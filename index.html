@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>$</text></svg>">
+</head>
+<body>
+  <header>
+    <h1>Budget Tracker</h1>
+    <div id="user-info" class="user-info" style="display: none;">
+      <button id="sign-out-btn" onclick="handleSignOut()">Sign Out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-section">
+      <h2>Sign in to view your budget</h2>
+      <p>You'll need access to the Google Sheet to view its data.</p>
+      <button id="sign-in-btn" onclick="handleSignIn()">Sign in with Google</button>
+    </section>
+
+    <section id="app-section">
+      <div id="status"></div>
+      <div id="filters-container">
+        <div id="month-selector"></div>
+        <div id="tag-selector"></div>
+        <div id="category-selector"></div>
+      </div>
+      <div class="charts-row">
+        <div id="chart-container" class="chart-card">
+          <canvas id="budget-chart"></canvas>
+        </div>
+        <div id="bar-chart-container" class="chart-card">
+          <canvas id="monthly-bar-chart"></canvas>
+        </div>
+      </div>
+      <div id="data-container"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
