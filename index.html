@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budget Visualizer</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Budget Tracker</title>
+  <link rel="stylesheet" href="style.css?v=11">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>$</text></svg>">
 </head>
 <body>
@@ -24,26 +24,51 @@
 
     <section id="app-section">
       <div id="status"></div>
-      <div id="filters-container">
-        <div id="month-selector"></div>
-        <div id="tag-selector"></div>
-        <div id="category-selector"></div>
+
+      <!-- Tab navigation -->
+      <div class="tab-bar">
+        <button class="tab active" data-tab="breakdown">Spending Breakdown</button>
+        <button class="tab" data-tab="trends">Spending Trends</button>
       </div>
-      <div class="charts-row">
-        <div id="chart-container" class="chart-card">
-          <canvas id="budget-chart"></canvas>
+
+      <!-- Filters row -->
+      <div class="content-card">
+        <div id="filters-row">
+          <div id="month-selector"></div>
+          <div id="tag-selector"></div>
+          <div id="category-selector"></div>
         </div>
-        <div id="bar-chart-container" class="chart-card">
+
+        <!-- Spending Breakdown tab -->
+        <div id="tab-breakdown" class="tab-content active">
+          <div class="breakdown-layout">
+            <div class="donut-wrapper">
+              <canvas id="budget-chart"></canvas>
+              <div id="donut-center">
+                <div class="donut-label" id="donut-label">Total Spending</div>
+                <div class="donut-total" id="donut-total">$0.00</div>
+              </div>
+            </div>
+            <div class="category-list" id="category-list"></div>
+          </div>
+
+          <div class="summary-stats" id="summary-stats"></div>
+        </div>
+
+        <!-- Spending Trends tab -->
+        <div id="tab-trends" class="tab-content">
           <canvas id="monthly-bar-chart"></canvas>
         </div>
       </div>
+
+      <!-- Transactions table -->
       <div id="data-container"></div>
     </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
