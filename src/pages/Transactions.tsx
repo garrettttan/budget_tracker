@@ -5,6 +5,7 @@ import { money, shortDate } from '../lib/format';
 import Button from '../components/Button';
 import CategorySelect, { type Category, TRANSFER } from '../components/CategorySelect';
 import MerchantCell from '../components/MerchantCell';
+import TagCell, { type Tag } from '../components/TagCell';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
 
 const PAGE = 100;
@@ -24,14 +25,23 @@ type Row = {
   category_id: string | null;
   accounts: { name: string } | null;
   merchants: { name: string } | null;
+  transaction_tags: { tag_id: string }[];
 };
 
 const COLUMNS =
-  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, accounts(name), merchants(name)';
+  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, accounts(name), merchants(name), transaction_tags(tag_id)';
 
-/** Posted rows only: pending ones have their own section. */
-function fetchRows(status: Status, from: number, to: number) {
-  let q = db().from('transactions').select(COLUMNS).eq('pending', false);
+/**
+ * Posted rows only: pending ones have their own section. With a tag, a second,
+ * inner join on the tags keeps only rows carrying it, while transaction_tags
+ * still lists all of each row's tags.
+ */
+function fetchRows(status: Status, tag: string | null, from: number, to: number) {
+  let q = db()
+    .from('transactions')
+    .select(tag ? `${COLUMNS}, tag_filter:transaction_tags!inner(tag_id)` : COLUMNS)
+    .eq('pending', false);
+  if (tag) q = q.eq('tag_filter.tag_id', tag);
   if (status !== 'all') q = q.eq('approved', status === 'approved');
   return q.order('posted_date', { ascending: false }).order('id', { ascending: false }).range(from, to);
 }
@@ -65,12 +75,14 @@ function savePendingOpen(open: boolean) {
 }
 
 /**
- * Every transaction, filtered by review status. Each row can get or change
- * its category, and is approved or unapproved from here.
+ * Every transaction, filtered by review status (and optionally by tag). Each
+ * posted row can get or change its category and tags, and is approved or
+ * unapproved from here.
  */
 export default function Transactions({ count, onChange }: { count: number | null; onChange: () => Promise<void> }) {
   const [params, setParams] = useSearchParams();
   const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'review';
+  const tagFilter = params.get('tag');
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [pending, setPending] = useState<Row[]>([]);
@@ -78,6 +90,7 @@ export default function Transactions({ count, onChange }: { count: number | null
   const [hasMore, setHasMore] = useState(false);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [accounts, setAccounts] = useState<Map<string, string>>(new Map());
+  const [tags, setTags] = useState<Tag[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,10 +100,13 @@ export default function Transactions({ count, onChange }: { count: number | null
     Promise.all([
       db().from('categories').select('id, name, is_income').eq('archived', false).order('sort_order'),
       db().from('accounts').select('id, name'),
-    ]).then(([c, a]) => {
-      if (c.error ?? a.error) setError((c.error ?? a.error)!.message);
+      db().from('tags').select('id, name').order('name'),
+    ]).then(([c, a, t]) => {
+      const failed = c.error ?? a.error ?? t.error;
+      if (failed) setError(failed.message);
       setCategories((c.data ?? []) as Category[]);
       setAccounts(new Map((a.data ?? []).map((x) => [x.id as string, x.name as string])));
+      setTags((t.data ?? []) as Tag[]);
     });
   }, []);
 
@@ -99,9 +115,10 @@ export default function Transactions({ count, onChange }: { count: number | null
     async (size: number) => {
       const none = Promise.resolve({ data: [], error: null });
       const [t, p, s] = await Promise.all([
-        fetchRows(status, 0, size - 1),
-        status === 'approved' ? none : fetchPending(),
-        status === 'approved'
+        fetchRows(status, tagFilter, 0, size - 1),
+        // pending rows can't carry tags, so a tag filter leaves them out
+        status === 'approved' || tagFilter ? none : fetchPending(),
+        status === 'approved' || tagFilter
           ? none
           : db()
               .from('transfer_suggestions')
@@ -115,7 +132,7 @@ export default function Transactions({ count, onChange }: { count: number | null
       setPending((p.data ?? []) as unknown as Row[]);
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
-    [status],
+    [status, tagFilter],
   );
 
   // categories first, so rows never flash an empty picker
@@ -129,7 +146,7 @@ export default function Transactions({ count, onChange }: { count: number | null
   async function loadMore() {
     const from = rows?.length ?? 0;
     setBusy(true);
-    const { data, error } = await fetchRows(status, from, from + PAGE - 1);
+    const { data, error } = await fetchRows(status, tagFilter, from, from + PAGE - 1);
     if (error) setError(error.message);
     else {
       setRows((rs) => [...(rs ?? []), ...((data ?? []) as unknown as Row[])]);
@@ -180,10 +197,59 @@ export default function Transactions({ count, onChange }: { count: number | null
   const unapprove = (r: Row) =>
     act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
 
-  function setStatus(s: Status) {
+  /** Changes the filters in the URL; `undefined` keeps a filter as it is. */
+  function setFilters(next: { status?: Status; tag?: string | null }) {
     setNotice(null);
     setError(null);
-    setParams(s === 'review' ? {} : { status: s });
+    const s = next.status ?? status;
+    const t = next.tag === undefined ? tagFilter : next.tag;
+    setParams({ ...(s === 'review' ? {} : { status: s }), ...(t ? { tag: t } : {}) });
+  }
+
+  const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag';
+  const rowTags = (r: Row) =>
+    r.transaction_tags
+      .map((x) => tags.find((t) => t.id === x.tag_id))
+      .filter((t): t is Tag => Boolean(t))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+  /** Shows a tag change right away; reloads the rows if saving it failed. */
+  async function saveTags(r: Row, tagIds: string[], save: () => PromiseLike<{ error: { message: string } | null }>) {
+    setError(null);
+    setNotice(null);
+    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, transaction_tags: tagIds.map((tag_id) => ({ tag_id })) } : x)) ?? null);
+    const { error } = await save();
+    if (error) {
+      setError(error.message);
+      await reload(Math.max(rows?.length ?? 0, PAGE));
+    }
+  }
+
+  const ids = (r: Row) => r.transaction_tags.map((x) => x.tag_id);
+
+  function addTag(r: Row, tagId: string) {
+    if (ids(r).includes(tagId)) return;
+    return saveTags(r, [...ids(r), tagId], () =>
+      db().from('transaction_tags').insert({ transaction_id: r.id, tag_id: tagId }),
+    );
+  }
+
+  function removeTag(r: Row, tagId: string) {
+    return saveTags(
+      r,
+      ids(r).filter((x) => x !== tagId),
+      () => db().from('transaction_tags').delete().eq('transaction_id', r.id).eq('tag_id', tagId),
+    );
+  }
+
+  async function createTag(r: Row, typed: string) {
+    const existing = tags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
+    if (existing) return addTag(r, existing.id);
+    const { data, error } = await db().from('tags').insert({ name: typed }).select('id, name').single();
+    if (error) return setError(error.message);
+    const tag = data as Tag;
+    setTags((ts) => [...ts, tag].sort((a, b) => a.name.localeCompare(b.name)));
+    return addTag(r, tag.id);
   }
 
   function toggleApproved(r: Row) {
@@ -214,11 +280,20 @@ export default function Transactions({ count, onChange }: { count: number | null
 
       <div className="filter" role="group" aria-label="Show">
         {STATUSES.map((s) => (
-          <Button key={s} size="small" aria-pressed={status === s} onClick={() => setStatus(s)}>
+          <Button key={s} size="small" aria-pressed={status === s} onClick={() => setFilters({ status: s })}>
             {s === 'review' ? `To review${count ? ` (${count})` : ''}` : s === 'approved' ? 'Approved' : 'All'}
           </Button>
         ))}
       </div>
+
+      {tagFilter && (
+        <p className="tag-filter">
+          Tagged <strong>{tagName(tagFilter)}</strong>
+          <Button variant="link" onClick={() => setFilters({ tag: null })}>
+            Show every tag
+          </Button>
+        </p>
+      )}
 
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -290,7 +365,9 @@ export default function Transactions({ count, onChange }: { count: number | null
 
       {rows && rows.length === 0 && (
         <p className="empty">
-          {status === 'review'
+          {tagFilter
+            ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
+            : status === 'review'
             ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'
             : status === 'approved'
               ? 'No approved transactions yet.'
@@ -303,7 +380,8 @@ export default function Transactions({ count, onChange }: { count: number | null
           {(suggestions.length > 0 || pending.length > 0) && <h2>Transactions</h2>}
           <p className="muted small">
             Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
-            unreviewed charges from it. Approved by mistake? Untick it.
+            unreviewed charges from it. Approved by mistake? Untick it. Tags group transactions across categories (like a
+            trip); tagged spending is kept apart from your normal spending.
           </p>
           <table className="register txns">
             <thead>
@@ -328,6 +406,15 @@ export default function Transactions({ count, onChange }: { count: number | null
                       description={r.description}
                       postedDate={r.posted_date}
                       account={r.accounts?.name}
+                    />
+                    <TagCell
+                      tags={rowTags(r)}
+                      allTags={tags}
+                      rowName={name(r)}
+                      onAdd={(id) => addTag(r, id)}
+                      onCreate={(typed) => createTag(r, typed)}
+                      onRemove={(id) => removeTag(r, id)}
+                      onFilter={(id) => setFilters({ tag: id })}
                     />
                   </td>
                   <td>{r.accounts?.name}</td>
