@@ -26,14 +26,42 @@ type Row = {
   merchants: { name: string } | null;
 };
 
+const COLUMNS =
+  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, accounts(name), merchants(name)';
+
+/** Posted rows only: pending ones have their own section. */
 function fetchRows(status: Status, from: number, to: number) {
-  let q = db()
-    .from('transactions')
-    .select(
-      'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, accounts(name), merchants(name)',
-    );
+  let q = db().from('transactions').select(COLUMNS).eq('pending', false);
   if (status !== 'all') q = q.eq('approved', status === 'approved');
   return q.order('posted_date', { ascending: false }).order('id', { ascending: false }).range(from, to);
+}
+
+/** Pending rows are never approved, and there are only ever a few, so all of them at once. */
+function fetchPending() {
+  return db()
+    .from('transactions')
+    .select(COLUMNS)
+    .eq('pending', true)
+    .order('posted_date', { ascending: false })
+    .order('id', { ascending: false });
+}
+
+const PENDING_OPEN_KEY = 'transactions.pendingOpen';
+
+function readPendingOpen() {
+  try {
+    return localStorage.getItem(PENDING_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function savePendingOpen(open: boolean) {
+  try {
+    localStorage.setItem(PENDING_OPEN_KEY, open ? '1' : '0');
+  } catch {
+    // storage unavailable: the section just starts closed next time
+  }
 }
 
 /**
@@ -45,6 +73,8 @@ export default function Transactions({ count, onChange }: { count: number | null
   const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'review';
 
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [pending, setPending] = useState<Row[]>([]);
+  const [pendingOpen, setPendingOpen] = useState(readPendingOpen);
   const [hasMore, setHasMore] = useState(false);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [accounts, setAccounts] = useState<Map<string, string>>(new Map());
@@ -67,19 +97,22 @@ export default function Transactions({ count, onChange }: { count: number | null
   /** Loads the first `size` rows of the current filter, plus transfer suggestions. */
   const reload = useCallback(
     async (size: number) => {
-      const [t, s] = await Promise.all([
+      const none = Promise.resolve({ data: [], error: null });
+      const [t, p, s] = await Promise.all([
         fetchRows(status, 0, size - 1),
+        status === 'approved' ? none : fetchPending(),
         status === 'approved'
-          ? Promise.resolve({ data: [], error: null })
+          ? none
           : db()
               .from('transfer_suggestions')
               .select('out_id, in_id, out_account_id, in_account_id, amount, out_date, in_date')
               .order('out_date'),
       ]);
-      const failed = t.error ?? s.error;
+      const failed = t.error ?? p.error ?? s.error;
       if (failed) setError(failed.message);
       setRows((t.data ?? []) as unknown as Row[]);
       setHasMore((t.data ?? []).length === size);
+      setPending((p.data ?? []) as unknown as Row[]);
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
     [status],
@@ -89,6 +122,7 @@ export default function Transactions({ count, onChange }: { count: number | null
   useEffect(() => {
     if (!categories) return;
     setRows(null);
+    setPending([]);
     reload(PAGE);
   }, [categories, reload]);
 
@@ -159,13 +193,14 @@ export default function Transactions({ count, onChange }: { count: number | null
   }
 
   const approvedTitle = (r: Row) =>
-    r.approved
-      ? 'Untick to move it back to To review'
-      : r.pending
-        ? 'Pending: it can be approved once the bank posts it'
-        : r.category_id
-          ? 'Tick to approve'
-          : 'Choose a category first';
+    r.approved ? 'Untick to move it back to To review' : r.category_id ? 'Tick to approve' : 'Choose a category first';
+
+  function togglePending(open: boolean) {
+    setPendingOpen(open);
+    savePendingOpen(open);
+  }
+
+  const pendingTotal = pending.reduce((sum, r) => sum + Number(r.amount), 0);
 
   return (
     <section>
@@ -205,6 +240,54 @@ export default function Transactions({ count, onChange }: { count: number | null
         />
       )}
 
+      {pending.length > 0 && (
+        <details
+          className="pending-section"
+          open={pendingOpen}
+          onToggle={(e) => togglePending((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary>
+            <span className="pending-title">Pending</span>
+            <span className="muted">
+              {' '}
+              {pending.length} {pending.length === 1 ? 'transaction' : 'transactions'},{' '}
+              <span className={pendingTotal < 0 ? 'out' : 'in'}>{money(pendingTotal)}</span>
+            </span>
+          </summary>
+          <p className="muted small">
+            Not posted by the bank yet, so the amount can still change. Each one moves into the list below, ready to
+            review, once it posts.
+          </p>
+          <table className="register txns pending-txns">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Merchant</th>
+                <th scope="col">Account</th>
+                <th scope="col" className="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((r) => (
+                <tr key={r.id}>
+                  <td>{shortDate(r.posted_date)}</td>
+                  <td>
+                    <MerchantCell
+                      name={r.merchants?.name}
+                      description={r.description}
+                      postedDate={r.posted_date}
+                      account={r.accounts?.name}
+                    />
+                  </td>
+                  <td>{r.accounts?.name}</td>
+                  <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+
       {rows && rows.length === 0 && (
         <p className="empty">
           {status === 'review'
@@ -217,7 +300,7 @@ export default function Transactions({ count, onChange }: { count: number | null
 
       {rows && rows.length > 0 && (
         <>
-          {suggestions.length > 0 && <h2>Transactions</h2>}
+          {(suggestions.length > 0 || pending.length > 0) && <h2>Transactions</h2>}
           <p className="muted small">
             Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
             unreviewed charges from it. Approved by mistake? Untick it.
@@ -246,14 +329,13 @@ export default function Transactions({ count, onChange }: { count: number | null
                       postedDate={r.posted_date}
                       account={r.accounts?.name}
                     />
-                    {r.pending && <span className="tag">Pending</span>}
                   </td>
                   <td>{r.accounts?.name}</td>
                   <td>
                     <CategorySelect
                       categories={categories ?? []}
                       value={r.is_transfer ? TRANSFER : r.category_id}
-                      disabled={busy || r.pending}
+                      disabled={busy}
                       label={`Category for ${name(r)}`}
                       onChange={(value) => setCategory(r, value)}
                     />
@@ -265,7 +347,7 @@ export default function Transactions({ count, onChange }: { count: number | null
                       aria-label={`Approved: ${name(r)}`}
                       title={approvedTitle(r)}
                       checked={r.approved}
-                      disabled={busy || (!r.approved && (r.pending || !r.category_id))}
+                      disabled={busy || (!r.approved && !r.category_id)}
                       onChange={() => toggleApproved(r)}
                     />
                   </td>
