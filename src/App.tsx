@@ -16,7 +16,8 @@ function useUnreviewedCount(enabled: boolean) {
     const { count } = await supabase
       .from('transactions')
       .select('id', { count: 'exact', head: true })
-      .eq('approved', false);
+      .eq('approved', false)
+      .eq('pending', false); // pending rows can't be approved yet, so they aren't counted
     setCount(count ?? 0);
   }, [enabled]);
   useEffect(() => {
