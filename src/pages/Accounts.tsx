@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, relativeTime } from '../lib/format';
+import Button from '../components/Button';
 
 type AccountClass = 'cash' | 'investment' | 'liability';
 
@@ -35,6 +36,10 @@ export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null); // account id
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [a, c] = await Promise.all([
@@ -55,6 +60,30 @@ export default function Accounts() {
   useEffect(() => {
     load();
   }, [load]);
+
+  function startRename(account: Account) {
+    setRenaming(account.id);
+    setDraft(account.name);
+    setError(null);
+    setNotice(null);
+  }
+
+  /** Your name for the account. The sync sets the bank's name only once, so it sticks. */
+  async function rename(account: Account) {
+    const name = draft.trim();
+    if (!name) return;
+    if (name === account.name) return setRenaming(null);
+    setBusy(true);
+    setError(null);
+    const { error } = await db().from('accounts').update({ name }).eq('id', account.id);
+    if (error) setError(error.message);
+    else {
+      setNotice(`Renamed to ${name}.`);
+      setRenaming(null);
+    }
+    await load();
+    setBusy(false);
+  }
 
   async function changeClass(account: Account, next: AccountClass) {
     setError(null);
@@ -87,6 +116,7 @@ export default function Accounts() {
         <h1>Accounts</h1>
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
+      {notice && <p className="notice" role="status">{notice}</p>}
 
       {connections && connections.length === 0 && (
         <p className="empty">
@@ -123,19 +153,40 @@ export default function Accounts() {
               <div key={value}>
                 <h2>{label}</h2>
                 {note && <p className="muted small">{note}</p>}
-                <table className="register">
+                <table className="register accounts">
                   <thead>
                     <tr>
                       <th scope="col">Account</th>
                       <th scope="col">Institution</th>
                       <th scope="col">Class</th>
                       <th scope="col" className="num">Balance</th>
+                      <th scope="col">
+                        <span className="visually-hidden">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {group.map((a) => (
                       <tr key={a.id}>
-                        <td>{a.name}</td>
+                        <td>
+                          {renaming === a.id ? (
+                            <input
+                              type="text"
+                              className="merchant-name-input"
+                              aria-label={`New name for ${a.name}`}
+                              value={draft}
+                              autoFocus
+                              disabled={busy}
+                              onChange={(e) => setDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') rename(a);
+                                if (e.key === 'Escape') setRenaming(null);
+                              }}
+                            />
+                          ) : (
+                            a.name
+                          )}
+                        </td>
                         <td>{a.institution ?? <span className="muted">Manual</span>}</td>
                         <td>
                           <select
@@ -151,15 +202,38 @@ export default function Accounts() {
                           </select>
                         </td>
                         <td className="num">{money(a.balance)}</td>
+                        <td className="action">
+                          {renaming === a.id ? (
+                            <>
+                              <Button
+                                size="small"
+                                disabled={busy || !draft.trim()}
+                                title={draft.trim() ? undefined : 'Type a name first'}
+                                onClick={() => rename(a)}
+                              >
+                                Save
+                              </Button>
+                              <Button size="small" variant="link" disabled={busy} onClick={() => setRenaming(null)}>
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button size="small" disabled={busy} aria-label={`Rename ${a.name}`} onClick={() => startRename(a)}>
+                              Rename
+                            </Button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <th scope="row" colSpan={3}>
-                        Total {label.toLowerCase()}
-                      </th>
+                      {/* one cell per column, so phones can hide Institution here too */}
+                      <th scope="row">Total {label.toLowerCase()}</th>
+                      <td />
+                      <td />
                       <td className="num">{money(total(group))}</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>

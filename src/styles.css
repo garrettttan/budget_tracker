@@ -366,6 +366,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.txns tr.unreviewed td:nth-child(2) { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
   /* merchants: hide the remembered category */
   .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
+  /* accounts: hide the institution (room for Rename) */
+  .register.accounts th:nth-child(2), .register.accounts td:nth-child(2) { display: none; }
   /* transfers: hide the dates column */
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
@@ -374,7 +376,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.txns .tags-col { display: none; }
   .register.txns td, .register.txns th,
   .register.merchants td, .register.merchants th,
-  .register.transfers td, .register.transfers th { padding-right: 0.5rem; }
+  .register.transfers td, .register.transfers th,
+  .register.accounts td, .register.accounts th { padding-right: 0.5rem; }
   .combobox input { width: 6.5rem; }
   .register td.action { padding-left: 0.25rem; }
 }
