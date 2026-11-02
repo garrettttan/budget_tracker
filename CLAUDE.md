@@ -10,13 +10,14 @@ plan: https://claude.ai/artifact/Vy9euCxBXrLegJXUcK2UBz
   URL https://ppfxuyueackbytpbqqva.supabase.co, region us-east-2, Free plan.
   The same org also has an unrelated project "Fantasy Survivor"; never touch it.
 
-## Status (Nov 1, 2026)
+## Status (Nov 2, 2026)
 
-**Phase 1 (foundation) is done.** Phase 2 (SimpleFIN connect + daily sync) is written and
-in review; after merge: apply `20261102120000_simplefin_vault.sql` (rename the file to the
-version Supabase records), deploy the `sync` (verify_jwt off) and `simplefin-claim` edge
-functions, set `SYNC_SECRET` as both an edge function secret and a GitHub repo secret.
-Garrett then pastes his Setup Token in Settings.
+**Phases 1 and 2 are done.** SimpleFIN is connected and the first sync ran on Nov 2.
+Edge functions `sync` (verify_jwt off) and `simplefin-claim` are deployed; `SYNC_SECRET` is
+set in Supabase and as a GitHub repo secret.
+
+Keep personal financial details (account names or numbers, balances, transaction counts,
+institutions) out of this public repo: code, tests, commits, PRs and this file.
 
 - [x] `supabase/migrations/20261102013452_initial_schema.sql`: tests pass (`npm run test:db`)
 - [x] Web app shell builds (`npm run build`)
@@ -32,6 +33,15 @@ Garrett then pastes his Setup Token in Settings.
 
 - Never push to `main`. Every change goes on a branch with a PR for Garrett to review;
   merging to `main` deploys to Pages.
+- **Merging to `main` deploys Supabase too** (GitHub integration, "Deploy to production"):
+  new migrations are applied (recorded under the filename's version) and the edge functions
+  declared in `config.toml` are deployed. Auth/API settings in `config.toml` are ignored, so
+  its localhost `site_url` doesn't touch production. Never apply migrations by hand; keep
+  them safe to re-run. Manual function deploy, if ever needed:
+  `supabase functions deploy <name> --project-ref ppfxuyueackbytpbqqva --use-api`
+  (add `--no-verify-jwt` for `sync`). Automatic branching stays off (paid on Free plan).
+- Avoid stacked PRs: the repo doesn't auto-delete merged branches, so a stacked PR merges
+  into its base branch instead of `main`.
 - To redeploy without a code change: Actions → Deploy to GitHub Pages → Run workflow.
 
 ## Decisions already made (don't relitigate)
@@ -70,8 +80,9 @@ From https://beta-bridge.simplefin.org/info/developers:
 - Expect ≤ 24 requests/day; exceeding the warning level disables the Access Token.
   Warnings arrive in the `errors` array of `/accounts` responses (deprecated in v2 in favor
   of `errlist`, so read both).
-- Each `/accounts` request's start-date→end-date range is limited to **90 days**
-  (the guide said 60 earlier; it says 90 as of Nov 2026). Use `version=2`.
+- Each `/accounts` request's start-date→end-date range is limited to 90 days (the guide
+  said 60 earlier), but live responses warn above **45 days** ("may be capped"), so the
+  sync uses 45-day windows. Use `version=2`.
 - Pending transactions may have `posted = 0`. Amounts/balances are numeric strings; dates
   are epoch seconds.
 - History depth varies by bank (~90 days typical).
@@ -83,7 +94,7 @@ Sync design: one run/day; start-date = last posted date − 10 days; include pen
 upsert accounts + daily balance snapshot; upsert transactions on
 (account_id, source, external_id); delete pending rows in the window that SimpleFIN no
 longer returns; pre-fill category from merchant memory; suggest transfer pairs; log to
-`sync_runs`. First sync walks back in 90-day chunks (max 3 requests). On a rate-limit
+`sync_runs`. First sync walks back in 45-day chunks (max 3 requests). On a rate-limit
 warning, stop and skip the next run. Transfer-pair suggestions are deferred to phase 3.
 
 Access URL stored in **Supabase Vault** via `save_simplefin_access_url` /

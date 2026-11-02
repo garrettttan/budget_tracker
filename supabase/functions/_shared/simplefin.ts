@@ -6,12 +6,13 @@
 // Protocol: https://www.simplefin.org/protocol.html (we always ask for v2)
 // Limits:   https://beta-bridge.simplefin.org/info/developers
 //   * ~24 requests/day; going past the warning level disables the Access Token
-//   * each /accounts request may span at most 90 days
+//   * each /accounts request may span at most 90 days, but responses warn
+//     above 45 ("may be capped"), so we stay at 45
 
 export const MAX_REQUESTS_PER_DAY = 12; // our own cap, well under SimpleFIN's ~24
 const TIME_ZONE = 'America/New_York';
-const WINDOW_DAYS = 90;
-const MAX_WINDOWS = 3; // first sync: up to 270 days back
+const WINDOW_DAYS = 45;
+const MAX_WINDOWS = 3; // first sync: up to 135 days back (banks keep ~90)
 const OVERLAP_DAYS = 10;
 const COOLDOWN_HOURS = 44; // after a rate-limit warning, skip the next daily run
 const DAY = 86_400;
@@ -112,7 +113,7 @@ export async function fetchAccountSet(accessUrl: string, window: Window, fetchIm
 }
 
 /**
- * Request windows, newest first, each at most 90 days.
+ * Request windows, newest first, each at most 45 days.
  * Incremental: from the last posted date minus 10 days, through tomorrow.
  * First sync (no posted date yet): 3 windows back; the caller stops at the
  * first empty one.
