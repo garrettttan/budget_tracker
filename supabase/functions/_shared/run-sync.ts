@@ -12,6 +12,7 @@ import {
   SimplefinError,
   bankFieldsChanged,
   fetchAccountSet,
+  guessAccountClass,
   isStalePending,
   merchantName,
   normalizeDescription,
@@ -54,8 +55,10 @@ export async function runSync(
     if (!accessUrl) throw new SimplefinError('No SimpleFIN access saved. Connect in Settings.');
 
     const fetched = await fetchWindows(accessUrl, windows, lastPosted === null, log);
-    const accountIds = await saveAccounts(admin, conn, fetched, now);
-    await saveTransactions(admin, conn, fetched, accountIds, now, log);
+    const { ids: accountIds, investments } = await saveAccounts(admin, conn, fetched, now);
+    // investments are balance-only: balances above, no transactions
+    const tracked = new Map([...fetched.accounts].filter(([id]) => !investments.has(id)));
+    await saveTransactions(admin, conn, { ...fetched, accounts: tracked }, accountIds, now, log);
 
     if (fetched.rateLimited) connectionStatus = 'rate_limited';
     if (log.messages.length) status = 'warning';
@@ -174,11 +177,12 @@ async function saveAccounts(
   conn: Connection,
   { accounts, institutions }: Fetched,
   now: Date,
-): Promise<Map<string, string>> {
-  const existing = await must<{ id: string; external_id: string }[]>(
-    admin.from('accounts').select('id, external_id').eq('connection_id', conn.id),
+): Promise<{ ids: Map<string, string>; investments: Set<string> }> {
+  const existing = await must<{ id: string; external_id: string; class: string }[]>(
+    admin.from('accounts').select('id, external_id, class').eq('connection_id', conn.id),
   );
   const ids = new Map(existing.map((a) => [a.external_id, a.id])); // SimpleFIN id → our id
+  const investments = new Set(existing.filter((a) => a.class === 'investment').map((a) => a.external_id));
 
   for (const a of accounts.values()) {
     const bankFields = {
@@ -190,7 +194,7 @@ async function saveAccounts(
     if (id) {
       await must(admin.from('accounts').update(bankFields).eq('id', id));
     } else {
-      // name and institution are set once, so your edits are kept
+      // name, institution and class are set once, so your edits are kept
       const created = await must<{ id: string }>(
         admin
           .from('accounts')
@@ -200,6 +204,7 @@ async function saveAccounts(
             external_id: a.id,
             name: a.name,
             institution: institutions.get(a.conn_id) ?? null,
+            class: guessAccountClass(a),
             ...bankFields,
           })
           .select('id')
@@ -217,7 +222,7 @@ async function saveAccounts(
     balance: a.balance,
   }));
   if (snapshots.length) await must(admin.from('balance_snapshots').upsert(snapshots, { onConflict: 'account_id,date' }));
-  return ids;
+  return { ids, investments };
 }
 
 // ---------------------------------------------------------------------------
