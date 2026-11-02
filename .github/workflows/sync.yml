@@ -1,0 +1,41 @@
+name: Daily SimpleFIN sync
+
+# 10:17 UTC = 6:17 a.m. New York in daylight time, 5:17 a.m. in standard time.
+# Off the top of the hour, when GitHub and SimpleFIN are busiest.
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch: # "Run workflow" button for an extra sync
+
+permissions:
+  contents: read
+  actions: write # for the keepalive step
+
+concurrency:
+  group: simplefin-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # This repo is public, so its logs are too: print only the HTTP code and
+      # status. Details are in the app under Settings → Sync log.
+      - name: Call the sync function
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+          TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'schedule' }}
+        run: |
+          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 300 -X POST \
+            -H "Authorization: Bearer $SYNC_SECRET" "$SUPABASE_URL/functions/v1/sync?trigger=$TRIGGER")
+          echo "HTTP $code, status: $(jq -r .status response.json 2>/dev/null)"
+          test "$code" = 200
+
+      # GitHub turns off scheduled workflows in public repos after 60 days
+      # without commits. Re-enabling this one resets that timer.
+      - name: Keep the schedule enabled
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/sync.yml/enable" --silent

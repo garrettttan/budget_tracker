@@ -1,0 +1,232 @@
+// Usage: npm run test:db
+// Runs every migration (in filename order) against an in-memory Postgres with
+// stubbed Supabase auth and Vault schemas, then checks RLS isolation, starter
+// categories, the reporting views, and the Vault helpers.
+import { PGlite } from '@electric-sql/pglite';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const db = new PGlite();
+const dir = process.argv[2];
+const migrations = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+
+const stub = `
+create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
+create schema auth;
+create table auth.users (id uuid primary key default gen_random_uuid(), email text);
+create function auth.uid() returns uuid language sql stable as $$
+  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+grant usage on schema public, auth to anon, authenticated, service_role;
+grant execute on function auth.uid() to anon, authenticated;
+-- Mirror the live project's defaults for objects created by migrations:
+-- no read/write on tables and no function execute for any API role, so
+-- every grant the app or edge functions rely on must be explicit
+alter default privileges in schema public grant truncate, references, trigger on tables to anon, authenticated, service_role;
+alter default privileges in schema public revoke execute on functions from public;
+-- Vault stand-in with the same function signatures (no encryption)
+create schema vault;
+create table vault.secrets (id uuid primary key default gen_random_uuid(), name text unique, description text, secret text);
+create function vault.create_secret(new_secret text, new_name text default null, new_description text default '', new_key_id uuid default null)
+  returns uuid language sql as $$ insert into vault.secrets (secret, name, description) values (new_secret, new_name, new_description) returning id $$;
+create function vault.update_secret(secret_id uuid, new_secret text default null, new_name text default null, new_description text default null, new_key_id uuid default null)
+  returns void language sql as $$ update vault.secrets set secret = coalesce(new_secret, secret) where id = secret_id $$;
+create view vault.decrypted_secrets as select id, name, description, secret as decrypted_secret from vault.secrets;
+`;
+
+let failures = 0;
+const check = (name, ok, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
+  if (!ok) failures++;
+};
+
+await db.exec(stub);
+for (const file of migrations) await db.exec(readFileSync(join(dir, file), 'utf8'));
+check(`migrations apply (${migrations.length})`, true);
+
+const a = '11111111-1111-1111-1111-111111111111';
+const b = '22222222-2222-2222-2222-222222222222';
+await db.exec(`insert into auth.users (id, email) values ('${a}','a@x.com'), ('${b}','b@x.com');`);
+
+const cats = await db.query(`select count(*)::int n from public.categories where user_id = $1`, [a]);
+check('starter categories seeded on sign-up', cats.rows[0].n === 14, `${cats.rows[0].n} categories`);
+const gas = await db.query(`select count(*)::int n from public.categories where name ilike 'gas%'`);
+check('no Gas category', gas.rows[0].n === 0);
+
+// Act as user A through RLS
+const asUser = async (uid, sql, params) => {
+  await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${uid}', false);`);
+  try { return await db.query(sql, params); } finally { await db.exec(`reset role;`); }
+};
+
+// User A sets up data
+const acct = (await asUser(a, `insert into public.accounts (name, type) values ('Rewards Card','credit') returning id`)).rows[0].id;
+const venmo = (await asUser(a, `insert into public.accounts (name, type) values ('Venmo','manual') returning id`)).rows[0].id;
+const dining = (await asUser(a, `select id from public.categories where name='Dining'`)).rows[0].id;
+const income = (await asUser(a, `select id from public.categories where name='Income'`)).rows[0].id;
+
+const dinner = (await asUser(a,
+  `insert into public.transactions (account_id, source, external_id, posted_date, amount, description, category_id)
+   values ($1,'simplefin','TX1','2026-10-10',-120,'CARBONE NYC',$2) returning id`, [acct, dining])).rows[0].id;
+await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, description, category_id)
+   values ($1,'manual','2026-10-15',3000,'Paycheck',$2)`, [acct, income]);
+const pay = (await asUser(a,
+  `insert into public.transactions (account_id, source, posted_date, amount, description)
+   values ($1,'manual','2026-10-12',40,'Sam paid you')  returning id`, [venmo])).rows[0].id;
+const reimb = (await asUser(a,
+  `insert into public.reimbursements (transaction_id, who, amount) values ($1,'Sam',40) returning id`, [dinner])).rows[0].id;
+await asUser(a, `insert into public.reimbursement_payments (reimbursement_id, payment_transaction_id, amount) values ($1,$2,40)`, [reimb, pay]);
+// transfer: card payment, excluded
+await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, description, is_transfer)
+   values ($1,'manual','2026-10-20',500,'Payment thank you', true)`, [acct]);
+// pending, excluded
+await asUser(a, `insert into public.transactions (account_id, source, external_id, posted_date, amount, description, pending, category_id)
+   values ($1,'simplefin','TX2','2026-10-29',-15,'JOES COFFEE', true, $2)`, [acct, dining]);
+
+// Duplicate external id rejected
+let dupRejected = false;
+try { await asUser(a, `insert into public.transactions (account_id, source, external_id, posted_date, amount) values ($1,'simplefin','TX1','2026-10-10',-120)`, [acct]); }
+catch { dupRejected = true; }
+check('duplicate SimpleFIN transaction rejected', dupRejected);
+let upsertOk = false;
+try {
+  await asUser(a, `insert into public.transactions (account_id, source, external_id, posted_date, amount) values ($1,'simplefin','TX1','2026-10-10',-120)
+    on conflict (account_id, source, external_id) do nothing`, [acct]);
+  upsertOk = true;
+} catch {}
+check('upsert on (account_id, source, external_id) skips duplicates', upsertOk);
+
+// Views
+const spend = (await asUser(a, `select category_name, spent::float from public.monthly_category_spend()`)).rows;
+check('dining counts only your share ($80)', spend.length === 1 && spend[0].category_name === 'Dining' && spend[0].spent === 80, JSON.stringify(spend));
+const cf = (await asUser(a, `select income::float, spending::float from public.monthly_cashflow()`)).rows;
+check('cashflow: income 3000, spending 80 (Venmo payback not income)', cf.length === 1 && cf[0].income === 3000 && cf[0].spending === 80, JSON.stringify(cf));
+
+// Payback tagged Income in Review still isn't income once linked
+await asUser(a, `update public.transactions set category_id=$1 where id=$2`, [income, pay]);
+const cfTagged = (await asUser(a, `select income::float from public.monthly_cashflow()`)).rows;
+check('linked payback tagged Income is not income', cfTagged[0]?.income === 3000, JSON.stringify(cfTagged));
+
+// Write-off: full amount counts again
+await asUser(a, `update public.reimbursements set status='written_off' where id=$1`, [reimb]);
+const spend2 = (await asUser(a, `select spent::float from public.monthly_category_spend() where category_name='Dining'`)).rows;
+check('written-off reimbursement counts full $120', spend2[0]?.spent === 120, JSON.stringify(spend2));
+
+// Tags: tagged spending is left out of normal spending unless toggled on
+const travel = (await asUser(a, `select id from public.categories where name='Travel'`)).rows[0].id;
+const japan = (await asUser(a, `insert into public.tags (name) values ('Japan 2026') returning id`)).rows[0].id;
+const work = (await asUser(a, `insert into public.tags (name) values ('Work') returning id`)).rows[0].id;
+const sushi = (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id) values ($1,'manual','2026-10-05',-200,$2) returning id`, [acct, dining])).rows[0].id;
+const flight = (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id) values ($1,'manual','2026-10-01',-900,$2) returning id`, [acct, travel])).rows[0].id;
+await asUser(a, `insert into public.transaction_tags (transaction_id, tag_id) values ($1,$3), ($2,$3), ($2,$4)`, [sushi, flight, japan, work]);
+const spendFor = async (tags) => Object.fromEntries((await asUser(a,
+  `select category_name, spent::float from public.monthly_category_spend($1::uuid[])`, [tags])).rows.map(r => [r.category_name, r.spent]));
+const normal = await spendFor([]);
+check('normal spending leaves out tagged transactions', normal.Dining === 120 && normal.Travel === undefined, JSON.stringify(normal));
+const withJapan = await spendFor([japan]);
+check('toggling a tag on adds its transactions', withJapan.Dining === 320 && withJapan.Travel === 900, JSON.stringify(withJapan));
+const withWork = await spendFor([work]);
+check('a transaction with several tags shows if any is on', withWork.Travel === 900 && withWork.Dining === 120, JSON.stringify(withWork));
+const cfNormal = (await asUser(a, `select spending::float from public.monthly_cashflow()`)).rows;
+check('cashflow uses the same tag rule', cfNormal[0]?.spending === 120, JSON.stringify(cfNormal));
+const trip = (await asUser(a, `select spent::float, transaction_count::int n from public.tag_spend where tag_id=$1`, [japan])).rows[0];
+check('tag_spend totals a trip', trip.spent === 1100 && trip.n === 2, JSON.stringify(trip));
+let anonRpc = false;
+try { await db.exec(`set role anon;`); await db.query(`select * from public.monthly_category_spend()`); anonRpc = true; } catch {} finally { await db.exec(`reset role;`); }
+check('signed-out visitors cannot call reporting functions', !anonRpc);
+
+// Merchants: two descriptions, merged into one merchant
+const shopping = (await asUser(a, `select id from public.categories where name='Shopping'`)).rows[0].id;
+const m2 = (await asUser(a, `insert into public.merchants (name, last_category_id) values ('Amzn Mktp Us',$1) returning id`, [shopping])).rows[0].id;
+const m3 = (await asUser(a, `insert into public.merchants (name) values ('Amazon.com') returning id`)).rows[0].id;
+await asUser(a, `insert into public.merchant_aliases (merchant_id, match_key) values ($1,'amzn mktp us'), ($2,'amazon.com')`, [m2, m3]);
+await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, merchant_id) values ($1,'manual','2026-10-20',-30,$2)`, [acct, m3]);
+let aliasDupRejected = false;
+try { await asUser(a, `insert into public.merchant_aliases (merchant_id, match_key) values ($1,'amazon.com')`, [m2]); } catch { aliasDupRejected = true; }
+check('a description maps to only one merchant', aliasDupRejected);
+await asUser(a, `update public.merchant_aliases set merchant_id=$1 where merchant_id=$2`, [m2, m3]);
+await asUser(a, `update public.transactions set merchant_id=$1 where merchant_id=$2`, [m2, m3]);
+await asUser(a, `delete from public.merchants where id=$1`, [m3]);
+await asUser(a, `update public.merchants set name='Amazon' where id=$1`, [m2]);
+const hit = (await asUser(a,
+  `select m.name, c.name as category from public.merchant_aliases ma
+   join public.merchants m on m.id = ma.merchant_id left join public.categories c on c.id = m.last_category_id
+   where ma.match_key = 'amazon.com'`)).rows;
+check('after merge, old description pre-fills Amazon / Shopping', hit.length === 1 && hit[0].name === 'Amazon' && hit[0].category === 'Shopping', JSON.stringify(hit));
+const amazonTx = (await asUser(a, `select count(*)::int n from public.transactions where merchant_id=$1`, [m2])).rows[0].n;
+check('merged transactions regroup under Amazon', amazonTx === 1);
+
+// RLS isolation
+const bTx = (await asUser(b, `select count(*)::int n from public.transactions`)).rows[0].n;
+const bCats = (await asUser(b, `select count(*)::int n from public.categories`)).rows[0].n;
+check('user B sees none of A\'s transactions', bTx === 0);
+const bAliases = (await asUser(b, `select count(*)::int n from public.merchant_aliases`)).rows[0].n;
+check('user B sees none of A\'s merchant aliases', bAliases === 0);
+check('user B sees only own categories', bCats === 14);
+let crossWrite = false;
+try { await asUser(b, `insert into public.transactions (user_id, account_id, source, posted_date, amount) values ($1,$2,'manual','2026-10-01',-1)`, [a, acct]); crossWrite = true; } catch {}
+check('user B cannot write rows as user A', !crossWrite);
+const anonRows = await (async () => {
+  await db.exec(`set role anon;`);
+  try { return (await db.query(`select count(*)::int n from public.transactions`)).rows[0].n; }
+  catch { return 'denied'; } finally { await db.exec(`reset role;`); }
+})();
+check('signed-out visitors see nothing', anonRows === 0 || anonRows === 'denied', String(anonRows));
+
+// connections: read-only from browser, vault id hidden
+await db.exec(`insert into public.connections (user_id, vault_secret_id) values ('${a}', gen_random_uuid())`);
+let connWrite = false;
+try { await asUser(a, `insert into public.connections (label) values ('x')`); connWrite = true; } catch {}
+check('browser cannot create connections', !connWrite);
+let vaultHidden = false;
+try { await asUser(a, `select vault_secret_id from public.connections`); } catch { vaultHidden = true; }
+check('vault_secret_id hidden from browser', vaultHidden);
+const connStatus = (await asUser(a, `select status from public.connections`)).rows;
+check('browser can read connection status', connStatus.length === 1);
+
+let seedCallable = false;
+try { await asUser(b, `select public.seed_starter_categories($1)`, [a]); seedCallable = true; } catch {}
+check('browser cannot call seed function for another user', !seedCallable);
+
+// Vault helpers: service role only; reconnecting replaces the same secret
+const asService = async (sql, params) => {
+  await db.exec(`set role service_role;`);
+  try { return await db.query(sql, params); } finally { await db.exec(`reset role;`); }
+};
+const url1 = 'https://user:pass1@bridge.example/simplefin';
+const conn1 = (await asService(`select public.save_simplefin_access_url($1, $2) as id`, [b, url1])).rows[0].id;
+const read1 = (await asService(`select public.get_simplefin_access_url($1) as url`, [conn1])).rows[0].url;
+check('service role saves and reads the Access URL', read1 === url1);
+const conn2 = (await asService(`select public.save_simplefin_access_url($1, $2) as id`, [b, 'https://user:pass2@bridge.example/simplefin'])).rows[0].id;
+const secrets = (await db.query(`select count(*)::int n from vault.secrets`)).rows[0].n;
+const read2 = (await asService(`select public.get_simplefin_access_url($1) as url`, [conn2])).rows[0].url;
+check('reconnecting reuses the connection and secret', conn2 === conn1 && secrets === 1 && read2.endsWith('pass2@bridge.example/simplefin'));
+// The sync edge function writes with the service role
+let serviceWrites = true;
+const serviceDetail = [];
+for (const [table, sql, params] of [
+  ['accounts', `insert into public.accounts (user_id, connection_id, external_id, name) values ($1, $2, 'ACT-1', 'Checking') returning id`, [b, conn1]],
+  ['sync_runs', `insert into public.sync_runs (user_id, connection_id) values ($1, $2) returning id`, [b, conn1]],
+  ['merchants', `insert into public.merchants (user_id, name) values ($1, 'Joes Coffee') returning id`, [b]],
+  ['connections', `update public.connections set last_synced_at = now() where id = $1 returning id`, [conn1]],
+]) {
+  try { await asService(sql, params); } catch (e) { serviceWrites = false; serviceDetail.push(`${table}: ${e.message}`); }
+}
+try {
+  const acctB = (await asService(`select id from public.accounts where external_id = 'ACT-1'`)).rows[0].id;
+  await asService(`insert into public.transactions (user_id, account_id, source, external_id, posted_date, amount)
+    values ($1, $2, 'simplefin', 'T-1', '2026-11-01', -4.5) on conflict (account_id, source, external_id) do nothing`, [b, acctB]);
+  await asService(`insert into public.balance_snapshots (account_id, date, user_id, balance) values ($1, '2026-11-01', $2, 100)
+    on conflict (account_id, date) do update set balance = excluded.balance`, [acctB, b]);
+  await asService(`delete from public.transactions where external_id = 'T-1'`);
+} catch (e) { serviceWrites = false; serviceDetail.push(e.message); }
+check('service role can write everything the sync touches', serviceWrites, serviceDetail.join('; '));
+
+let browserReadsUrl = false;
+try { await asUser(b, `select public.get_simplefin_access_url($1)`, [conn1]); browserReadsUrl = true; } catch {}
+check('browser cannot read the Access URL', !browserReadsUrl);
+let browserSavesUrl = false;
+try { await asUser(b, `select public.save_simplefin_access_url($1, 'https://x')`, [b]); browserSavesUrl = true; } catch {}
+check('browser cannot save an Access URL', !browserSavesUrl);
+
+console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
+process.exit(failures ? 1 : 0);
