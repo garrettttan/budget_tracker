@@ -350,9 +350,57 @@ const bMerchant = (await asUser(b, `insert into public.merchants (name) values (
 try { await asUser(b, `select public.merge_merchants($1, $2)`, [bMerchant, fresh]); crossMerge = true; } catch {}
 check("merge: can't touch another user's merchants", !crossMerge);
 
+// editing approved rows: recategorize, send back to Review
+const dTransit = await catId('Transit');
+const bakery = await merchant('Bakery');
+const b1 = await txn({ merchant_id: bakery, category_id: dDining, posted_date: '2026-10-05' });
+const b2 = await txn({ merchant_id: bakery, posted_date: '2026-10-06' }); // unreviewed, no category yet
+await one(`select public.approve_transactions($1)`, [[b1]]);
+await one(`update public.transactions set category_id = null where id = $1 returning id`, [b2]);
+const changed = (await one(`select public.recategorize_transactions($1, $2) as n`, [[b1], dGroceries])).n;
+const b1Row = await row(b1);
+check('recategorize: an approved row gets the new category and stays approved', changed === 1 && b1Row.category_id === dGroceries && b1Row.approved);
+check('recategorize: the merchant remembers the new category, and pre-fills unreviewed rows',
+  (await one(`select last_category_id from public.merchants where id = $1`, [bakery])).last_category_id === dGroceries
+  && (await row(b2)).category_id === dGroceries);
+check('recategorize: unreviewed rows are left alone', (await one(`select public.recategorize_transactions($1, $2) as n`, [[b2], dTransit])).n === 0);
+let foreignCat = false;
+const bCat = (await asUser(b, `select id from public.categories limit 1`)).rows[0].id;
+try { await one(`select public.recategorize_transactions($1, $2)`, [[b1], bCat]); foreignCat = true; } catch {}
+check("recategorize: can't use another user's category", !foreignCat);
+check("recategorize: another user can't change your rows",
+  (await asUser(b, `select public.recategorize_transactions($1, $2) as n`, [[b1], bCat])).rows[0].n === 0 && (await row(b1)).category_id === dGroceries);
+
+const tOut = await txn({ account_id: checking, amount: -40, posted_date: '2026-10-16' });
+const tIn = await txn({ account_id: card, amount: 40, posted_date: '2026-10-16' });
+await one(`select public.confirm_transfer($1, $2)`, [tOut, tIn]);
+await one(`select public.recategorize_transactions($1, $2)`, [[tOut], dTransit]);
+const [tOutRow, tInRow] = [await row(tOut), await row(tIn)];
+check('recategorize: a transfer becomes spending; its other side goes back to Review',
+  !tOutRow.is_transfer && tOutRow.transfer_pair_id === null && tOutRow.category_id === dTransit && tOutRow.approved
+  && !tInRow.is_transfer && tInRow.transfer_pair_id === null && !tInRow.approved);
+
+check('send_to_review: unapproved, keeping the category as a pre-fill',
+  (await one(`select public.send_to_review($1) as n`, [[b1]])).n === 1 && !(await row(b1)).approved && (await row(b1)).category_id === dGroceries);
+const sOut = await txn({ account_id: checking, amount: -60, posted_date: '2026-10-18' });
+const sIn = await txn({ account_id: card, amount: 60, posted_date: '2026-10-18' });
+await one(`select public.confirm_transfer($1, $2)`, [sOut, sIn]);
+const moved = (await one(`select public.send_to_review($1) as n`, [[sIn]])).n;
+const [sOutRow, sInRow] = [await row(sOut), await row(sIn)];
+check('send_to_review: a transfer loses its flag, and both sides go back',
+  moved === 1 && !sOutRow.approved && !sInRow.approved && !sOutRow.is_transfer && !sInRow.is_transfer && sOutRow.transfer_pair_id === null);
+check('send_to_review: the pair is suggested again', (await asUser(d,
+  `select count(*)::int n from public.transfer_suggestions where out_id = $1 and in_id = $2`, [sOut, sIn])).rows[0].n === 1);
+await one(`select public.approve_transactions($1)`, [[b1]]);
+check("send_to_review: another user can't send your rows back",
+  (await asUser(b, `select public.send_to_review($1) as n`, [[b1]])).rows[0].n === 0 && (await row(b1)).approved);
+
 let anonRpc3 = false;
 try { await db.exec(`set role anon;`); await db.query(`select public.approve_transactions('{}')`); anonRpc3 = true; } catch {} finally { await db.exec(`reset role;`); }
 check('signed-out visitors cannot call the review functions', !anonRpc3);
+let anonRpc4 = false;
+try { await db.exec(`set role anon;`); await db.query(`select public.send_to_review('{}')`); anonRpc4 = true; } catch {} finally { await db.exec(`reset role;`); }
+check('signed-out visitors cannot send rows back to Review', !anonRpc4);
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

@@ -132,7 +132,11 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 - Review functions (security invoker, call with `rpc`): `approve_transactions(ids)` approves
   rows that have a category or are transfers (never pending), updates merchant memory, and
   pre-fills other unreviewed rows of those merchants; `mark_transfer(id)`,
-  `confirm_transfer(out, in)`; `merge_merchants(from, into)`. View `transfer_suggestions`:
+  `confirm_transfer(out, in)`; `merge_merchants(from, into)`. Editing approved rows
+  (Transactions page): `recategorize_transactions(ids, category)` (also teaches merchant
+  memory) and `send_to_review(ids)` (keeps the category as a pre-fill). Either one un-pairs
+  a transfer and sends its other side back to Review. Merchant memory lives in
+  `learn_merchant_categories(ids)`, shared by approve and recategorize. View `transfer_suggestions`:
   unreviewed opposite amounts in different accounts within 5 days, computed, not stored.
   "Not a transfer" stores the pair in `dismissed_transfer_pairs` (yours only; cascades with
   either transaction), and the view skips it.
