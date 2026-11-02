@@ -49,7 +49,6 @@ export default function Transactions({ count, onChange }: { count: number | null
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [accounts, setAccounts] = useState<Map<string, string>>(new Map());
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -82,7 +81,6 @@ export default function Transactions({ count, onChange }: { count: number | null
       setRows((t.data ?? []) as unknown as Row[]);
       setHasMore((t.data ?? []).length === size);
       setSuggestions((s.data ?? []) as Suggestion[]);
-      setSelected(new Set());
     },
     [status],
   );
@@ -148,32 +146,26 @@ export default function Transactions({ count, onChange }: { count: number | null
   const unapprove = (r: Row) =>
     act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
 
-  const ready = rows?.filter((r) => !r.approved && !r.pending && r.category_id) ?? [];
-  const allSelected = ready.length > 0 && ready.every((r) => selected.has(r.id));
-
-  function toggle(id: string) {
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function setStatus(s: Status) {
     setNotice(null);
     setError(null);
     setParams(s === 'review' ? {} : { status: s });
   }
 
-  const unapproveButton = (r: Row) => (
-    <Button size="small" className="unapprove" disabled={busy} title="Move it back to To review" onClick={() => unapprove(r)}>
-      Unapprove
-    </Button>
-  );
+  function toggleApproved(r: Row) {
+    // flip the box right away; the reload that follows confirms it
+    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, approved: !x.approved } : x)) ?? null);
+    return r.approved ? unapprove(r) : approve([r.id]);
+  }
 
-  const approveTitle = (r: Row) =>
-    r.pending ? 'Pending: it can be approved once the bank posts it' : r.category_id ? undefined : 'Choose a category first';
+  const approvedTitle = (r: Row) =>
+    r.approved
+      ? 'Untick to move it back to To review'
+      : r.pending
+        ? 'Pending: it can be approved once the bank posts it'
+        : r.category_id
+          ? 'Tick to approve'
+          : 'Choose a category first';
 
   return (
     <section>
@@ -227,52 +219,25 @@ export default function Transactions({ count, onChange }: { count: number | null
         <>
           {suggestions.length > 0 && <h2>Transactions</h2>}
           <p className="muted small">
-            Pick a category, then approve. Approving teaches the merchant its category and pre-fills your other
-            unreviewed charges from it. Approved by mistake? Unapprove it.
+            Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
+            unreviewed charges from it. Approved by mistake? Untick it.
           </p>
-          {status !== 'approved' && (
-            <div className="bulk-bar">
-              <Button variant="primary" disabled={busy || selected.size === 0} onClick={() => approve([...selected])}>
-                Approve selected ({selected.size})
-              </Button>
-            </div>
-          )}
           <table className="register txns">
             <thead>
               <tr>
-                <th scope="col">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all ready to approve"
-                    checked={allSelected}
-                    disabled={ready.length === 0}
-                    onChange={() => setSelected(allSelected ? new Set() : new Set(ready.map((r) => r.id)))}
-                  />
-                </th>
                 <th scope="col">Date</th>
                 <th scope="col">Merchant</th>
                 <th scope="col">Account</th>
                 <th scope="col">Category</th>
                 <th scope="col" className="num">Amount</th>
-                <th scope="col">
-                  <span className="visually-hidden">Action</span>
+                <th scope="col" className="approved-col">
+                  Approved
                 </th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className={r.approved ? undefined : 'unreviewed'}>
-                  <td>
-                    {!r.approved && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${name(r)}`}
-                        checked={selected.has(r.id)}
-                        disabled={r.pending || !r.category_id}
-                        onChange={() => toggle(r.id)}
-                      />
-                    )}
-                  </td>
                   <td>{shortDate(r.posted_date)}</td>
                   <td>
                     <MerchantCell
@@ -280,10 +245,7 @@ export default function Transactions({ count, onChange }: { count: number | null
                       description={r.description}
                       postedDate={r.posted_date}
                       account={r.accounts?.name}
-                    >
-                      {/* phones: Unapprove lives here, so approved rows stay narrow */}
-                      {r.approved && <div className="phone-only row-action">{unapproveButton(r)}</div>}
-                    </MerchantCell>
+                    />
                     {r.pending && <span className="tag">Pending</span>}
                   </td>
                   <td>{r.accounts?.name}</td>
@@ -297,19 +259,15 @@ export default function Transactions({ count, onChange }: { count: number | null
                     />
                   </td>
                   <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
-                  <td className="action">
-                    {r.approved ? (
-                      unapproveButton(r)
-                    ) : (
-                      <Button
-                        size="small"
-                        disabled={busy || r.pending || !r.category_id}
-                        title={approveTitle(r)}
-                        onClick={() => approve([r.id])}
-                      >
-                        Approve
-                      </Button>
-                    )}
+                  <td className="approved-col">
+                    <input
+                      type="checkbox"
+                      aria-label={`Approved: ${name(r)}`}
+                      title={approvedTitle(r)}
+                      checked={r.approved}
+                      disabled={busy || (!r.approved && (r.pending || !r.category_id))}
+                      onChange={() => toggleApproved(r)}
+                    />
                   </td>
                 </tr>
               ))}
