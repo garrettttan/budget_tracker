@@ -167,6 +167,18 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
 .register select { padding: 0.2rem 0.4rem; }
 
+.bulk-bar { margin: 0.75rem 0; }
+.register.review td:first-child, .register.review th:first-child { width: 1.75rem; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .net-worth { font-size: var(--step-1); margin: 1.5rem 0 0; font-variant-numeric: tabular-nums; }
 .net-worth strong { margin-left: 0.5rem; }
 
@@ -259,6 +271,9 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
   /* register collapses: hide account and category columns */
   .register.txns th:nth-child(3), .register.txns td:nth-child(3),
   .register.txns th:nth-child(4), .register.txns td:nth-child(4) { display: none; }
+  /* review: hide the date and account columns */
+  .register.review th:nth-child(2), .register.review td:nth-child(2),
+  .register.review th:nth-child(4), .register.review td:nth-child(4) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
