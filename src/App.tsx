@@ -3,7 +3,6 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/auth';
 import { isConfigured, supabase } from './lib/supabase';
 import SignIn from './pages/SignIn';
-import Review from './pages/Review';
 import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
 import Settings from './pages/Settings';
@@ -12,20 +11,21 @@ import NotConfigured from './pages/NotConfigured';
 function useUnreviewedCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
   const location = useLocation();
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     if (!enabled || !supabase) return;
-    supabase
+    const { count } = await supabase
       .from('transactions')
       .select('id', { count: 'exact', head: true })
-      .eq('approved', false)
-      .then(({ count }) => setCount(count ?? 0));
+      .eq('approved', false);
+    setCount(count ?? 0);
   }, [enabled]);
-  useEffect(refresh, [refresh, location.pathname]);
+  useEffect(() => {
+    refresh();
+  }, [refresh, location.pathname]);
   return { count, refresh };
 }
 
 const NAV = [
-  { to: '/review', label: 'Review' },
   { to: '/transactions', label: 'Transactions' },
   { to: '/accounts', label: 'Accounts' },
   { to: '/settings', label: 'Settings' },
@@ -48,7 +48,7 @@ export default function App() {
             <li key={item.to}>
               <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active' : undefined)}>
                 <span>{item.label}</span>
-                {item.to === '/review' && unreviewed !== null && unreviewed > 0 && (
+                {item.to === '/transactions' && unreviewed !== null && unreviewed > 0 && (
                   <span className="badge" aria-label={`${unreviewed} to review`}>
                     {unreviewed}
                   </span>
@@ -60,11 +60,12 @@ export default function App() {
       </nav>
       <main className="page">
         <Routes>
-          <Route path="/review" element={<Review count={unreviewed} onChange={refreshUnreviewed} />} />
-          <Route path="/transactions" element={<Transactions onChange={refreshUnreviewed} />} />
+          <Route path="/transactions" element={<Transactions count={unreviewed} onChange={refreshUnreviewed} />} />
+          {/* Review and Transactions were one page each until Nov 2026 */}
+          <Route path="/review" element={<Navigate to="/transactions" replace />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />
-          <Route path="*" element={<Navigate to="/review" replace />} />
+          <Route path="*" element={<Navigate to="/transactions" replace />} />
         </Routes>
       </main>
     </div>

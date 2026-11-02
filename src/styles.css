@@ -203,8 +203,12 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .combobox li.active { background: var(--accent-wash); }
 .combobox li[aria-selected='true'] { font-weight: 600; }
 .combobox-empty { color: var(--ink-soft); cursor: default; }
-.register.review td:first-child, .register.review th:first-child { width: 1.75rem; }
+.register.txns td:first-child, .register.txns th:first-child { width: 1.75rem; }
 .row-action { margin-top: 0.4rem; }
+
+/* review filter: the pressed button is filled */
+.filter { display: flex; gap: 0.5rem; margin: 0 0 1rem; }
+.filter .btn[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .load-more { margin: 1rem 0; }
 
 /* Settings → Merchants */
@@ -321,29 +325,26 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
     z-index: 10;
   }
   .rail .wordmark { display: none; }
-  .rail ul { grid-template-columns: repeat(4, 1fr); }
+  .rail ul { grid-template-columns: repeat(3, 1fr); }
   .rail a { flex-direction: column; gap: 0.15rem; font-size: var(--step--1); padding: 0.5rem 0.25rem; }
   .page { padding-bottom: 6rem; }
   .tally-number { font-size: 3.25rem; }
 
-  /* transactions: hide date, account and action columns (date, account and
-     Send to Review are in the row's details) */
+  /* transactions: hide checkbox, date and account columns (date and account
+     are in the row's details); approve row by row */
   .register.txns th:nth-child(1), .register.txns td:nth-child(1),
-  .register.txns th:nth-child(3), .register.txns td:nth-child(3),
-  .register.txns th:nth-child(6), .register.txns td:nth-child(6) { display: none; }
-  .register.txns tr.unreviewed td:nth-child(2) { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
+  .register.txns th:nth-child(2), .register.txns td:nth-child(2),
+  .register.txns th:nth-child(4), .register.txns td:nth-child(4) { display: none; }
+  .register.txns td.action .unapprove { display: none; }
+  .phone-only.row-action { display: block; }
+  .register.txns tr.unreviewed td:nth-child(3) { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
   /* merchants: hide the remembered category */
   .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
-  /* review: hide checkbox, date and account columns; approve row by row */
-  .register.review th:nth-child(1), .register.review td:nth-child(1),
-  .register.review th:nth-child(2), .register.review td:nth-child(2),
-  .register.review th:nth-child(4), .register.review td:nth-child(4) { display: none; }
   .bulk-bar { display: none; }
   /* transfers: hide the dates column */
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
-  .register.review td, .register.review th,
   .register.txns td, .register.txns th,
   .register.merchants td, .register.merchants th,
   .register.transfers td, .register.transfers th { padding-right: 0.5rem; }
