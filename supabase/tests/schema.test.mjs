@@ -243,5 +243,98 @@ let browserSavesUrl = false;
 try { await asUser(b, `select public.save_simplefin_access_url($1, 'https://x')`, [b]); browserSavesUrl = true; } catch {}
 check('browser cannot save an Access URL', !browserSavesUrl);
 
+// ---------------------------------------------------------------------------
+// Phase 3: approving, merchant memory, transfers, merging merchants
+// (a fresh user with made-up data)
+// ---------------------------------------------------------------------------
+const d = '44444444-4444-4444-4444-444444444444';
+await db.exec(`insert into auth.users (id) values ('${d}')`);
+const one = async (sql, params) => (await asUser(d, sql, params)).rows[0];
+const catId = async (name) => (await one(`select id from public.categories where name = $1`, [name])).id;
+const [dDining, dGroceries] = [await catId('Dining'), await catId('Groceries')];
+const checking = (await one(`insert into public.accounts (name) values ('Checking') returning id`)).id;
+const card = (await one(`insert into public.accounts (name, class) values ('Card', 'liability') returning id`)).id;
+const merchant = async (name) => (await one(`insert into public.merchants (name) values ($1) returning id`, [name])).id;
+const coffee = await merchant('Coffee Shop');
+const txn = async (fields) => {
+  const f = { account_id: card, source: 'manual', posted_date: '2026-10-01', amount: -5, ...fields };
+  const cols = Object.keys(f);
+  return (await one(
+    `insert into public.transactions (${cols.join(', ')}) values (${cols.map((_, i) => `$${i + 1}`).join(', ')}) returning id`,
+    Object.values(f),
+  )).id;
+};
+const row = (id) => one(`select approved, category_id, is_transfer, transfer_pair_id, merchant_id from public.transactions where id = $1`, [id]);
+
+// approve_transactions
+const c1 = await txn({ merchant_id: coffee, category_id: dDining, posted_date: '2026-10-02' });
+const c2 = await txn({ merchant_id: coffee, posted_date: '2026-10-03' }); // uncategorized, unreviewed
+const c3 = await txn({ merchant_id: coffee, category_id: dGroceries, posted_date: '2026-10-04' }); // already has a different category
+const noCat = await txn({});
+const pend = await txn({ category_id: dDining, pending: true });
+const approvedCount = (await one(`select public.approve_transactions($1) as n`, [[c1, noCat, pend]])).n;
+check('approve: only rows with a category, and not pending', approvedCount === 1 && (await row(c1)).approved && !(await row(noCat)).approved && !(await row(pend)).approved);
+check('approve: the merchant remembers the category', (await one(`select last_category_id from public.merchants where id = $1`, [coffee])).last_category_id === dDining);
+const c2Row = await row(c2);
+check('approve: other unreviewed rows from that merchant are pre-filled, still unapproved', c2Row.category_id === dDining && !c2Row.approved);
+check('approve: a row that already has a category keeps it', (await row(c3)).category_id === dGroceries);
+const bApproves = (await asUser(b, `select public.approve_transactions($1) as n`, [[c2]])).rows[0].n;
+check("approve: another user can't approve your rows", bApproves === 0 && !(await row(c2)).approved);
+await one(`select public.approve_transactions($1)`, [[c2, c3]]);
+check('approve: the latest approved date wins merchant memory', (await one(`select last_category_id from public.merchants where id = $1`, [coffee])).last_category_id === dGroceries);
+
+// transfers
+const payOut = await txn({ account_id: checking, amount: -500, posted_date: '2026-10-10' });
+const payIn = await txn({ account_id: card, amount: 500, posted_date: '2026-10-12' });
+const farIn = await txn({ account_id: card, amount: 500, posted_date: '2026-10-20' }); // 10 days later
+const sameAcct = await txn({ account_id: checking, amount: 500, posted_date: '2026-10-11' });
+const suggested = (await asUser(d, `select out_id, in_id from public.transfer_suggestions`)).rows;
+check('suggestions: opposite amounts, different accounts, within 5 days',
+  suggested.length === 1 && suggested[0].out_id === payOut && suggested[0].in_id === payIn, JSON.stringify(suggested.length));
+check("suggestions: other users don't see yours", (await asUser(b, `select count(*)::int n from public.transfer_suggestions`)).rows[0].n === 0);
+let badPair = false;
+try { await one(`select public.confirm_transfer($1, $2)`, [payOut, sameAcct]); badPair = true; } catch {}
+check('confirm_transfer: both sides must be in different accounts', !badPair);
+try { await one(`select public.confirm_transfer($1, $2)`, [payOut, c1]); badPair = true; } catch {}
+check('confirm_transfer: amounts must be opposite', !badPair);
+await one(`select public.confirm_transfer($1, $2)`, [payOut, payIn]);
+const [o, i] = [await row(payOut), await row(payIn)];
+check('confirm_transfer: both flagged, paired to each other, and approved',
+  o.is_transfer && i.is_transfer && o.transfer_pair_id === payIn && i.transfer_pair_id === payOut && o.approved && i.approved);
+check('suggestions: a confirmed pair disappears', (await asUser(d, `select count(*)::int n from public.transfer_suggestions`)).rows[0].n === 0);
+await one(`select public.mark_transfer($1)`, [farIn]);
+const f = await row(farIn);
+check('mark_transfer: one-sided transfer is flagged and approved without a category', f.is_transfer && f.approved && f.category_id === null);
+let pendTransfer = false;
+try { await one(`select public.mark_transfer($1)`, [pend]); pendTransfer = true; } catch {}
+check('mark_transfer: pending rows wait', !pendTransfer);
+const spendNow = (await asUser(d, `select count(*)::int n from public.spending_lines where transaction_id in ($1, $2, $3)`, [payOut, payIn, farIn])).rows[0].n;
+check('transfers stay out of spending', spendNow === 0);
+
+// merge_merchants
+const cafe = await merchant('Coffee Shop Downtown');
+await one(`insert into public.merchant_aliases (merchant_id, match_key) values ($1, 'coffee shop downtown')`, [cafe]);
+const cafeTxn = await txn({ merchant_id: cafe });
+const fresh = await merchant('New Place');
+await one(`select public.merge_merchants($1, $2)`, [cafe, coffee]);
+const alias = await one(`select merchant_id from public.merchant_aliases where match_key = 'coffee shop downtown'`);
+check('merge: descriptions and transactions move to the kept merchant',
+  alias.merchant_id === coffee && (await row(cafeTxn)).merchant_id === coffee && !(await one(`select 1 as x from public.merchants where id = $1`, [cafe])));
+await one(`select public.merge_merchants($1, $2)`, [coffee, fresh]);
+check('merge: the kept merchant inherits a remembered category if it has none',
+  (await one(`select last_category_id from public.merchants where id = $1`, [fresh])).last_category_id === dGroceries);
+let selfMerge = false;
+try { await one(`select public.merge_merchants($1, $1)`, [fresh]); selfMerge = true; } catch {}
+check("merge: can't merge a merchant into itself", !selfMerge);
+let crossMerge = false;
+try { await asUser(b, `select public.merge_merchants($1, $2)`, [fresh, fresh]); crossMerge = true; } catch {}
+const bMerchant = (await asUser(b, `insert into public.merchants (name) values ('Mine') returning id`)).rows[0].id;
+try { await asUser(b, `select public.merge_merchants($1, $2)`, [bMerchant, fresh]); crossMerge = true; } catch {}
+check("merge: can't touch another user's merchants", !crossMerge);
+
+let anonRpc3 = false;
+try { await db.exec(`set role anon;`); await db.query(`select public.approve_transactions('{}')`); anonRpc3 = true; } catch {} finally { await db.exec(`reset role;`); }
+check('signed-out visitors cannot call the review functions', !anonRpc3);
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);
