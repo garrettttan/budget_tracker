@@ -129,6 +129,11 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 - Every table has `user_id` + RLS `user_id = (select auth.uid())`.
 - `connections`, `balance_snapshots`, `sync_runs` are read-only from the browser.
 - `accounts.class` (`cash` | `investment` | `liability`) replaced the unused `accounts.type`.
+- Review functions (security invoker, call with `rpc`): `approve_transactions(ids)` approves
+  rows that have a category or are transfers (never pending), updates merchant memory, and
+  pre-fills other unreviewed rows of those merchants; `mark_transfer(id)`,
+  `confirm_transfer(out, in)`; `merge_merchants(from, into)`. View `transfer_suggestions`:
+  unreviewed opposite amounts in different accounts within 5 days, computed, not stored.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);
