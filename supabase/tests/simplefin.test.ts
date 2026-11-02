@@ -58,17 +58,17 @@ test('the Access URL credentials become a Basic auth header', async () => {
   assert.equal(auth, `Basic ${btoa('u:p')}`);
 });
 
-test('windows: incremental overlaps 10 days; long gaps split into ≤ 90-day pieces, at most 3', () => {
+test('windows: incremental overlaps 10 days; long gaps split into ≤ 45-day pieces, at most 3', () => {
   const [daily] = planWindows('2026-11-01', now);
   assert.equal(daily.start, epoch('2026-10-22T00:00:00Z'));
   assert.equal(daily.end, epoch(now.toISOString()) + DAY);
 
-  const gap = planWindows('2026-06-01', now);
+  const gap = planWindows('2026-09-01', now);
   assert.equal(gap.length, 2);
   assert.equal(gap[0].start, gap[1].end, 'contiguous, newest first');
-  for (const w of gap) assert.ok(w.end - w.start <= 90 * DAY);
+  for (const w of gap) assert.ok(w.end - w.start <= 45 * DAY);
 
-  assert.equal(planWindows(null, now).length, 3, 'first sync: up to 270 days back');
+  assert.equal(planWindows(null, now).length, 3, 'first sync: up to 135 days back');
   assert.equal(planWindows('2025-01-01', now).length, 3);
 });
 
