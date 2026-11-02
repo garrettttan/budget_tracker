@@ -134,6 +134,8 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
   pre-fills other unreviewed rows of those merchants; `mark_transfer(id)`,
   `confirm_transfer(out, in)`; `merge_merchants(from, into)`. View `transfer_suggestions`:
   unreviewed opposite amounts in different accounts within 5 days, computed, not stored.
+  "Not a transfer" stores the pair in `dismissed_transfer_pairs` (yours only; cascades with
+  either transaction), and the view skips it.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);
@@ -161,6 +163,11 @@ Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accen
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
 rules, no cards. The Review count is the one large element. Avoid all-caps labels.
+
+Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
+`primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`
+(needs `aria-label`); `size="small"` inside table rows. Disabled buttons fade with a
+not-allowed cursor; give a disabled action a `title` that says why.
 
 ## Build phases
 

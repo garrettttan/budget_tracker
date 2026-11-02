@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { db } from '../lib/supabase';
 import { relativeTime } from '../lib/format';
+import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
 
@@ -105,9 +106,7 @@ export default function Settings({ email }: { email: string }) {
 
       <h2>Account</h2>
       <p className="muted">Signed in as {email}</p>
-      <button type="button" onClick={() => db().auth.signOut()}>
-        Sign out
-      </button>
+      <Button onClick={() => db().auth.signOut()}>Sign out</Button>
     </section>
   );
 }

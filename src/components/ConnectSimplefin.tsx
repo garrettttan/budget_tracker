@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { db } from '../lib/supabase';
+import Button from './Button';
 
 type ClaimResponse = {
   sync: { status: 'skipped'; reason: string } | { status: 'ok' | 'warning' | 'error'; new: number };
@@ -42,9 +43,9 @@ export default function ConnectSimplefin({ onConnected }: { onConnected: () => v
         Setup Token
         <input type="text" autoComplete="off" spellCheck={false} required value={token} onChange={(e) => setToken(e.target.value)} />
       </label>
-      <button type="submit" className="primary" disabled={busy}>
+      <Button type="submit" variant="primary" disabled={busy}>
         {busy ? 'Connecting and syncing…' : 'Connect SimpleFIN'}
-      </button>
+      </Button>
       {busy && <p className="muted">The first sync can take up to a minute.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}

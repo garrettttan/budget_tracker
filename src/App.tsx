@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/auth';
 import { isConfigured, supabase } from './lib/supabase';
@@ -12,15 +12,16 @@ import NotConfigured from './pages/NotConfigured';
 function useUnreviewedCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
   const location = useLocation();
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!enabled || !supabase) return;
     supabase
       .from('transactions')
       .select('id', { count: 'exact', head: true })
       .eq('approved', false)
       .then(({ count }) => setCount(count ?? 0));
-  }, [enabled, location.pathname]);
-  return count;
+  }, [enabled]);
+  useEffect(refresh, [refresh, location.pathname]);
+  return { count, refresh };
 }
 
 const NAV = [
@@ -32,7 +33,7 @@ const NAV = [
 
 export default function App() {
   const { session, loading } = useAuth();
-  const unreviewed = useUnreviewedCount(Boolean(session));
+  const { count: unreviewed, refresh: refreshUnreviewed } = useUnreviewedCount(Boolean(session));
 
   if (!isConfigured) return <NotConfigured />;
   if (loading) return <div className="boot" aria-busy="true" />;
@@ -59,7 +60,7 @@ export default function App() {
       </nav>
       <main className="page">
         <Routes>
-          <Route path="/review" element={<Review count={unreviewed} />} />
+          <Route path="/review" element={<Review count={unreviewed} onChange={refreshUnreviewed} />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />

@@ -311,6 +311,24 @@ check('mark_transfer: pending rows wait', !pendTransfer);
 const spendNow = (await asUser(d, `select count(*)::int n from public.spending_lines where transaction_id in ($1, $2, $3)`, [payOut, payIn, farIn])).rows[0].n;
 check('transfers stay out of spending', spendNow === 0);
 
+// "Not a transfer": dismissing a suggestion
+const dOut = await txn({ account_id: checking, amount: -75, posted_date: '2026-10-14' });
+const dIn = await txn({ account_id: card, amount: 75, posted_date: '2026-10-15' });
+const pairShown = async (who) =>
+  (await asUser(who, `select count(*)::int n from public.transfer_suggestions where out_id = $1 and in_id = $2`, [dOut, dIn])).rows[0].n === 1;
+check('dismiss: the pair is suggested at first', await pairShown(d));
+let foreignDismiss = false;
+try { await asUser(b, `insert into public.dismissed_transfer_pairs (out_id, in_id) values ($1, $2)`, [dOut, dIn]); foreignDismiss = true; } catch {}
+check("dismiss: nobody else can dismiss your pairs", !foreignDismiss && (await pairShown(d)));
+await one(`insert into public.dismissed_transfer_pairs (out_id, in_id) values ($1, $2) returning out_id`, [dOut, dIn]);
+check('dismiss: your dismissal hides it', !(await pairShown(d)));
+const [dOutRow, dInRow] = [await row(dOut), await row(dIn)];
+check('dismiss: both transactions stay unreviewed and unflagged',
+  !dOutRow.approved && !dInRow.approved && !dOutRow.is_transfer && !dInRow.is_transfer);
+await one(`delete from public.transactions where id = $1 returning id`, [dIn]);
+check('dismiss: removed along with its transaction',
+  (await asUser(d, `select count(*)::int n from public.dismissed_transfer_pairs where out_id = $1`, [dOut])).rows[0].n === 0);
+
 // merge_merchants
 const cafe = await merchant('Coffee Shop Downtown');
 await one(`insert into public.merchant_aliases (merchant_id, match_key) values ($1, 'coffee shop downtown')`, [cafe]);

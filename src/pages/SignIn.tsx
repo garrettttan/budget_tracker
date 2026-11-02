@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { db } from '../lib/supabase';
+import Button from '../components/Button';
 
 type Mode = 'sign-in' | 'create';
 
@@ -63,19 +64,18 @@ export default function SignIn() {
         </label>
         {error && <p className="error" role="alert">{error}</p>}
         {notice && <p className="notice" role="status">{notice}</p>}
-        <button type="submit" className="primary" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {busy ? 'Working…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
-        </button>
-        <button
-          type="button"
-          className="link"
+        </Button>
+        <Button
+          variant="link"
           onClick={() => {
             setMode(mode === 'sign-in' ? 'create' : 'sign-in');
             setError(null);
           }}
         >
           {mode === 'sign-in' ? 'First time here? Create your account' : 'Already have an account? Sign in'}
-        </button>
+        </Button>
       </form>
     </div>
   );
