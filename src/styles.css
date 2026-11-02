@@ -169,6 +169,12 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 /* row buttons: compact, and set apart from the amount column */
 .register td.action { text-align: right; white-space: nowrap; padding-left: 1.25rem; padding-right: 0; }
 .register td.action button { font-size: var(--step--1); padding: 0.25rem 0.6rem; }
+.register td.action button:not(.dismiss) { transition: background-color 120ms, border-color 120ms, color 120ms; }
+.register td.action button:not(.dismiss):hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+}
 .register td.action button + button { margin-left: 0.5rem; }
 .register td.action button.dismiss {
   border: none;
