@@ -18,8 +18,8 @@ review inbox (filter To review / Approved / All, searchable category picker on e
 an Approved checkbox to approve or unapprove, bulk approve, transfer suggestions with
 Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
 editing approved rows (recategorize, mark transfer, send back to Review); Settings →
-Merchants (rename, merge); tags (on each row under the merchant: "+ Tag" picks or creates
-one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
+Merchants (rename, merge); tags (a Tags column; on phones, in the row's tap-to-expand details: "+ Tag" picks or
+creates one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
 renames, deletes).
 
 **Next: finish phase 3.**
