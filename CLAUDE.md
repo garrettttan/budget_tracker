@@ -44,7 +44,8 @@ PR branch can be clicked through before merge.
 ## Workflow
 
 - Never push to `main`. Every change goes on a branch with a PR for Garrett to review;
-  merging to `main` deploys to Pages.
+  merging to `main` deploys to Pages. Exception: a commit that changes only `CLAUDE.md`
+  can be pushed straight to `main`.
 - **Merging to `main` deploys Supabase too** (GitHub integration, "Deploy to production"):
   new migrations are applied (recorded under the filename's version) and the edge functions
   declared in `config.toml` are deployed. Auth/API settings in `config.toml` are ignored, so
