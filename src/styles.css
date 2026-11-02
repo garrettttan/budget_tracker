@@ -204,6 +204,15 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .combobox li[aria-selected='true'] { font-weight: 600; }
 .combobox-empty { color: var(--ink-soft); cursor: default; }
 .register.review td:first-child, .register.review th:first-child { width: 1.75rem; }
+.row-action { margin-top: 0.4rem; }
+.load-more { margin: 1rem 0; }
+
+/* Settings → Merchants */
+.merchant-filter { width: 16rem; max-width: 100%; margin-bottom: 0.5rem; }
+.merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
+.register tr.merge-row td { background: var(--accent-wash); }
+.merge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.merge-row p { margin: 0.4rem 0 0; }
 
 .visually-hidden {
   position: absolute;
@@ -317,9 +326,14 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .page { padding-bottom: 6rem; }
   .tally-number { font-size: 3.25rem; }
 
-  /* register collapses: hide account and category columns */
+  /* transactions: hide date, account and action columns (date, account and
+     Send to Review are in the row's details) */
+  .register.txns th:nth-child(1), .register.txns td:nth-child(1),
   .register.txns th:nth-child(3), .register.txns td:nth-child(3),
-  .register.txns th:nth-child(4), .register.txns td:nth-child(4) { display: none; }
+  .register.txns th:nth-child(6), .register.txns td:nth-child(6) { display: none; }
+  .register.txns tr.unreviewed td:nth-child(2) { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
+  /* merchants: hide the remembered category */
+  .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
   /* review: hide checkbox, date and account columns; approve row by row */
   .register.review th:nth-child(1), .register.review td:nth-child(1),
   .register.review th:nth-child(2), .register.review td:nth-child(2),
@@ -330,6 +344,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
   .register.review td, .register.review th,
+  .register.txns td, .register.txns th,
+  .register.merchants td, .register.merchants th,
   .register.transfers td, .register.transfers th { padding-right: 0.5rem; }
   .combobox input { width: 6.5rem; }
   .register td.action { padding-left: 0.25rem; }

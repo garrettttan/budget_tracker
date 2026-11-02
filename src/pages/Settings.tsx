@@ -4,6 +4,7 @@ import { relativeTime } from '../lib/format';
 import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
+import MerchantList from '../components/MerchantList';
 
 type Category = { id: string; name: string; group_name: string | null; is_income: boolean; archived: boolean };
 
@@ -103,6 +104,9 @@ export default function Settings({ email }: { email: string }) {
           </div>
         ))}
       </dl>
+
+      <h2>Merchants</h2>
+      <MerchantList />
 
       <h2>Account</h2>
       <p className="muted">Signed in as {email}</p>

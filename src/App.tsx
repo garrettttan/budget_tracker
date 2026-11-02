@@ -61,7 +61,7 @@ export default function App() {
       <main className="page">
         <Routes>
           <Route path="/review" element={<Review count={unreviewed} onChange={refreshUnreviewed} />} />
-          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions" element={<Transactions onChange={refreshUnreviewed} />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
