@@ -1,4 +1,5 @@
 import { money, shortDate } from '../lib/format';
+import Button from './Button';
 
 export type Suggestion = { out_id: string; in_id: string; amount: string; out_date: string; in_date: string };
 
@@ -46,19 +47,18 @@ export default function TransferSuggestions({
               </td>
               <td className="num">{money(s.amount)}</td>
               <td className="action">
-                <button type="button" disabled={busy} onClick={() => onConfirm(s)}>
+                <Button size="small" disabled={busy} onClick={() => onConfirm(s)}>
                   Confirm transfer
-                </button>
-                <button
-                  type="button"
-                  className="dismiss"
+                </Button>
+                <Button
+                  variant="icon"
                   aria-label="Not a transfer"
                   title="Not a transfer"
                   disabled={busy}
                   onClick={() => onDismiss(s)}
                 >
                   ×
-                </button>
+                </Button>
               </td>
             </tr>
           ))}

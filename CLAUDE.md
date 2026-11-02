@@ -164,6 +164,11 @@ Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accen
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
 rules, no cards. The Review count is the one large element. Avoid all-caps labels.
 
+Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
+`primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`
+(needs `aria-label`); `size="small"` inside table rows. Disabled buttons fade with a
+not-allowed cursor; give a disabled action a `title` that says why.
+
 ## Build phases
 
 1. Foundation (above)
