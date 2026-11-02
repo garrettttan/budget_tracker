@@ -207,7 +207,12 @@ export default function Review({ count, onChange }: { count: number | null; onCh
                   </td>
                   <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
                   <td className="action">
-                    <button type="button" disabled={busy || !r.category_id} onClick={() => approve([r.id])}>
+                    <button
+                      type="button"
+                      disabled={busy || !r.category_id}
+                      title={r.category_id ? undefined : 'Choose a category first'}
+                      onClick={() => approve([r.id])}
+                    >
                       Approve
                     </button>
                   </td>
