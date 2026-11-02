@@ -24,6 +24,9 @@ Merchants (rename, merge).
 - Manual accounts (e.g. Venmo: no `connection_id`), added from the Accounts page
 - Add transaction (account, date, amount in/out, description, category, note), saved as
   already approved since you entered it
+- Tags (tables `tags` + `transaction_tags` exist, no UI yet): create and rename in Settings;
+  add or remove tags on one row or several selected rows on Transactions; filter by tag.
+  Trends (phase 6) then toggles tags on and shows a total per tag (`tag_spend`).
 
 **To check:** the first scheduled sync (`.github/workflows/sync.yml`) is due Nov 3 at
 10:17 UTC. A manual run (Run workflow) succeeded on Nov 2. Confirm a `schedule` run shows
@@ -193,10 +196,11 @@ not-allowed cursor; give a disabled action a `title` that says why.
 1. Foundation: **done**
 2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log): **done**
 3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing):
-   mostly **done**; manual accounts and Add transaction next
+   mostly **done**; manual accounts, Add transaction and tags next
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
 5. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
-6. Trends (spending by category, category over time, cash flow, net worth)
+6. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
+   per-tag totals)
 
 ## Commands
 
