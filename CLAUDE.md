@@ -12,22 +12,31 @@ plan: https://claude.ai/artifact/Vy9euCxBXrLegJXUcK2UBz
 
 ## Status (Nov 2, 2026)
 
-**Phases 1 and 2 are done.** SimpleFIN is connected and the first sync ran on Nov 2.
-Edge functions `sync` (verify_jwt off) and `simplefin-claim` are deployed; `SYNC_SECRET` is
-set in Supabase and as a GitHub repo secret.
+**Done:** phase 1 (foundation), phase 2 (SimpleFIN connect + daily sync), and phase 3
+parts 1–2: the review/transfer/merge database functions and the Review inbox (searchable
+category picker, bulk approve, transfer suggestions with Confirm / × dismiss, merchant
+name with the bank's text on hover or tap).
+
+**Next: phase 3, part 3.**
+- Settings → Merchants: list with transaction counts, rename, merge (`merge_merchants`)
+- Transactions page: edit an approved row (category, transfer flag, send back to Review),
+  and "load more" instead of the 200-row cap
+
+**Open issue:** the scheduled sync (`.github/workflows/sync.yml`, 10:17 UTC) has never run.
+The repo was recreated on Nov 2 and the first scheduled run didn't fire. Check the Actions
+tab, do a manual run (Run workflow), and confirm a new `sync_runs` row.
 
 Keep personal financial details (account names or numbers, balances, transaction counts,
 institutions) out of this public repo: code, tests, commits, PRs and this file.
 
-- [x] `supabase/migrations/20261102013452_initial_schema.sql`: tests pass (`npm run test:db`)
-- [x] Web app shell builds (`npm run build`)
-- [x] Applied to `ppfxuyueackbytpbqqva` (version 20261102013452, matching the filename).
-      Security advisor clean; performance advisor shows only "unused index" (empty DB)
-- [x] Code on `main` (PR #1); Pages source = GitHub Actions; repo variables
-      `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` set. Live at
-      https://garrettttan.github.io/budget_tracker/
-- [x] Supabase Auth: Site URL = the Pages URL; Garrett's account created; new sign-ups off
-- [x] Done check: one confirmed user, 14 categories seeded by the sign-up trigger
+**Setup facts:** live at https://garrettttan.github.io/budget_tracker/ (Pages from GitHub
+Actions; repo variables `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`; secret `SYNC_SECRET`).
+Supabase Auth Site URL = the Pages URL; new sign-ups are off.
+
+**Testing UI changes:** a test user with made-up data exists in the live project (its
+credentials are kept out of the repo). Local Playwright scripts in `.local/e2e/` (excluded
+via `.git/info/exclude`, never pushed) drive `npm run dev` on port 5173 as that user, so a
+PR branch can be clicked through before merge.
 
 ## Workflow
 
@@ -171,9 +180,10 @@ not-allowed cursor; give a disabled action a `title` that says why.
 
 ## Build phases
 
-1. Foundation (above)
-2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log)
-3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing)
+1. Foundation: **done**
+2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log): **done**
+3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing):
+   parts 1–2 **done**; part 3 (merchants page, editing transactions) next
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
 5. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
 6. Trends (spending by category, category over time, cash flow, net worth)
