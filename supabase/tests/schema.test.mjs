@@ -40,8 +40,23 @@ const check = (name, ok, detail = '') => {
 };
 
 await db.exec(stub);
-for (const file of migrations) await db.exec(readFileSync(join(dir, file), 'utf8'));
+const legacy = '33333333-3333-3333-3333-333333333333';
+for (const file of migrations) {
+  if (file.includes('account_classes')) {
+    // rows written with the old accounts.type column, to check the backfill
+    await db.exec(`insert into auth.users (id) values ('${legacy}');
+      insert into public.accounts (user_id, name, type) values ('${legacy}', 'Old card', 'credit'), ('${legacy}', 'Old Venmo', 'manual');`);
+  }
+  await db.exec(readFileSync(join(dir, file), 'utf8'));
+}
 check(`migrations apply (${migrations.length})`, true);
+const backfilled = Object.fromEntries((await db.query(`select name, class from public.accounts where user_id = $1`, [legacy])).rows.map((r) => [r.name, r.class]));
+check('account classes backfilled from type (credit → liability, manual → cash)', backfilled['Old card'] === 'liability' && backfilled['Old Venmo'] === 'cash', JSON.stringify(backfilled));
+await db.exec(readFileSync(join(dir, migrations.find((f) => f.includes('account_classes'))), 'utf8'));
+check('account classes migration is safe to re-run', true);
+let badClass = false;
+try { await db.exec(`insert into public.accounts (user_id, name, class) values ('${legacy}', 'X', 'other')`); badClass = true; } catch {}
+check('account class must be cash, investment or liability', !badClass);
 
 const a = '11111111-1111-1111-1111-111111111111';
 const b = '22222222-2222-2222-2222-222222222222';
@@ -59,8 +74,8 @@ const asUser = async (uid, sql, params) => {
 };
 
 // User A sets up data
-const acct = (await asUser(a, `insert into public.accounts (name, type) values ('Rewards Card','credit') returning id`)).rows[0].id;
-const venmo = (await asUser(a, `insert into public.accounts (name, type) values ('Venmo','manual') returning id`)).rows[0].id;
+const acct = (await asUser(a, `insert into public.accounts (name, class) values ('Rewards Card','liability') returning id`)).rows[0].id;
+const venmo = (await asUser(a, `insert into public.accounts (name) values ('Venmo') returning id`)).rows[0].id;
 const dining = (await asUser(a, `select id from public.categories where name='Dining'`)).rows[0].id;
 const income = (await asUser(a, `select id from public.categories where name='Income'`)).rows[0].id;
 

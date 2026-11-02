@@ -8,6 +8,7 @@ import {
   claimAccessUrl,
   decodeSetupToken,
   fetchAccountSet,
+  guessAccountClass,
   isStalePending,
   merchantName,
   normalizeDescription,
@@ -132,4 +133,11 @@ test('merchant keys group variants of one merchant', () => {
   assert.equal(merchantName('joes coffee'), 'Joes Coffee');
   assert.equal(merchantName("trader joe's"), "Trader Joe's");
   assert.equal(merchantName('amazon.com'), 'Amazon.com');
+});
+
+test('new accounts: cards and negative balances are liabilities, the rest start as cash', () => {
+  assert.equal(guessAccountClass({ name: 'CREDIT CARD (1234)', balance: '0.00' }), 'liability');
+  assert.equal(guessAccountClass({ name: 'Rewards (5678)', balance: '-50.00' }), 'liability');
+  assert.equal(guessAccountClass({ name: 'Checking (0001)', balance: '100.00' }), 'cash');
+  assert.equal(guessAccountClass({ name: 'Individual (ABCD)', balance: '100.00' }), 'cash', 'investments are set by hand');
 });

@@ -164,6 +164,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register td.out { color: var(--out); }
 .register td.in { color: var(--in); }
 .register tr.unreviewed td:first-child { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
+.register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
+.register select { padding: 0.2rem 0.4rem; }
+
+.net-worth { font-size: var(--step-1); margin: 1.5rem 0 0; font-variant-numeric: tabular-nums; }
+.net-worth strong { margin-left: 0.5rem; }
 
 .tag {
   margin-left: 0.5rem;
@@ -199,7 +204,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .auth { display: grid; gap: 1rem; }
 .auth label { display: grid; gap: 0.35rem; font-weight: 500; }
 
-input {
+input, select {
   font: inherit;
   color: var(--ink);
   background: var(--surface);
@@ -207,7 +212,7 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
 }
-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
 
 button {
   font: inherit;

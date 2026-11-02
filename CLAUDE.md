@@ -48,7 +48,13 @@ Garrett then pastes his Setup Token in Settings.
 - **Reimbursements** are first-class: mark part of a transaction as owed by someone;
   link the incoming payment later. Category spending counts only your share; written-off
   reimbursements count fully again; linked payments aren't income.
-- **Venmo is not on SimpleFIN**, so it's a manual account (`type = 'manual'`): payments
+- **Account classes: Cash** (checking, savings, Venmo), **Investments**, **Liabilities**
+  (credit cards), in `accounts.class`. Investments are balance-only: the sync updates the
+  balance and daily snapshot but imports no transactions (investment trades aren't
+  spending). New accounts are guessed (negative balance or "credit"/"card" in the name →
+  liability, else cash); set investments on the Accounts page, which deletes their
+  imported transactions after a confirm.
+- **Venmo is not on SimpleFIN**, so it's a manual account (no `connection_id`): payments
   entered by hand or via Venmo CSV. Venmo cash-outs to the bank are transfers.
 - **Backfill all of 2026** via CSV/OFX import (SimpleFIN only has ~90 days).
 - **Budgeting: tracking only for v1.** Monthly per-category targets later
@@ -111,6 +117,7 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 - Amounts `numeric(12,2)`; negative = money out (SimpleFIN's convention).
 - Every table has `user_id` + RLS `user_id = (select auth.uid())`.
 - `connections`, `balance_snapshots`, `sync_runs` are read-only from the browser.
+- `accounts.class` (`cash` | `investment` | `liability`) replaced the unused `accounts.type`.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);

@@ -250,3 +250,18 @@ export function normalizeDescription(description: string): string {
 export function merchantName(key: string): string {
   return key.replace(/(^|\s)[a-z]/g, (c) => c.toUpperCase());
 }
+
+// ---------------------------------------------------------------------------
+// Account classes
+// ---------------------------------------------------------------------------
+
+export type AccountClass = 'cash' | 'investment' | 'liability';
+
+/**
+ * Best guess for a newly seen account; you can change it on the Accounts page.
+ * SimpleFIN doesn't say what kind of account it is. Investments can't be told
+ * apart by name ("Individual"), so they start as Cash.
+ */
+export function guessAccountClass(account: Pick<SfAccount, 'name' | 'balance'>): AccountClass {
+  return Number(account.balance) < 0 || /credit|card/i.test(account.name) ? 'liability' : 'cash';
+}
