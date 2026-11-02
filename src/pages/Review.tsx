@@ -193,7 +193,7 @@ export default function Review({ count, onChange }: { count: number | null; onCh
                   <td>{shortDate(r.posted_date)}</td>
                   <td>
                     {r.merchants?.name ?? r.description}
-                    <div className="muted small">{r.description}</div>
+                    {r.merchants && <div className="muted small raw">{r.description}</div>}
                   </td>
                   <td>{r.accounts?.name}</td>
                   <td>
