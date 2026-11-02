@@ -21,7 +21,7 @@ export default function TransferSuggestions({
       <h2>Possible transfers</h2>
       <p className="muted small">
         Money moving between your own accounts isn't spending. Confirm a pair to mark both sides as a transfer and approve
-        them. If it isn't a transfer, choose "Not a transfer" and categorize both transactions below as usual.
+        them. If it isn't, dismiss it with × and categorize both transactions below as usual.
       </p>
       <table className="register">
         <thead>
@@ -49,8 +49,15 @@ export default function TransferSuggestions({
                 <button type="button" disabled={busy} onClick={() => onConfirm(s)}>
                   Confirm transfer
                 </button>
-                <button type="button" className="link" disabled={busy} onClick={() => onDismiss(s)}>
-                  Not a transfer
+                <button
+                  type="button"
+                  className="dismiss"
+                  aria-label="Not a transfer"
+                  title="Not a transfer"
+                  disabled={busy}
+                  onClick={() => onDismiss(s)}
+                >
+                  ×
                 </button>
               </td>
             </tr>
