@@ -22,6 +22,7 @@ export default function Review({ count, onChange }: { count: number | null; onCh
   const [categories, setCategories] = useState<Category[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set()); // rows showing their details
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -93,6 +94,15 @@ export default function Review({ count, onChange }: { count: number | null; onCh
   const ready = toReview.filter((r) => r.category_id);
   const allSelected = ready.length > 0 && ready.every((r) => selected.has(r.id));
   const accountName = (id: string) => rows?.find((r) => r.id === id)?.accounts?.name ?? '';
+
+  function toggleDetails(id: string) {
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -188,8 +198,26 @@ export default function Review({ count, onChange }: { count: number | null; onCh
                   </td>
                   <td>{shortDate(r.posted_date)}</td>
                   <td>
-                    {r.merchants?.name ?? r.description}
-                    {r.merchants && <div className="muted small raw">{r.description}</div>}
+                    {/* name only; hover (desktop) shows the bank's text, click/tap shows details */}
+                    <Button
+                      variant="link"
+                      className="merchant-toggle"
+                      title={r.description}
+                      aria-expanded={expanded.has(r.id)}
+                      aria-controls={`details-${r.id}`}
+                      onClick={() => toggleDetails(r.id)}
+                    >
+                      {r.merchants?.name ?? r.description}
+                    </Button>
+                    {expanded.has(r.id) && (
+                      <div id={`details-${r.id}`} className="row-details">
+                        <span className="phone-only">
+                          {shortDate(r.posted_date)} · {r.accounts?.name}
+                          <br />
+                        </span>
+                        {r.description}
+                      </div>
+                    )}
                   </td>
                   <td>{r.accounts?.name}</td>
                   <td>

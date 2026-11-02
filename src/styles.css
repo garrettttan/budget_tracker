@@ -175,6 +175,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 .bulk-bar { margin: 0.75rem 0; }
 
+/* merchant name in Review: looks like text; click/tap shows the row's details */
+.btn-link.merchant-toggle { color: var(--ink); font-weight: inherit; text-align: left; }
+.row-details { color: var(--ink-soft); font-size: var(--step--1); margin-top: 0.2rem; overflow-wrap: anywhere; }
+.phone-only { display: none; }
+
 /* searchable category picker */
 .combobox { position: relative; }
 .combobox input { width: 12rem; max-width: 100%; padding: 0.2rem 0.4rem; }
@@ -323,7 +328,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* transfers: hide the dates column */
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
-  .register.review .raw { display: none; }
+  .phone-only { display: inline; }
   .register.review td, .register.review th,
   .register.transfers td, .register.transfers th { padding-right: 0.5rem; }
   .combobox input { width: 6.5rem; }
