@@ -43,7 +43,7 @@ export default function TransferSuggestions({
                 {s.in_date !== s.out_date && <span className="muted"> → {shortDate(s.in_date)}</span>}
               </td>
               <td className="num">{money(s.amount)}</td>
-              <td className="num">
+              <td className="action">
                 <button type="button" disabled={busy} onClick={() => onConfirm(s)}>
                   Confirm transfer
                 </button>

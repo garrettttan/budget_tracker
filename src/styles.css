@@ -166,6 +166,9 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register tr.unreviewed td:first-child { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
 .register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
 .register select { padding: 0.2rem 0.4rem; }
+/* row buttons: compact, and set apart from the amount column */
+.register td.action { text-align: right; white-space: nowrap; padding-left: 1.25rem; padding-right: 0; }
+.register td.action button { font-size: var(--step--1); padding: 0.25rem 0.6rem; }
 
 .bulk-bar { margin: 0.75rem 0; }
 .register.review td:first-child, .register.review th:first-child { width: 1.75rem; }
