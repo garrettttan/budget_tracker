@@ -12,19 +12,22 @@ plan: https://claude.ai/artifact/Vy9euCxBXrLegJXUcK2UBz
 
 ## Status (Nov 2, 2026)
 
-**Done:** phase 1 (foundation), phase 2 (SimpleFIN connect + daily sync), and phase 3
-parts 1–2: the review/transfer/merge database functions and the Review inbox (searchable
-category picker, bulk approve, transfer suggestions with Confirm / × dismiss, merchant
-name with the bank's text on hover or tap).
+**Done:** phase 1 (foundation), phase 2 (SimpleFIN connect + daily sync), and most of
+phase 3: review/transfer/merge database functions; one Transactions page that is also the
+review inbox (filter To review / Approved / All, searchable category picker on every row,
+an Approved checkbox to approve or unapprove, bulk approve, transfer suggestions with
+Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
+editing approved rows (recategorize, mark transfer, send back to Review); Settings →
+Merchants (rename, merge).
 
-**Next: phase 3, part 3.**
-- Settings → Merchants: list with transaction counts, rename, merge (`merge_merchants`)
-- Transactions page: edit an approved row (category, transfer flag, send back to Review),
-  and "load more" instead of the 200-row cap
+**Next: finish phase 3.**
+- Manual accounts (e.g. Venmo: no `connection_id`), added from the Accounts page
+- Add transaction (account, date, amount in/out, description, category, note), saved as
+  already approved since you entered it
 
-**Open issue:** the scheduled sync (`.github/workflows/sync.yml`, 10:17 UTC) has never run.
-The repo was recreated on Nov 2 and the first scheduled run didn't fire. Check the Actions
-tab, do a manual run (Run workflow), and confirm a new `sync_runs` row.
+**To check:** the first scheduled sync (`.github/workflows/sync.yml`) is due Nov 3 at
+10:17 UTC. A manual run (Run workflow) succeeded on Nov 2. Confirm a `schedule` run shows
+in the Actions tab and a new `sync_runs` row.
 
 Keep personal financial details (account names or numbers, balances, transaction counts,
 institutions) out of this public repo: code, tests, commits, PRs and this file.
@@ -123,9 +126,9 @@ rate-limit warning.
 
 ## Schema notes (see the migration for details)
 
-13 tables: connections, accounts, categories, merchants, merchant_aliases, import_batches,
+14 tables: connections, accounts, categories, merchants, merchant_aliases, import_batches,
 transactions, reimbursements, reimbursement_payments, tags, transaction_tags,
-balance_snapshots, sync_runs.
+dismissed_transfer_pairs, balance_snapshots, sync_runs.
 Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`), `tag_spend`
 (total per tag, e.g. a trip). Functions (call with `rpc`): `monthly_category_spend(include_tags)`,
 `monthly_cashflow(include_tags)`.
@@ -170,7 +173,7 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
 from any Pages subpath. Pages: Transactions (also the review inbox: filter To review /
-Approved / All via `?status=`; every row has a category picker and Approve or Unapprove;
+Approved / All via `?status=`; every row has a category picker and an Approved checkbox;
 `/review` redirects here), Accounts, Settings, SignIn.
 Email + password auth (single user).
 
@@ -189,7 +192,7 @@ not-allowed cursor; give a disabled action a `title` that says why.
 1. Foundation: **done**
 2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log): **done**
 3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing):
-   parts 1–2 **done**; part 3 (merchants page, editing transactions) next
+   mostly **done**; manual accounts and Add transaction next
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
 5. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
 6. Trends (spending by category, category over time, cash flow, net worth)
