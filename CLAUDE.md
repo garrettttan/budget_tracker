@@ -33,11 +33,13 @@ institutions) out of this public repo: code, tests, commits, PRs and this file.
 
 - Never push to `main`. Every change goes on a branch with a PR for Garrett to review;
   merging to `main` deploys to Pages.
-- **Migrations apply automatically on merge** (Supabase GitHub integration), recorded under
-  the filename's version. Never apply them by hand, and keep them safe to re-run. The
-  integration does not deploy edge functions:
+- **Merging to `main` deploys Supabase too** (GitHub integration, "Deploy to production"):
+  new migrations are applied (recorded under the filename's version) and the edge functions
+  declared in `config.toml` are deployed. Auth/API settings in `config.toml` are ignored, so
+  its localhost `site_url` doesn't touch production. Never apply migrations by hand; keep
+  them safe to re-run. Manual function deploy, if ever needed:
   `supabase functions deploy <name> --project-ref ppfxuyueackbytpbqqva --use-api`
-  (add `--no-verify-jwt` for `sync`).
+  (add `--no-verify-jwt` for `sync`). Automatic branching stays off (paid on Free plan).
 - Avoid stacked PRs: the repo doesn't auto-delete merged branches, so a stacked PR merges
   into its base branch instead of `main`.
 - To redeploy without a code change: Actions → Deploy to GitHub Pages → Run workflow.
