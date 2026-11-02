@@ -1,7 +1,15 @@
 import { money, shortDate } from '../lib/format';
 import Button from './Button';
 
-export type Suggestion = { out_id: string; in_id: string; amount: string; out_date: string; in_date: string };
+export type Suggestion = {
+  out_id: string;
+  in_id: string;
+  out_account_id: string;
+  in_account_id: string;
+  amount: string;
+  out_date: string;
+  in_date: string;
+};
 
 /** Possible transfers: an outflow and a matching inflow in two of your accounts. */
 export default function TransferSuggestions({
@@ -12,7 +20,7 @@ export default function TransferSuggestions({
   busy,
 }: {
   suggestions: Suggestion[];
-  accountName: (transactionId: string) => string;
+  accountName: (accountId: string) => string;
   onConfirm: (s: Suggestion) => void;
   onDismiss: (s: Suggestion) => void;
   busy: boolean;
@@ -39,8 +47,8 @@ export default function TransferSuggestions({
         <tbody>
           {suggestions.map((s) => (
             <tr key={`${s.out_id}:${s.in_id}`}>
-              <td>{accountName(s.out_id)}</td>
-              <td>{accountName(s.in_id)}</td>
+              <td>{accountName(s.out_account_id)}</td>
+              <td>{accountName(s.in_account_id)}</td>
               <td>
                 {shortDate(s.out_date)}
                 {s.in_date !== s.out_date && <span className="muted"> → {shortDate(s.in_date)}</span>}

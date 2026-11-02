@@ -169,13 +169,15 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 ## Web app
 
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
-from any Pages subpath. Pages: Review, Transactions, Accounts, Settings, SignIn.
+from any Pages subpath. Pages: Transactions (also the review inbox: filter To review /
+Approved / All via `?status=`; every row has a category picker and Approve or Unapprove;
+`/review` redirects here), Accounts, Settings, SignIn.
 Email + password auth (single user).
 
 Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accent teal
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
-rules, no cards. The Review count is the one large element. Avoid all-caps labels.
+rules, no cards. The to-review count on Transactions is the one large element. Avoid all-caps labels.
 
 Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
 `primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`
