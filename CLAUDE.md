@@ -134,6 +134,8 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
   pre-fills other unreviewed rows of those merchants; `mark_transfer(id)`,
   `confirm_transfer(out, in)`; `merge_merchants(from, into)`. View `transfer_suggestions`:
   unreviewed opposite amounts in different accounts within 5 days, computed, not stored.
+  "Not a transfer" stores the pair in `dismissed_transfer_pairs` (yours only; cascades with
+  either transaction), and the view skips it.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);

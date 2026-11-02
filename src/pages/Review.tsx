@@ -130,6 +130,12 @@ export default function Review({ count, onChange }: { count: number | null; onCh
           onConfirm={(s) =>
             act(() => db().rpc('confirm_transfer', { p_out: s.out_id, p_in: s.in_id }), 'Transfer confirmed and approved.')
           }
+          onDismiss={(s) =>
+            act(
+              () => db().from('dismissed_transfer_pairs').insert({ out_id: s.out_id, in_id: s.in_id }),
+              'Dismissed. Both transactions are still in To review.',
+            )
+          }
         />
       )}
 

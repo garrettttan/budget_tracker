@@ -7,11 +7,13 @@ export default function TransferSuggestions({
   suggestions,
   accountName,
   onConfirm,
+  onDismiss,
   busy,
 }: {
   suggestions: Suggestion[];
   accountName: (transactionId: string) => string;
   onConfirm: (s: Suggestion) => void;
+  onDismiss: (s: Suggestion) => void;
   busy: boolean;
 }) {
   return (
@@ -19,7 +21,7 @@ export default function TransferSuggestions({
       <h2>Possible transfers</h2>
       <p className="muted small">
         Money moving between your own accounts isn't spending. Confirm a pair to mark both sides as a transfer and approve
-        them. If a pair isn't a transfer, categorize those transactions below instead.
+        them. If it isn't a transfer, choose "Not a transfer" and categorize both transactions below as usual.
       </p>
       <table className="register">
         <thead>
@@ -46,6 +48,9 @@ export default function TransferSuggestions({
               <td className="action">
                 <button type="button" disabled={busy} onClick={() => onConfirm(s)}>
                   Confirm transfer
+                </button>
+                <button type="button" className="link" disabled={busy} onClick={() => onDismiss(s)}>
+                  Not a transfer
                 </button>
               </td>
             </tr>
