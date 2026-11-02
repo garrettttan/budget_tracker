@@ -219,8 +219,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .pending-section summary .in { color: var(--in); }
 .pending-section[open] summary { margin-bottom: 0.5rem; }
 
-/* tags on a transaction (under the merchant name) */
-.tag-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; margin-top: 0.25rem; }
+/* Transactions → Tags column */
+.register .tags-col { min-width: 8rem; }
+.phone-only-block { display: none; }
+.row-details .tag-cell { margin-top: 0.4rem; }
+.tag-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 1.9rem; }
 .tag-chip {
   display: inline-flex;
   align-items: center;
@@ -367,6 +370,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
+  .phone-only-block { display: block; }
+  .register.txns .tags-col { display: none; }
   .register.txns td, .register.txns th,
   .register.merchants td, .register.merchants th,
   .register.transfers td, .register.transfers th { padding-right: 0.5rem; }

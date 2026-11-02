@@ -206,6 +206,18 @@ export default function Transactions({ count, onChange }: { count: number | null
     setParams({ ...(s === 'review' ? {} : { status: s }), ...(t ? { tag: t } : {}) });
   }
 
+  const tagCell = (r: Row) => (
+    <TagCell
+      tags={rowTags(r)}
+      allTags={tags}
+      rowName={name(r)}
+      onAdd={(id) => addTag(r, id)}
+      onCreate={(typed) => createTag(r, typed)}
+      onRemove={(id) => removeTag(r, id)}
+      onFilter={(id) => setFilters({ tag: id })}
+    />
+  );
+
   const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag';
   const rowTags = (r: Row) =>
     r.transaction_tags
@@ -390,6 +402,7 @@ export default function Transactions({ count, onChange }: { count: number | null
                 <th scope="col">Merchant</th>
                 <th scope="col">Account</th>
                 <th scope="col">Category</th>
+                <th scope="col" className="tags-col">Tags</th>
                 <th scope="col" className="num">Amount</th>
                 <th scope="col" className="approved-col">
                   Approved
@@ -406,16 +419,10 @@ export default function Transactions({ count, onChange }: { count: number | null
                       description={r.description}
                       postedDate={r.posted_date}
                       account={r.accounts?.name}
-                    />
-                    <TagCell
-                      tags={rowTags(r)}
-                      allTags={tags}
-                      rowName={name(r)}
-                      onAdd={(id) => addTag(r, id)}
-                      onCreate={(typed) => createTag(r, typed)}
-                      onRemove={(id) => removeTag(r, id)}
-                      onFilter={(id) => setFilters({ tag: id })}
-                    />
+                    >
+                      {/* phones hide the Tags column, so tags live in the row's details there */}
+                      <div className="phone-only-block">{tagCell(r)}</div>
+                    </MerchantCell>
                   </td>
                   <td>{r.accounts?.name}</td>
                   <td>
@@ -427,6 +434,7 @@ export default function Transactions({ count, onChange }: { count: number | null
                       onChange={(value) => setCategory(r, value)}
                     />
                   </td>
+                  <td className="tags-col">{tagCell(r)}</td>
                   <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
                   <td className="approved-col">
                     <input
