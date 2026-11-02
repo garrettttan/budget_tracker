@@ -2,9 +2,13 @@ import { useId, useRef, useState } from 'react';
 
 export type Option = { value: string; text: string };
 
+/** Option value for "Create …" (shown when `onCreate` is passed and nothing matches exactly). */
+const CREATE = '\u0000create';
+
 /**
  * Searchable picker (an ARIA combobox): type to filter, ↑/↓ to move, Enter to
- * pick, Esc to cancel. Used for categories and merchants.
+ * pick, Esc to cancel. Used for categories, merchants and tags. With
+ * `onCreate`, typing a name no option has offers to create it.
  */
 export default function Combobox({
   options,
@@ -13,6 +17,10 @@ export default function Combobox({
   label,
   disabled,
   autoFocus,
+  placeholder = 'Choose…',
+  onCreate,
+  createLabel = (text) => `Create “${text}”`,
+  onClose,
 }: {
   options: Option[];
   value: string | null;
@@ -20,6 +28,11 @@ export default function Combobox({
   label: string;
   disabled?: boolean;
   autoFocus?: boolean;
+  placeholder?: string;
+  onCreate?: (text: string) => void;
+  createLabel?: (text: string) => string;
+  /** Called when the list closes without a pick (Esc or leaving the box). */
+  onClose?: () => void;
 }) {
   const selectedText = options.find((o) => o.value === value)?.text ?? '';
 
@@ -29,7 +42,10 @@ export default function Combobox({
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
 
-  const matches = query ? options.filter((o) => o.text.toLowerCase().includes(query.toLowerCase())) : options;
+  const typed = query.trim();
+  const filtered = typed ? options.filter((o) => o.text.toLowerCase().includes(typed.toLowerCase())) : options;
+  const exact = options.some((o) => o.text.toLowerCase() === typed.toLowerCase());
+  const matches = onCreate && typed && !exact ? [...filtered, { value: CREATE, text: createLabel(typed) }] : filtered;
 
   function start() {
     setQuery('');
@@ -40,13 +56,15 @@ export default function Combobox({
   function pick(optionValue: string) {
     setOpen(false);
     setQuery('');
-    if (optionValue !== value) onChange(optionValue);
+    if (optionValue === CREATE) onCreate?.(typed);
+    else if (optionValue !== value) onChange(optionValue);
     input.current?.blur();
   }
 
   function cancel() {
     setOpen(false);
     setQuery('');
+    onClose?.();
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -79,7 +97,7 @@ export default function Combobox({
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={open && matches[active] ? `${listId}-${active}` : undefined}
-        placeholder="Choose…"
+        placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
         disabled={disabled}
@@ -96,7 +114,9 @@ export default function Combobox({
       />
       {open && (
         <ul id={listId} role="listbox" aria-label={label}>
-          {matches.length === 0 && <li className="combobox-empty">No match</li>}
+          {matches.length === 0 && (
+            <li className="combobox-empty">{onCreate && !typed ? 'Type a name to create one' : 'No match'}</li>
+          )}
           {matches.map((o, i) => (
             <li
               key={o.value}

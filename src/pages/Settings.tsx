@@ -5,6 +5,7 @@ import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
 import MerchantList from '../components/MerchantList';
+import TagList from '../components/TagList';
 
 type Category = { id: string; name: string; group_name: string | null; is_income: boolean; archived: boolean };
 
@@ -107,6 +108,9 @@ export default function Settings({ email }: { email: string }) {
 
       <h2>Merchants</h2>
       <MerchantList />
+
+      <h2>Tags</h2>
+      <TagList />
 
       <h2>Account</h2>
       <p className="muted">Signed in as {email}</p>

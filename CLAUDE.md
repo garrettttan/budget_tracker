@@ -18,15 +18,16 @@ review inbox (filter To review / Approved / All, searchable category picker on e
 an Approved checkbox to approve or unapprove, bulk approve, transfer suggestions with
 Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
 editing approved rows (recategorize, mark transfer, send back to Review); Settings →
-Merchants (rename, merge).
+Merchants (rename, merge); tags (on each row under the merchant: "+ Tag" picks or creates
+one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
+renames, deletes).
 
 **Next: finish phase 3.**
 - Manual accounts (e.g. Venmo: no `connection_id`), added from the Accounts page
 - Add transaction (account, date, amount in/out, description, category, note), saved as
   already approved since you entered it
-- Tags (tables `tags` + `transaction_tags` exist, no UI yet): create and rename in Settings;
-  add or remove tags on one row or several selected rows on Transactions; filter by tag.
-  Trends (phase 6) then toggles tags on and shows a total per tag (`tag_spend`).
+- Bulk tagging (several selected rows at once). Tagging one row, the tag filter and
+  Settings → Tags are done; Trends (phase 6) toggles tags on and shows `tag_spend` totals.
 
 **To check:** the first scheduled sync (`.github/workflows/sync.yml`) is due Nov 3 at
 10:17 UTC. A manual run (Run workflow) succeeded on Nov 2. Confirm a `schedule` run shows
@@ -196,7 +197,7 @@ not-allowed cursor; give a disabled action a `title` that says why.
 1. Foundation: **done**
 2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log): **done**
 3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing):
-   mostly **done**; manual accounts, Add transaction and tags next
+   mostly **done**; manual accounts, Add transaction and bulk tagging next
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
 5. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
 6. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
