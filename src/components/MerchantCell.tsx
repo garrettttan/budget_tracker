@@ -5,19 +5,21 @@ import Button from './Button';
 /**
  * A transaction's merchant name. Hover (desktop) shows the bank's text;
  * click/tap shows details: date and account (phones hide those columns), the
- * bank's text, and any extra actions passed as children.
+ * bank's text, your note, and any extra actions passed as children.
  */
 export default function MerchantCell({
   name,
   description,
   postedDate,
   account,
+  note,
   children,
 }: {
   name: string | undefined;
   description: string;
   postedDate: string;
   account: string | undefined;
+  note?: string | null;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -41,6 +43,7 @@ export default function MerchantCell({
             <br />
           </span>
           {description}
+          {note && <span className="row-note">Note: {note}</span>}
           {children}
         </div>
       )}

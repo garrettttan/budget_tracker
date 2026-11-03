@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
-import { money, relativeTime } from '../lib/format';
+import { money, parseAmount, relativeTime } from '../lib/format';
 import Button from '../components/Button';
-
-type AccountClass = 'cash' | 'investment' | 'liability';
+import AddAccount, { type AccountClass, CLASSES } from '../components/AddAccount';
 
 type Account = {
   id: string;
@@ -13,15 +12,10 @@ type Account = {
   class: AccountClass;
   balance: string | null;
   balance_date: string | null;
+  connection_id: string | null; // null = a manual account (Venmo, cash)
 };
 
 type Connection = { id: string; label: string; status: string; status_message: string | null; last_synced_at: string | null };
-
-const CLASSES: { value: AccountClass; label: string; note?: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'investment', label: 'Investments', note: 'Balance only; transactions aren’t imported.' },
-  { value: 'liability', label: 'Liabilities' },
-];
 
 // Daily sync + GitHub's schedule jitter; past this, something stopped it
 const STALE_HOURS = 36;
@@ -32,20 +26,24 @@ function isStale(lastSyncedAt: string | null): boolean {
 
 const total = (accounts: Account[]) => accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
 
+const isManual = (a: Account) => a.connection_id === null;
+
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null); // account id
+  const [editing, setEditing] = useState<string | null>(null); // account id
   const [draft, setDraft] = useState('');
+  const [draftBalance, setDraftBalance] = useState('');
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [a, c] = await Promise.all([
       db()
         .from('accounts')
-        .select('id, name, institution, class, balance, balance_date')
+        .select('id, name, institution, class, balance, balance_date, connection_id')
         .eq('hidden', false)
         .order('sort_order')
         .order('name'),
@@ -61,25 +59,62 @@ export default function Accounts() {
     load();
   }, [load]);
 
-  function startRename(account: Account) {
-    setRenaming(account.id);
+  function startEdit(account: Account) {
+    setEditing(account.id);
     setDraft(account.name);
+    setDraftBalance(account.balance === null ? '' : Number(account.balance).toFixed(2));
     setError(null);
     setNotice(null);
   }
 
-  /** Your name for the account. The sync sets the bank's name only once, so it sticks. */
-  async function rename(account: Account) {
+  const draftAmount = draftBalance.trim() === '' ? 0 : parseAmount(draftBalance, { allowNegative: true });
+  const saveBlocked = (a: Account) =>
+    !draft.trim() ? 'Type a name first' : isManual(a) && draftAmount === null ? 'The balance isn’t a number' : undefined;
+
+  /**
+   * Your name for the account (the sync sets the bank's name only once, so it
+   * sticks) and, for a manual account, its balance.
+   */
+  async function save(account: Account) {
+    if (saveBlocked(account)) return;
     const name = draft.trim();
-    if (!name) return;
-    if (name === account.name) return setRenaming(null);
+    const changes: Record<string, unknown> = {};
+    if (name !== account.name) changes.name = name;
+    if (isManual(account) && draftAmount !== Number(account.balance ?? 0)) {
+      changes.balance = draftAmount;
+      changes.balance_date = new Date().toISOString();
+    }
+    if (Object.keys(changes).length === 0) return setEditing(null);
     setBusy(true);
     setError(null);
-    const { error } = await db().from('accounts').update({ name }).eq('id', account.id);
+    const { error } = await db().from('accounts').update(changes).eq('id', account.id);
     if (error) setError(error.message);
     else {
-      setNotice(`Renamed to ${name}.`);
-      setRenaming(null);
+      setNotice(changes.balance === undefined ? `Renamed to ${name}.` : `Saved ${name}.`);
+      setEditing(null);
+    }
+    await load();
+    setBusy(false);
+  }
+
+  /** Manual accounts only: synced ones would come back with the next sync. */
+  async function remove(account: Account) {
+    setError(null);
+    const { count, error: countError } = await db()
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('account_id', account.id);
+    if (countError) return setError(countError.message);
+    const what = count
+      ? `its ${count} ${count === 1 ? 'transaction' : 'transactions'} (and any tags or reimbursements on them) will be deleted too.`
+      : 'it has no transactions.';
+    if (!window.confirm(`Delete ${account.name}? This can’t be undone; ${what}`)) return;
+    setBusy(true);
+    const { error } = await db().from('accounts').delete().eq('id', account.id);
+    if (error) setError(error.message);
+    else {
+      setNotice(`Deleted ${account.name}.`);
+      setEditing(null);
     }
     await load();
     setBusy(false);
@@ -114,9 +149,30 @@ export default function Accounts() {
     <section>
       <header className="page-head">
         <h1>Accounts</h1>
+        {!adding && (
+          <Button
+            onClick={() => {
+              setAdding(true);
+              setNotice(null);
+            }}
+          >
+            Add manual account
+          </Button>
+        )}
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
+
+      {adding && (
+        <AddAccount
+          onCancel={() => setAdding(false)}
+          onAdded={async (name) => {
+            setAdding(false);
+            setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
+            await load();
+          }}
+        />
+      )}
 
       {connections && connections.length === 0 && (
         <p className="empty">
@@ -169,7 +225,7 @@ export default function Accounts() {
                     {group.map((a) => (
                       <tr key={a.id}>
                         <td>
-                          {renaming === a.id ? (
+                          {editing === a.id ? (
                             <input
                               type="text"
                               className="merchant-name-input"
@@ -179,8 +235,8 @@ export default function Accounts() {
                               disabled={busy}
                               onChange={(e) => setDraft(e.target.value)}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') rename(a);
-                                if (e.key === 'Escape') setRenaming(null);
+                                if (e.key === 'Enter') save(a);
+                                if (e.key === 'Escape') setEditing(null);
                               }}
                             />
                           ) : (
@@ -201,24 +257,46 @@ export default function Accounts() {
                             ))}
                           </select>
                         </td>
-                        <td className="num">{money(a.balance)}</td>
+                        <td className="num">
+                          {editing === a.id && isManual(a) ? (
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className="balance-input"
+                              aria-label={`Balance of ${a.name}`}
+                              value={draftBalance}
+                              disabled={busy}
+                              onChange={(e) => setDraftBalance(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') save(a);
+                                if (e.key === 'Escape') setEditing(null);
+                              }}
+                            />
+                          ) : (
+                            money(a.balance)
+                          )}
+                        </td>
                         <td className="action">
-                          {renaming === a.id ? (
+                          {editing === a.id ? (
                             <>
-                              <Button
-                                size="small"
-                                disabled={busy || !draft.trim()}
-                                title={draft.trim() ? undefined : 'Type a name first'}
-                                onClick={() => rename(a)}
-                              >
+                              <Button size="small" disabled={busy || Boolean(saveBlocked(a))} title={saveBlocked(a)} onClick={() => save(a)}>
                                 Save
                               </Button>
-                              <Button size="small" variant="link" disabled={busy} onClick={() => setRenaming(null)}>
+                              {isManual(a) && (
+                                <Button size="small" variant="link" className="danger" disabled={busy} onClick={() => remove(a)}>
+                                  Delete
+                                </Button>
+                              )}
+                              <Button size="small" variant="link" disabled={busy} onClick={() => setEditing(null)}>
                                 Cancel
                               </Button>
                             </>
+                          ) : isManual(a) ? (
+                            <Button size="small" disabled={busy} aria-label={`Edit ${a.name}`} onClick={() => startEdit(a)}>
+                              Edit
+                            </Button>
                           ) : (
-                            <Button size="small" disabled={busy} aria-label={`Rename ${a.name}`} onClick={() => startRename(a)}>
+                            <Button size="small" disabled={busy} aria-label={`Rename ${a.name}`} onClick={() => startEdit(a)}>
                               Rename
                             </Button>
                           )}

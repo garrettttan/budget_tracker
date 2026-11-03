@@ -10,29 +10,34 @@ plan: https://claude.ai/artifact/Vy9euCxBXrLegJXUcK2UBz
   URL https://ppfxuyueackbytpbqqva.supabase.co, region us-east-2, Free plan.
   The same org also has an unrelated project "Fantasy Survivor"; never touch it.
 
-## Status (Nov 2, 2026)
+## Status (Nov 3, 2026)
 
-**Done:** phase 1 (foundation), phase 2 (SimpleFIN connect + daily sync), and most of
-phase 3: review/transfer/merge database functions; one Transactions page that is also the
+**Done:** phase 1 (foundation), phase 2 (SimpleFIN connect + daily sync), and phase 3:
+review/transfer/merge database functions; one Transactions page that is also the
 review inbox (filter To review / Approved / All, searchable category picker on every row,
-an Approved checkbox to approve or unapprove, bulk approve, transfer suggestions with
+an Approved checkbox to approve or unapprove, transfer suggestions with
 Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
 editing approved rows (recategorize, mark transfer, send back to Review); Settings →
 Merchants (rename, merge); tags (a Tags column; on phones, in the row's tap-to-expand details: "+ Tag" picks or
 creates one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
 renames, deletes); renaming accounts on the Accounts page (the sync sets an account's
-name only when it first creates it, so your name sticks).
+name only when it first creates it, so your name sticks); a select column on Transactions
+whose bar approves, adds a tag to (or creates one), or removes a tag from every selected row;
+manual accounts (Accounts → Add manual account: name, class, balance; Edit sets name and
+balance, Delete removes it and its transactions); Add transaction on Transactions (account,
+date, amount out/in, description, category or Transfer, note), saved with `source = 'manual'`
+and already approved, the form staying open for the next one. All of these are direct table
+writes under RLS, no new database functions.
 
-**Next: finish phase 3.**
-- Manual accounts (e.g. Venmo: no `connection_id`), added from the Accounts page
-- Add transaction (account, date, amount in/out, description, category, note), saved as
-  already approved since you entered it
-- Bulk tagging (several selected rows at once). Tagging one row, the tag filter and
-  Settings → Tags are done; Trends (phase 5) toggles tags on and shows `tag_spend` totals.
+- A manual account's balance is whatever you last set (no trigger sums its transactions, so
+  a later CSV backfill can't skew it), and it gets no `balance_snapshots` rows (the browser
+  can't write them). Trends' net worth over time has to handle that.
+- Manual transactions get no `merchant_id`, so they don't teach or use merchant memory.
 
-**To check:** the first scheduled sync (`.github/workflows/sync.yml`) is due Nov 3 at
-10:17 UTC. A manual run (Run workflow) succeeded on Nov 2. Confirm a `schedule` run shows
-in the Actions tab and a new `sync_runs` row.
+**Next: phase 4, Reimbursements** (Expect reimbursement, Owed to me, link + split payments,
+Venmo payments entered through Add transaction on the Venmo account).
+
+The scheduled sync works: a `schedule` run on Nov 2 logged an `ok` `sync_runs` row.
 
 Keep personal financial details (account names or numbers, balances, transaction counts,
 institutions) out of this public repo: code, tests, commits, PRs and this file.
@@ -197,8 +202,8 @@ not-allowed cursor; give a disabled action a `title` that says why.
 
 1. Foundation: **done**
 2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log): **done**
-3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing):
-   mostly **done**; manual accounts, Add transaction and bulk tagging next
+3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing,
+   tags, manual accounts, Add transaction, bulk actions): **done**
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
 5. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
    per-tag totals)
