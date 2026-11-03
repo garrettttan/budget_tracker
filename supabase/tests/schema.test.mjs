@@ -494,5 +494,51 @@ check('signed-out visitors cannot call the reimbursement functions', !anonRpc5);
 await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_reimbursements.sql'))), 'utf8'));
 check('reimbursements migration is safe to re-run', true);
 
+// ---- Delete a manually added transaction (as user D)
+const gone = async (id) => (await one(`select count(*)::int n from public.transactions where id = $1`, [id])).n === 0;
+const del = (id) => one(`select public.delete_manual_transaction($1)`, [id]);
+const typo = await txn({ amount: -9.99, description: 'Typo' });
+await del(typo);
+check('delete_manual_transaction: deletes a manual row', await gone(typo));
+const synced = await txn({ amount: -5, source: 'simplefin', external_id: 'SYNCED1' });
+check('delete_manual_transaction: refuses synced rows', (await fails(`select public.delete_manual_transaction($1)`, [synced])) && !(await gone(synced)));
+check("delete_manual_transaction: another user can't delete your row",
+  await (async () => { const t = await txn({ amount: -1 }); try { await asUser(b, `select public.delete_manual_transaction($1)`, [t]); } catch {} return !(await gone(t)); })());
+
+// a manual charge with an unpaid reimbursement: both go
+const lunch = await txn({ amount: -30, category_id: dDiningR, approved: true });
+const rLunch = (await one(`select public.expect_reimbursement($1, 'Jo', 15) as id`, [lunch])).id;
+await del(lunch);
+check('delete_manual_transaction: unpaid reimbursements on it go too', await gone(lunch) &&
+  (await one(`select count(*)::int n from public.reimbursements where id = $1`, [rLunch])).n === 0);
+
+// a manual charge whose reimbursement has a payment linked: refused
+const brunch = await txn({ amount: -40, category_id: dDiningR, approved: true });
+const rBrunch = (await one(`select public.expect_reimbursement($1, 'Lee', 20) as id`, [brunch])).id;
+const leePays = await txn({ account_id: checking, amount: 20, description: 'Lee' });
+await one(`select public.link_reimbursement_payment($1, $2)`, [leePays, [rBrunch]]);
+check('delete_manual_transaction: refuses a charge with a linked payment',
+  (await fails(`select public.delete_manual_transaction($1)`, [brunch])) && !(await gone(brunch)));
+
+// deleting the payback itself: unlinked first, so Lee owes it again
+await del(leePays);
+check('delete_manual_transaction: deleting a payback reopens what it paid',
+  (await gone(leePays)) && (await st(rBrunch)) === 'owed' && (await paidOn(rBrunch)) === 0);
+
+// one side of a confirmed transfer: the other side goes back to review, unpaired
+const delOut = await txn({ account_id: checking, amount: -75, posted_date: '2026-10-20' });
+const delIn = await txn({ account_id: card, amount: 75, posted_date: '2026-10-20' });
+await one(`select public.confirm_transfer($1, $2)`, [delOut, delIn]);
+await del(delIn);
+const otherSide = await row(delOut);
+check('delete_manual_transaction: the other side of a transfer goes back to review',
+  (await gone(delIn)) && !otherSide.approved && !otherSide.is_transfer && otherSide.transfer_pair_id === null);
+
+let anonDel = false;
+try { await db.exec(`set role anon;`); await db.query(`select public.delete_manual_transaction(gen_random_uuid())`); anonDel = true; } catch {} finally { await db.exec(`reset role;`); }
+check('signed-out visitors cannot delete transactions', !anonDel);
+await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_delete_manual_transactions.sql'))), 'utf8'));
+check('delete migration is safe to re-run', true);
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);
