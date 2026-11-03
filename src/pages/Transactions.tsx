@@ -9,6 +9,17 @@ import TagCell, { type Tag } from '../components/TagCell';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
 import AddTransaction, { type AccountOption } from '../components/AddTransaction';
 import BulkBar from '../components/BulkBar';
+import {
+  ExpectForm,
+  LinkForm,
+  type PaymentLink,
+  type Reimbursement,
+  payers,
+  reimbursementSummary,
+  yourShare,
+} from '../components/RowReimbursements';
+import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
+import { type OpenItem, fetchOpen, personKey, suggestFor } from '../lib/reimbursements';
 
 const PAGE = 100;
 
@@ -29,10 +40,17 @@ type Row = {
   accounts: { name: string } | null;
   merchants: { name: string } | null;
   transaction_tags: { tag_id: string }[];
+  /** what people owe you on this charge */
+  reimbursements: Reimbursement[];
+  /** what this money in paid back, if it's linked */
+  reimbursement_payments: PaymentLink[];
 };
 
 const COLUMNS =
-  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, accounts(name), merchants(name), transaction_tags(tag_id)';
+  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, accounts(name), merchants(name), transaction_tags(tag_id), ' +
+  // both tables reach transactions more than one way, so name the foreign key
+  'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
+  'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
 
 /**
  * Posted rows only: pending ones have their own section. With a tag, a second,
@@ -98,6 +116,11 @@ export default function Transactions({ count, onChange }: { count: number | null
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tags, setTags] = useState<Tag[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [open, setOpen] = useState<OpenItem[]>([]);
+  const [people, setPeople] = useState<string[]>([]);
+  const [paybacks, setPaybacks] = useState<ReimbursementMatch[]>([]);
+  const [expecting, setExpecting] = useState<string | null>(null); // row id with Expect reimbursement open
+  const [linking, setLinking] = useState<string | null>(null); // row id with Link open
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -128,7 +151,8 @@ export default function Transactions({ count, onChange }: { count: number | null
   const reload = useCallback(
     async (size: number) => {
       const none = Promise.resolve({ data: [], error: null });
-      const [t, p, s] = await Promise.all([
+      const reviewing = status !== 'approved' && !tagFilter;
+      const [t, p, s, o, w, m] = await Promise.all([
         fetchRows(status, tagFilter, 0, size - 1),
         // pending rows can't carry tags, so a tag filter leaves them out
         status === 'approved' || tagFilter ? none : fetchPending(),
@@ -138,9 +162,38 @@ export default function Transactions({ count, onChange }: { count: number | null
               .from('transfer_suggestions')
               .select('out_id, in_id, out_account_id, in_account_id, amount, out_date, in_date')
               .order('out_date'),
+        fetchOpen(),
+        db().from('reimbursements').select('who'),
+        // money in waiting for review: candidates for "Paid back?" (a linked payment is already approved)
+        reviewing
+          ? db()
+              .from('transactions')
+              .select('id, posted_date, amount, description, accounts(name), merchants(name)')
+              .eq('approved', false)
+              .eq('pending', false)
+              .eq('is_transfer', false)
+              .gt('amount', 0)
+              .order('posted_date')
+              .limit(200)
+          : none,
       ]);
-      const failed = t.error ?? p.error ?? s.error;
+      const failed = t.error ?? p.error ?? s.error ?? w.error ?? m.error;
       if (failed) setError(failed.message);
+      if (o.error) setError(o.error);
+      setOpen(o.items);
+      // everyone you've entered before, for Expect reimbursement's suggestions
+      const names = new Map<string, string>();
+      for (const r of (w.data ?? []) as { who: string }[]) names.set(personKey(r.who), r.who.trim());
+      setPeople([...names.values()].sort((x, y) => x.localeCompare(y)));
+      setPaybacks(
+        ((m.data ?? []) as unknown as PaymentRow[]).flatMap((payment) => {
+          const match = suggestFor(
+            { amount: Number(payment.amount), text: `${payment.description} ${payment.merchants?.name ?? ''}` },
+            o.items,
+          );
+          return match ? [{ payment, items: match.items }] : [];
+        }),
+      );
       const loaded = (t.data ?? []) as unknown as Row[];
       setRows(loaded);
       setHasMore(loaded.length === size);
@@ -283,6 +336,106 @@ export default function Transactions({ count, onChange }: { count: number | null
     return addTag(r, tag.id);
   }
 
+  // ---- reimbursements ------------------------------------------------------
+
+  const expect = (r: Row, who: string, amount: number, note: string) =>
+    act(
+      () => db().rpc('expect_reimbursement', { p_transaction: r.id, p_who: who, p_amount: amount, p_note: note || null }),
+      () => {
+        setExpecting(null);
+        return `${who} owes you ${money(amount)} for ${name(r)}. It's on Owed to me, and only your share counts as spending.`;
+      },
+    );
+
+  const link = (paymentId: string, ids: string[]) =>
+    act(
+      () => db().rpc('link_reimbursement_payment', { p_payment: paymentId, p_reimbursements: ids }),
+      (n) => {
+        setLinking(null);
+        return `Linked ${money(Number(n))} as paid back. It's approved and doesn't count as income.`;
+      },
+    );
+
+  const unlink = (r: Row) =>
+    act(
+      () => db().rpc('unlink_reimbursement_payment', { p_payment: r.id }),
+      () => `Unlinked ${name(r)}. It's back in To review, and what it paid back is owed again.`,
+    );
+
+  const isCharge = (r: Row) => Number(r.amount) < 0 && !r.is_transfer;
+  const isLinked = (r: Row) => r.reimbursement_payments.length > 0;
+  const expectedOn = (r: Row) =>
+    r.reimbursements.filter((x) => x.status !== 'written_off').reduce((sum, x) => sum + Number(x.amount), 0);
+
+  /** The row's reimbursement actions, shown in its tap-to-expand details. */
+  function reimbursementDetails(r: Row) {
+    if (isCharge(r)) {
+      if (expecting === r.id) {
+        return (
+          <ExpectForm
+            charge={-Number(r.amount)}
+            expected={expectedOn(r)}
+            people={people}
+            busy={busy}
+            onCancel={() => setExpecting(null)}
+            onSave={(who, amount, note) => expect(r, who, amount, note)}
+          />
+        );
+      }
+      const full = expectedOn(r) >= -Number(r.amount);
+      return (
+        <div className="row-actions">
+          <Button
+            variant="link"
+            size="small"
+            disabled={busy || full}
+            title={full ? 'The whole charge is already expected back' : 'Someone owes you part of this'}
+            aria-label={`Expect reimbursement on ${name(r)}`}
+            onClick={() => setExpecting(r.id)}
+          >
+            Expect reimbursement
+          </Button>
+        </div>
+      );
+    }
+    if (Number(r.amount) > 0 && !r.is_transfer) {
+      if (isLinked(r)) {
+        return (
+          <div className="row-actions">
+            <Button variant="link" size="small" disabled={busy} aria-label={`Unlink payment ${name(r)}`} onClick={() => unlink(r)}>
+              Unlink payment
+            </Button>
+          </div>
+        );
+      }
+      if (linking === r.id) {
+        return (
+          <LinkForm
+            payment={Number(r.amount)}
+            open={open}
+            busy={busy}
+            onCancel={() => setLinking(null)}
+            onLink={(ids) => link(r.id, ids)}
+          />
+        );
+      }
+      return (
+        <div className="row-actions">
+          <Button
+            variant="link"
+            size="small"
+            disabled={busy}
+            aria-label={`Link ${name(r)} to what someone owes`}
+            onClick={() => setLinking(r.id)}
+          >
+            Link to what someone owes
+          </Button>
+        </div>
+      );
+    }
+    return null;
+  }
+
   // ---- selected rows -------------------------------------------------------
 
   const selectedRows = (rows ?? []).filter((r) => selected.has(r.id));
@@ -356,7 +509,13 @@ export default function Transactions({ count, onChange }: { count: number | null
   }
 
   const approvedTitle = (r: Row) =>
-    r.approved ? 'Untick to move it back to To review' : r.category_id ? 'Tick to approve' : 'Choose a category first';
+    isLinked(r)
+      ? 'Linked as a payback; use Unlink payment in its details to change this'
+      : r.approved
+        ? 'Untick to move it back to To review'
+        : r.category_id
+          ? 'Tick to approve'
+          : 'Choose a category first';
 
   function togglePending(open: boolean) {
     setPendingOpen(open);
@@ -407,6 +566,7 @@ export default function Transactions({ count, onChange }: { count: number | null
         <AddTransaction
           accounts={entryAccounts}
           categories={categories ?? []}
+          open={open}
           onClose={() => setAdding(false)}
           onAdded={async (summary) => {
             setError(null);
@@ -446,6 +606,10 @@ export default function Transactions({ count, onChange }: { count: number | null
             )
           }
         />
+      )}
+
+      {paybacks.length > 0 && (
+        <ReimbursementSuggestions matches={paybacks} open={open} busy={busy} onLink={link} />
       )}
 
       {pending.length > 0 && (
@@ -510,12 +674,13 @@ export default function Transactions({ count, onChange }: { count: number | null
 
       {rows && rows.length > 0 && (
         <>
-          {(suggestions.length > 0 || pending.length > 0) && <h2>Transactions</h2>}
+          {(suggestions.length > 0 || paybacks.length > 0 || pending.length > 0) && <h2>Transactions</h2>}
           <p className="muted small">
             Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
             unreviewed charges from it. Approved by mistake? Untick it. Tags group transactions across categories (like a
             trip); tagged spending is kept apart from your normal spending. Tick the boxes on the left to approve or tag
-            several at once.
+            several at once. Someone owes you part of a charge? Open its details (tap the merchant) and choose Expect
+            reimbursement.
           </p>
           {selected.size > 0 && (
             <BulkBar
@@ -581,30 +746,47 @@ export default function Transactions({ count, onChange }: { count: number | null
                       postedDate={r.posted_date}
                       account={r.accounts?.name}
                       note={r.note}
+                      summary={
+                        r.reimbursements.length > 0 ? (
+                          <div className="reimb-line">{reimbursementSummary(r.reimbursements)}</div>
+                        ) : isLinked(r) ? (
+                          <div className="reimb-line">Paid back by {payers(r.reimbursement_payments)}</div>
+                        ) : undefined
+                      }
                     >
                       {/* phones hide the Tags column, so tags live in the row's details there */}
                       <div className="phone-only-block">{tagCell(r)}</div>
+                      {reimbursementDetails(r)}
                     </MerchantCell>
                   </td>
                   <td className="account-col">{r.accounts?.name}</td>
                   <td>
-                    <CategorySelect
-                      categories={categories ?? []}
-                      value={r.is_transfer ? TRANSFER : r.category_id}
-                      disabled={busy}
-                      label={`Category for ${name(r)}`}
-                      onChange={(value) => setCategory(r, value)}
-                    />
+                    {isLinked(r) ? (
+                      <span className="muted">Payback, not income</span>
+                    ) : (
+                      <CategorySelect
+                        categories={categories ?? []}
+                        value={r.is_transfer ? TRANSFER : r.category_id}
+                        disabled={busy}
+                        label={`Category for ${name(r)}`}
+                        onChange={(value) => setCategory(r, value)}
+                      />
+                    )}
                   </td>
                   <td className="tags-col">{tagCell(r)}</td>
-                  <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
+                  <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
+                    {money(r.amount)}
+                    {r.reimbursements.length > 0 && (
+                      <div className="share">your share {money(-yourShare(Number(r.amount), r.reimbursements))}</div>
+                    )}
+                  </td>
                   <td className="approved-col">
                     <input
                       type="checkbox"
                       aria-label={`Approved: ${name(r)}`}
                       title={approvedTitle(r)}
                       checked={r.approved}
-                      disabled={busy || (!r.approved && !r.category_id)}
+                      disabled={busy || isLinked(r) || (!r.approved && !r.category_id && !r.is_transfer)}
                       onChange={() => toggleApproved(r)}
                     />
                   </td>

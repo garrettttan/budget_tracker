@@ -291,6 +291,38 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .balance-input { width: 7rem; padding: 0.2rem 0.4rem; text-align: right; }
 .btn-link.danger { color: var(--danger); }
 
+/* Reimbursements: a charge's line, your share, row forms, Owed to me */
+.reimb-line { font-size: var(--step--1); color: var(--accent); margin-top: 0.15rem; }
+.register td .share { font-size: var(--step--1); color: var(--ink-soft); font-weight: 400; white-space: normal; }
+.row-actions { margin-top: 0.4rem; }
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: var(--step--1);
+}
+.inline-form label { display: grid; gap: 0.2rem; font-weight: 500; }
+.inline-form label.check { display: flex; align-items: center; gap: 0.4rem; font-weight: 400; }
+.inline-form input[type='text'], .inline-form select { font-size: var(--step--1); padding: 0.25rem 0.45rem; width: 10rem; max-width: 100%; }
+.inline-form .amount-quick { display: flex; align-items: center; gap: 0.5rem; }
+.inline-form .amount-quick input { width: 6rem; }
+.inline-form-actions { display: flex; align-items: center; gap: 0.75rem; }
+.inline-form p { flex-basis: 100%; margin: 0; }
+.link-items { border: none; margin: 0; padding: 0; display: grid; gap: 0.2rem; flex-basis: 100%; }
+.link-items legend { font-weight: 500; padding: 0; margin-bottom: 0.2rem; }
+.link-items input { accent-color: var(--accent); }
+.register tr.choose-row td { background: var(--accent-wash); }
+.payback-plan { color: var(--ink-soft); font-weight: 400; margin: 0; align-self: end; }
+.register.settled th:nth-child(5), .register.settled td:nth-child(5) { padding-left: 1.25rem; }
+h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
+
 /* Settings → Merchants */
 .merchant-filter { width: 16rem; max-width: 100%; margin-bottom: 0.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
@@ -405,7 +437,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
     z-index: 10;
   }
   .rail .wordmark { display: none; }
-  .rail ul { grid-template-columns: repeat(3, 1fr); }
+  .rail ul { grid-template-columns: repeat(4, 1fr); }
   .rail a { flex-direction: column; gap: 0.15rem; font-size: var(--step--1); padding: 0.5rem 0.25rem; }
   .page { padding-bottom: 6rem; }
   .tally-number { font-size: 3.25rem; }
@@ -424,6 +456,20 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.accounts th:nth-child(2), .register.accounts td:nth-child(2) { display: none; }
   /* transfers: hide the dates column */
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
+  /* owed: hide the date and paid columns; settled: date and status */
+  .register.owed:not(.settled) th:nth-child(1), .register.owed:not(.settled) td:nth-child(1),
+  .register.owed:not(.settled) th:nth-child(4), .register.owed:not(.settled) td:nth-child(4),
+  .register.settled th:nth-child(1), .register.settled td:nth-child(1),
+  .register.paybacks th:nth-child(3), .register.paybacks td:nth-child(3) { display: none; }
+  .register.paybacks td.action { white-space: normal; text-align: left; }
+  .register.paybacks td.action .btn + .btn { margin: 0.4rem 0 0; display: block; }
+  .register.settled th:nth-child(5), .register.settled td:nth-child(5) { padding-left: 0.5rem; }
+  .muted .in { color: var(--in); }
+  .inline-form { display: grid; padding: 0.5rem; }
+  .inline-form input[type='text'], .inline-form select { width: 100%; min-width: 0; }
+  .inline-form .amount-quick input { width: 100%; }
+  .register.paybacks td, .register.paybacks th, .register.owed td, .register.owed th { padding-right: 0.5rem; }
+  .register.owed td.action .btn + .btn { margin-left: 0.25rem; }
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
   .phone-only-block { display: block; }

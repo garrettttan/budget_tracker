@@ -121,10 +121,11 @@ await asUser(a, `update public.transactions set category_id=$1 where id=$2`, [in
 const cfTagged = (await asUser(a, `select income::float from public.monthly_cashflow()`)).rows;
 check('linked payback tagged Income is not income', cfTagged[0]?.income === 3000, JSON.stringify(cfTagged));
 
-// Write-off: full amount counts again
+// Write-off of an item never paid: full amount counts again (partly paid: phase 4 checks)
+await asUser(a, `delete from public.reimbursement_payments where reimbursement_id=$1`, [reimb]);
 await asUser(a, `update public.reimbursements set status='written_off' where id=$1`, [reimb]);
 const spend2 = (await asUser(a, `select spent::float from public.monthly_category_spend() where category_name='Dining'`)).rows;
-check('written-off reimbursement counts full $120', spend2[0]?.spent === 120, JSON.stringify(spend2));
+check('written-off reimbursement (never paid) counts full $120', spend2[0]?.spent === 120, JSON.stringify(spend2));
 
 // Tags: tagged spending is left out of normal spending unless toggled on
 const travel = (await asUser(a, `select id from public.categories where name='Travel'`)).rows[0].id;
@@ -429,6 +430,69 @@ check('a manual account balance can be edited', Number((await asUser(a, `select 
 await asUser(a, `delete from public.accounts where id = $1`, [cash.id]);
 check('deleting a manual account deletes its transactions', (await asUser(a,
   `select count(*)::int n from public.transactions where id = any($1)`, [[entered.id, enteredTransfer]])).rows[0].n === 0);
+
+// ---- Phase 4: reimbursements (as user D)
+const fails = async (sql, params) => { try { await one(sql, params); return false; } catch { return true; } };
+const dDiningR = (await one(`select id from public.categories where name = 'Dining'`)).id;
+const dIncome = (await one(`select id from public.categories where name = 'Income'`)).id;
+const feast = await txn({ account_id: card, amount: -120, posted_date: '2026-10-10', category_id: dDiningR, approved: true });
+const dSpentOn = async (id) => Number((await one(`select spent from public.spending_lines where transaction_id = $1`, [id]))?.spent);
+const rSam = (await one(`select public.expect_reimbursement($1, 'Sam', 40) as id`, [feast])).id;
+const rAlex = (await one(`select public.expect_reimbursement($1, ' Alex ', 30, 'drinks') as id`, [feast])).id;
+check('expect_reimbursement: category spending counts only your share', (await dSpentOn(feast)) === 50);
+check('expect_reimbursement: trims the name', (await one(`select who from public.reimbursements where id = $1`, [rAlex])).who === 'Alex');
+check('expect_reimbursement: no more than the charge in total', await fails(`select public.expect_reimbursement($1, 'Kim', 50.01)`, [feast]));
+check('expect_reimbursement: not on money in, transfers or pending rows',
+  await fails(`select public.expect_reimbursement($1, 'Sam', 1)`, [await txn({ amount: 10 })]) &&
+  await fails(`select public.expect_reimbursement($1, 'Sam', 1)`, [await txn({ amount: -10, is_transfer: true })]) &&
+  await fails(`select public.expect_reimbursement($1, 'Sam', 1)`, [await txn({ amount: -10, pending: true, external_id: 'P1', source: 'simplefin' })]));
+check('expect_reimbursement: needs a name and an amount above zero',
+  await fails(`select public.expect_reimbursement($1, ' ', 5)`, [feast]) && await fails(`select public.expect_reimbursement($1, 'Sam', 0)`, [feast]));
+check("expect_reimbursement: can't add to another user's charge",
+  await (async () => { try { await asUser(b, `select public.expect_reimbursement($1, 'Sam', 1)`, [feast]); return false; } catch { return true; } })());
+
+// Sam pays $60 for a $40 item: $40 linked, $20 of the payment left over
+const samPays = await txn({ account_id: checking, amount: 60, posted_date: '2026-10-12', description: 'VENMO SAM' });
+const linked = Number((await one(`select public.link_reimbursement_payment($1, $2) as n`, [samPays, [rSam, rAlex]])).n);
+check('link: covers items oldest first, each up to what is still owed', linked === 60);
+const st = async (id) => (await one(`select status from public.reimbursements where id = $1`, [id])).status;
+const paidOn = async (id) => Number((await one(`select coalesce(sum(amount), 0) as n from public.reimbursement_payments where reimbursement_id = $1`, [id])).n);
+check('link: an item paid in full is received; one paid in part stays owed',
+  (await st(rSam)) === 'received' && (await st(rAlex)) === 'owed' && (await paidOn(rSam)) === 40 && (await paidOn(rAlex)) === 20);
+const samRow = await row(samPays);
+check('link: the payment is approved with no category', samRow.approved && samRow.category_id === null && !samRow.is_transfer);
+check('link: a linked payment is neither spending nor income',
+  (await one(`select count(*)::int n from public.spending_lines where transaction_id = $1`, [samPays])).n === 0 &&
+  (await asUser(d, `select income::float from public.monthly_cashflow() where month = '2026-10-01'`)).rows.every((r) => r.income === 0));
+check('link: a used-up payment links nothing more', await fails(`select public.link_reimbursement_payment($1, $2)`, [samPays, [rAlex]]));
+check('link: not from money out', await fails(`select public.link_reimbursement_payment($1, $2)`, [await txn({ amount: -10 }), [rAlex]]));
+check("link: another user can't link your payment",
+  await (async () => { try { await asUser(b, `select public.link_reimbursement_payment($1, $2)`, [samPays, [rAlex]]); return false; } catch { return true; } })());
+
+// Alex never pays the other $10: written off, only the unpaid part counts again
+await one(`update public.reimbursements set status = 'written_off' where id = $1`, [rAlex]);
+check('written off after a partial payment: only the unpaid part is your spending again', (await dSpentOn(feast)) === 60);
+check('link: skips written-off items', await fails(`select public.link_reimbursement_payment($1, $2)`, [await txn({ amount: 10 }), [rAlex]]));
+
+// Undo Sam's link
+const unlinked = (await one(`select public.unlink_reimbursement_payment($1) as n`, [samPays])).n;
+const samAfter = await row(samPays);
+check('unlink: removes the links; paid items are owed again, written-off ones stay',
+  unlinked === 2 && (await st(rSam)) === 'owed' && (await st(rAlex)) === 'written_off' && (await paidOn(rSam)) === 0);
+check('unlink: the payment goes back to To review', !samAfter.approved);
+check('unlink: written off and unpaid counts in full again; owed still comes off', (await dSpentOn(feast)) === 80);
+check('unlink: a payment with no links returns 0', (await one(`select public.unlink_reimbursement_payment($1) as n`, [samPays])).n === 0);
+
+// Received by hand (cash): no payment needed, still only your share
+await one(`update public.reimbursements set status = 'received' where id = $1`, [rSam]);
+check('received by hand: still counts only your share', (await dSpentOn(feast)) === 80);
+await one(`update public.transactions set category_id = $1 where id = $2`, [dIncome, samPays]);
+
+let anonRpc5 = false;
+try { await db.exec(`set role anon;`); await db.query(`select public.unlink_reimbursement_payment(gen_random_uuid())`); anonRpc5 = true; } catch {} finally { await db.exec(`reset role;`); }
+check('signed-out visitors cannot call the reimbursement functions', !anonRpc5);
+await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_reimbursements.sql'))), 'utf8'));
+check('reimbursements migration is safe to re-run', true);
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);
