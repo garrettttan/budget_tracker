@@ -28,7 +28,7 @@ name only when it first creates it, so your name sticks).
 - Add transaction (account, date, amount in/out, description, category, note), saved as
   already approved since you entered it
 - Bulk tagging (several selected rows at once). Tagging one row, the tag filter and
-  Settings → Tags are done; Trends (phase 6) toggles tags on and shows `tag_spend` totals.
+  Settings → Tags are done; Trends (phase 5) toggles tags on and shows `tag_spend` totals.
 
 **To check:** the first scheduled sync (`.github/workflows/sync.yml`) is due Nov 3 at
 10:17 UTC. A manual run (Run workflow) succeeded on Nov 2. Confirm a `schedule` run shows
@@ -200,9 +200,9 @@ not-allowed cursor; give a disabled action a `title` that says why.
 3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing):
    mostly **done**; manual accounts, Add transaction and bulk tagging next
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
-5. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
-6. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
+5. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
    per-tag totals)
+6. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
 
 ## Commands
 
