@@ -26,7 +26,8 @@ whose bar approves, adds a tag to (or creates one), or removes a tag from every 
 manual accounts (Accounts → Add manual account: name, class, balance; Edit sets name and
 balance, Delete removes it and its transactions); Add transaction on Transactions (account,
 date, amount out/in, description, category or Transfer, note), saved with `source = 'manual'`
-and already approved, the form staying open for the next one. All of these are direct table
+and already approved, the form staying open for the next one (Delete transaction in its details
+removes it). All of these are direct table
 writes under RLS, no new database functions.
 
 - A manual account's balance is whatever you last set (no trigger sums its transactions, so
@@ -183,6 +184,10 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
   spending again. Embeds between `transactions`, `reimbursements` and `reimbursement_payments`
   must name the foreign key (`reimbursements!reimbursements_transaction_id_fkey(...)`): the
   link table gives PostgREST a second path.
+- `delete_manual_transaction(id)` (security invoker, `rpc`): Delete transaction in a manual
+  row's details. Only `source = 'manual'`; refuses a charge whose reimbursements have payments
+  linked (unlink them first); unlinks a payback first (what it paid is owed again); sends the
+  other side of a transfer back to Review; unpaid reimbursements and tags cascade.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);

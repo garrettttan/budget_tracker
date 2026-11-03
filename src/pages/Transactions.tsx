@@ -37,6 +37,8 @@ type Row = {
   transfer_pair_id: string | null;
   category_id: string | null;
   note: string | null;
+  /** 'manual' = entered with Add transaction (only those can be deleted) */
+  source: string;
   accounts: { name: string } | null;
   merchants: { name: string } | null;
   transaction_tags: { tag_id: string }[];
@@ -47,7 +49,7 @@ type Row = {
 };
 
 const COLUMNS =
-  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, accounts(name), merchants(name), transaction_tags(tag_id), ' +
+  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, source, accounts(name), merchants(name), transaction_tags(tag_id), ' +
   // both tables reach transactions more than one way, so name the foreign key
   'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
   'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
@@ -361,6 +363,21 @@ export default function Transactions({ count, onChange }: { count: number | null
       () => db().rpc('unlink_reimbursement_payment', { p_payment: r.id }),
       () => `Unlinked ${name(r)}. It's back in To review, and what it paid back is owed again.`,
     );
+
+  /** Rows you entered by hand can be deleted; the database tidies what hangs off them. */
+  function remove(r: Row) {
+    const also = [
+      r.reimbursements.length ? 'what people owe you on it is removed too' : '',
+      isLinked(r) ? `what it paid back is owed again by ${payers(r.reimbursement_payments)}` : '',
+      r.transfer_pair_id ? 'the other side of the transfer goes back to To review' : '',
+    ].filter(Boolean);
+    const summary = `${name(r)} (${money(r.amount)}, ${shortDate(r.posted_date)})`;
+    if (!window.confirm(`Delete ${summary}? This can’t be undone${also.length ? `; ${also.join(', and ')}` : ''}.`)) return;
+    return act(
+      () => db().rpc('delete_manual_transaction', { p_id: r.id }),
+      () => `Deleted ${summary}.`,
+    );
+  }
 
   const isCharge = (r: Row) => Number(r.amount) < 0 && !r.is_transfer;
   const isLinked = (r: Row) => r.reimbursement_payments.length > 0;
@@ -757,6 +774,21 @@ export default function Transactions({ count, onChange }: { count: number | null
                       {/* phones hide the Tags column, so tags live in the row's details there */}
                       <div className="phone-only-block">{tagCell(r)}</div>
                       {reimbursementDetails(r)}
+                      {r.source === 'manual' && (
+                        <div className="row-actions">
+                          <Button
+                            variant="link"
+                            size="small"
+                            className="danger"
+                            disabled={busy}
+                            title="You added this by hand, so you can delete it"
+                            aria-label={`Delete ${name(r)}`}
+                            onClick={() => remove(r)}
+                          >
+                            Delete transaction
+                          </Button>
+                        </div>
+                      )}
                     </MerchantCell>
                   </td>
                   <td className="account-col">{r.accounts?.name}</td>
