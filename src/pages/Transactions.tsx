@@ -7,6 +7,8 @@ import CategorySelect, { type Category, TRANSFER } from '../components/CategoryS
 import MerchantCell from '../components/MerchantCell';
 import TagCell, { type Tag } from '../components/TagCell';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
+import AddTransaction, { type AccountOption } from '../components/AddTransaction';
+import BulkBar from '../components/BulkBar';
 
 const PAGE = 100;
 
@@ -23,13 +25,14 @@ type Row = {
   is_transfer: boolean;
   transfer_pair_id: string | null;
   category_id: string | null;
+  note: string | null;
   accounts: { name: string } | null;
   merchants: { name: string } | null;
   transaction_tags: { tag_id: string }[];
 };
 
 const COLUMNS =
-  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, accounts(name), merchants(name), transaction_tags(tag_id)';
+  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, accounts(name), merchants(name), transaction_tags(tag_id)';
 
 /**
  * Posted rows only: pending ones have their own section. With a tag, a second,
@@ -90,6 +93,9 @@ export default function Transactions({ count, onChange }: { count: number | null
   const [hasMore, setHasMore] = useState(false);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [accounts, setAccounts] = useState<Map<string, string>>(new Map());
+  const [entryAccounts, setEntryAccounts] = useState<AccountOption[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tags, setTags] = useState<Tag[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [busy, setBusy] = useState(false);
@@ -99,13 +105,21 @@ export default function Transactions({ count, onChange }: { count: number | null
   useEffect(() => {
     Promise.all([
       db().from('categories').select('id, name, is_income').eq('archived', false).order('sort_order'),
-      db().from('accounts').select('id, name'),
+      db().from('accounts').select('id, name, class, connection_id, hidden').order('sort_order').order('name'),
       db().from('tags').select('id, name').order('name'),
     ]).then(([c, a, t]) => {
       const failed = c.error ?? a.error ?? t.error;
       if (failed) setError(failed.message);
       setCategories((c.data ?? []) as Category[]);
-      setAccounts(new Map((a.data ?? []).map((x) => [x.id as string, x.name as string])));
+      const all = (a.data ?? []) as { id: string; name: string; class: string; connection_id: string | null; hidden: boolean }[];
+      setAccounts(new Map(all.map((x) => [x.id, x.name])));
+      // investments are balance-only, so no transactions; manual accounts first
+      setEntryAccounts(
+        all
+          .filter((x) => x.class !== 'investment' && !x.hidden)
+          .map((x) => ({ id: x.id, name: x.name, manual: x.connection_id === null }))
+          .sort((x, y) => Number(y.manual) - Number(x.manual)),
+      );
       setTags((t.data ?? []) as Tag[]);
     });
   }, []);
@@ -127,8 +141,12 @@ export default function Transactions({ count, onChange }: { count: number | null
       ]);
       const failed = t.error ?? p.error ?? s.error;
       if (failed) setError(failed.message);
-      setRows((t.data ?? []) as unknown as Row[]);
-      setHasMore((t.data ?? []).length === size);
+      const loaded = (t.data ?? []) as unknown as Row[];
+      setRows(loaded);
+      setHasMore(loaded.length === size);
+      // drop selected rows that left the list (approved out of To review, untagged out of a tag filter)
+      const visible = new Set(loaded.map((r) => r.id));
+      setSelected((sel) => (sel.size && [...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
       setPending((p.data ?? []) as unknown as Row[]);
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
@@ -140,6 +158,7 @@ export default function Transactions({ count, onChange }: { count: number | null
     if (!categories) return;
     setRows(null);
     setPending([]);
+    setSelected(new Set());
     reload(PAGE);
   }, [categories, reload]);
 
@@ -264,6 +283,72 @@ export default function Transactions({ count, onChange }: { count: number | null
     return addTag(r, tag.id);
   }
 
+  // ---- selected rows -------------------------------------------------------
+
+  const selectedRows = (rows ?? []).filter((r) => selected.has(r.id));
+  const canApprove = (r: Row) => !r.approved && (r.category_id !== null || r.is_transfer);
+  const approvable = selectedRows.filter(canApprove);
+  const allSelected = Boolean(rows?.length) && rows!.every((r) => selected.has(r.id));
+  const plural = (n: number) => `${n} ${n === 1 ? 'transaction' : 'transactions'}`;
+
+  function toggleSelected(id: string) {
+    setSelected((sel) => {
+      const next = new Set(sel);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set((rows ?? []).map((r) => r.id)));
+
+  const tagsOnSelected = tags.filter((t) => selectedRows.some((r) => r.transaction_tags.some((x) => x.tag_id === t.id)));
+
+  function approveSelected() {
+    const skipped = selectedRows.filter((r) => !r.approved && !canApprove(r)).length;
+    return act(
+      () => db().rpc('approve_transactions', { p_ids: approvable.map((r) => r.id) }),
+      (n) => `Approved ${plural(Number(n))}.${skipped ? ` ${plural(skipped)} still ${skipped === 1 ? 'needs' : 'need'} a category.` : ''}`,
+    );
+  }
+
+  /** Adds the tag to every selected row that doesn't have it yet. */
+  function tagSelected(tagId: string) {
+    const missing = selectedRows.filter((r) => !r.transaction_tags.some((x) => x.tag_id === tagId));
+    if (missing.length === 0) return setNotice(`All selected transactions already carry ${tagName(tagId)}.`);
+    return act(
+      () =>
+        db()
+          .from('transaction_tags')
+          .upsert(
+            missing.map((r) => ({ transaction_id: r.id, tag_id: tagId })),
+            { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true },
+          ),
+      () => `Tagged ${plural(missing.length)} ${tagName(tagId)}.`,
+    );
+  }
+
+  async function createTagForSelected(typed: string) {
+    const existing = tags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
+    if (existing) return tagSelected(existing.id);
+    const { data, error } = await db().from('tags').insert({ name: typed }).select('id, name').single();
+    if (error) return setError(error.message);
+    const tag = data as Tag;
+    setTags((ts) => [...ts, tag].sort((a, b) => a.name.localeCompare(b.name)));
+    const missing = selectedRows.map((r) => ({ transaction_id: r.id, tag_id: tag.id }));
+    return act(
+      () => db().from('transaction_tags').insert(missing),
+      () => `Tagged ${plural(missing.length)} ${tag.name}.`,
+    );
+  }
+
+  function untagSelected(tagId: string) {
+    const carrying = selectedRows.filter((r) => r.transaction_tags.some((x) => x.tag_id === tagId)).map((r) => r.id);
+    return act(
+      () => db().from('transaction_tags').delete().eq('tag_id', tagId).in('transaction_id', carrying),
+      () => `Removed ${tagName(tagId)} from ${plural(carrying.length)}.`,
+    );
+  }
+
   function toggleApproved(r: Row) {
     // flip the box right away; the reload that follows confirms it
     setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, approved: !x.approved } : x)) ?? null);
@@ -284,6 +369,17 @@ export default function Transactions({ count, onChange }: { count: number | null
     <section>
       <header className="page-head">
         <h1>Transactions</h1>
+        {!adding && (
+          <Button
+            onClick={() => {
+              setAdding(true);
+              setNotice(null);
+              setError(null);
+            }}
+          >
+            Add transaction
+          </Button>
+        )}
       </header>
       <div className="tally">
         <span className="tally-number">{count ?? '–'}</span>
@@ -307,8 +403,33 @@ export default function Transactions({ count, onChange }: { count: number | null
         </p>
       )}
 
+      {adding && (
+        <AddTransaction
+          accounts={entryAccounts}
+          categories={categories ?? []}
+          onClose={() => setAdding(false)}
+          onAdded={async (summary) => {
+            setError(null);
+            setNotice(`Added ${summary}, approved.`);
+            await reload(Math.max(rows?.length ?? 0, PAGE));
+          }}
+        />
+      )}
+
       {error && <p className="error" role="alert">{error}</p>}
-      {notice && <p className="notice" role="status">{notice}</p>}
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+          {adding && status === 'review' && notice.startsWith('Added ') && (
+            <>
+              {' '}
+              <Button variant="link" onClick={() => setFilters({ status: 'approved' })}>
+                See approved
+              </Button>
+            </>
+          )}
+        </p>
+      )}
 
       {suggestions.length > 0 && (
         <TransferSuggestions
@@ -348,16 +469,16 @@ export default function Transactions({ count, onChange }: { count: number | null
           <table className="register txns pending-txns">
             <thead>
               <tr>
-                <th scope="col">Date</th>
+                <th scope="col" className="date-col">Date</th>
                 <th scope="col">Merchant</th>
-                <th scope="col">Account</th>
+                <th scope="col" className="account-col">Account</th>
                 <th scope="col" className="num">Amount</th>
               </tr>
             </thead>
             <tbody>
               {pending.map((r) => (
                 <tr key={r.id}>
-                  <td>{shortDate(r.posted_date)}</td>
+                  <td className="date-col">{shortDate(r.posted_date)}</td>
                   <td>
                     <MerchantCell
                       name={r.merchants?.name}
@@ -366,7 +487,7 @@ export default function Transactions({ count, onChange }: { count: number | null
                       account={r.accounts?.name}
                     />
                   </td>
-                  <td>{r.accounts?.name}</td>
+                  <td className="account-col">{r.accounts?.name}</td>
                   <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
                 </tr>
               ))}
@@ -393,14 +514,42 @@ export default function Transactions({ count, onChange }: { count: number | null
           <p className="muted small">
             Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
             unreviewed charges from it. Approved by mistake? Untick it. Tags group transactions across categories (like a
-            trip); tagged spending is kept apart from your normal spending.
+            trip); tagged spending is kept apart from your normal spending. Tick the boxes on the left to approve or tag
+            several at once.
           </p>
+          {selected.size > 0 && (
+            <BulkBar
+              count={selected.size}
+              approvable={approvable.length}
+              allTags={tags}
+              tagsOnSelected={tagsOnSelected}
+              busy={busy}
+              onApprove={approveSelected}
+              onAddTag={tagSelected}
+              onCreateTag={createTagForSelected}
+              onRemoveTag={untagSelected}
+              onClear={() => setSelected(new Set())}
+            />
+          )}
           <table className="register txns">
             <thead>
               <tr>
-                <th scope="col">Date</th>
+                <th scope="col" className="select-col">
+                  <input
+                    type="checkbox"
+                    aria-label={allSelected ? 'Clear selection' : `Select all ${rows.length} shown`}
+                    title={allSelected ? 'Clear selection' : 'Select all shown'}
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selected.size > 0 && !allSelected;
+                    }}
+                    disabled={busy}
+                    onChange={toggleAll}
+                  />
+                </th>
+                <th scope="col" className="date-col">Date</th>
                 <th scope="col">Merchant</th>
-                <th scope="col">Account</th>
+                <th scope="col" className="account-col">Account</th>
                 <th scope="col">Category</th>
                 <th scope="col" className="tags-col">Tags</th>
                 <th scope="col" className="num">Amount</th>
@@ -411,20 +560,33 @@ export default function Transactions({ count, onChange }: { count: number | null
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className={r.approved ? undefined : 'unreviewed'}>
-                  <td>{shortDate(r.posted_date)}</td>
+                <tr
+                  key={r.id}
+                  className={[r.approved ? '' : 'unreviewed', selected.has(r.id) ? 'selected' : ''].join(' ').trim() || undefined}
+                >
+                  <td className="select-col">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${name(r)}`}
+                      checked={selected.has(r.id)}
+                      disabled={busy}
+                      onChange={() => toggleSelected(r.id)}
+                    />
+                  </td>
+                  <td className="date-col">{shortDate(r.posted_date)}</td>
                   <td>
                     <MerchantCell
                       name={r.merchants?.name}
                       description={r.description}
                       postedDate={r.posted_date}
                       account={r.accounts?.name}
+                      note={r.note}
                     >
                       {/* phones hide the Tags column, so tags live in the row's details there */}
                       <div className="phone-only-block">{tagCell(r)}</div>
                     </MerchantCell>
                   </td>
-                  <td>{r.accounts?.name}</td>
+                  <td className="account-col">{r.accounts?.name}</td>
                   <td>
                     <CategorySelect
                       categories={categories ?? []}

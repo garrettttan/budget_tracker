@@ -240,6 +240,57 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .tag-filter { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem; margin: 0 0 1rem; }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
 
+/* Transactions → select column and the bar for selected rows */
+.register .select-col { width: 2rem; padding-right: 0.25rem; }
+.register .select-col input { width: 1.05rem; height: 1.05rem; margin: 0.2rem 0 0; cursor: pointer; accent-color: var(--accent); }
+.register .select-col input:disabled { cursor: not-allowed; opacity: 0.45; }
+.register tr.selected td { background: var(--accent-wash); }
+.bulk-bar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+.bulk-bar .combobox input { width: 9.5rem; font-size: var(--step--1); }
+.row-note { display: block; color: var(--ink); margin-top: 0.2rem; }
+
+/* Add transaction / Add manual account: a form above the list */
+.page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.panel-form {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  max-width: 44rem;
+}
+.panel-form h2 { margin: 0 0 0.25rem; }
+.panel-form > p { margin: 0 0 0.75rem; }
+.fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem 1rem; }
+.fields label, .fields .field { display: grid; gap: 0.3rem; font-weight: 500; font-size: var(--step--1); align-content: start; }
+.fields .wide { grid-column: 1 / -1; }
+.fields .span-2 { grid-column: span 2; }
+.amount-entry { display: flex; gap: 0.4rem; }
+.amount-entry input { min-width: 0; }
+.fields input, .fields select { font-size: var(--step-0); padding: 0.45rem 0.6rem; width: 100%; }
+.fields .combobox input { width: 100%; }
+.fields .filter { margin: 0; }
+.fields .filter { gap: 0; }
+.fields .filter .btn { padding: 0.45rem 0.6rem; font-size: var(--step--1); }
+.fields .filter .btn:first-child { border-radius: 6px 0 0 6px; }
+.fields .filter .btn:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+.form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1rem; }
+.balance-input { width: 7rem; padding: 0.2rem 0.4rem; text-align: right; }
+.btn-link.danger { color: var(--danger); }
+
 /* Settings → Merchants */
 .merchant-filter { width: 16rem; max-width: 100%; margin-bottom: 0.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
@@ -360,10 +411,13 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .tally-number { font-size: 3.25rem; }
 
   /* transactions: hide date and account columns (they're in the row's details) */
-  .register.txns th:nth-child(1), .register.txns td:nth-child(1),
-  .register.txns th:nth-child(3), .register.txns td:nth-child(3) { display: none; }
+  .register.txns .date-col, .register.txns .account-col { display: none; }
   .register .approved-col { width: auto; font-size: var(--step--1); }
-  .register.txns tr.unreviewed td:nth-child(2) { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
+  .page-head .btn { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
+  .bulk-bar { top: 0; }
+  .fields { grid-template-columns: 1fr; }
+  .fields .span-2 { grid-column: auto; }
+  .panel-form { padding: 0.75rem 0.875rem 1rem; }
   /* merchants: hide the remembered category */
   .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
   /* accounts: hide the institution (room for Rename) */

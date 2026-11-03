@@ -402,5 +402,33 @@ let anonRpc4 = false;
 try { await db.exec(`set role anon;`); await db.query(`select public.send_to_review('{}')`); anonRpc4 = true; } catch {} finally { await db.exec(`reset role;`); }
 check('signed-out visitors cannot send rows back to Review', !anonRpc4);
 
+// ---- Phase 3 wrap-up: manual accounts, Add transaction, bulk tagging (direct writes from the browser)
+const cash = (await asUser(a, `insert into public.accounts (name, class, balance, balance_date) values ('Cash', 'cash', 40, now()) returning id, connection_id`)).rows[0];
+check('a manual account has no connection', cash.connection_id === null);
+const entered = (await asUser(a,
+  `insert into public.transactions (account_id, source, posted_date, amount, description, category_id, note, approved, approved_at)
+   values ($1, 'manual', '2026-11-03', -12.5, 'Bagels', $2, 'with Sam', true, now()) returning id, approved`, [cash.id, dining])).rows[0];
+const enteredTransfer = (await asUser(a,
+  `insert into public.transactions (account_id, source, posted_date, amount, description, is_transfer, approved, approved_at)
+   values ($1, 'manual', '2026-11-03', 100, 'ATM withdrawal', true, true, now()) returning id`, [cash.id])).rows[0].id;
+check('Add transaction: saved approved, with a category or as a transfer', entered.approved && Boolean(enteredTransfer));
+const bulkTag = (await asUser(a, `insert into public.tags (name) values ('Weekend') returning id`)).rows[0].id;
+await asUser(a, `insert into public.transaction_tags (transaction_id, tag_id) values ($1, $2)`, [entered.id, bulkTag]);
+await asUser(a, `insert into public.transaction_tags (transaction_id, tag_id) values ($1, $3), ($2, $3) on conflict (transaction_id, tag_id) do nothing`,
+  [entered.id, enteredTransfer, bulkTag]);
+check('bulk tag: rows that already carry the tag are skipped, the rest tagged', (await asUser(a,
+  `select count(*)::int n from public.transaction_tags where tag_id = $1`, [bulkTag])).rows[0].n === 2);
+await asUser(a, `delete from public.transaction_tags where tag_id = $1 and transaction_id = any($2)`, [bulkTag, [entered.id, enteredTransfer]]);
+check('bulk untag: removes the tag from every selected row', (await asUser(a,
+  `select count(*)::int n from public.transaction_tags where tag_id = $1`, [bulkTag])).rows[0].n === 0);
+let crossTag = false;
+try { await asUser(b, `insert into public.transaction_tags (transaction_id, tag_id) values ($1, $2) on conflict do nothing`, [entered.id, bulkTag]); crossTag = (await asUser(a, `select count(*)::int n from public.transaction_tags where tag_id = $1`, [bulkTag])).rows[0].n > 0; } catch {}
+check("bulk tag: another user can't tag your rows", !crossTag);
+await asUser(a, `update public.accounts set balance = 55.25, balance_date = now() where id = $1`, [cash.id]);
+check('a manual account balance can be edited', Number((await asUser(a, `select balance from public.accounts where id = $1`, [cash.id])).rows[0].balance) === 55.25);
+await asUser(a, `delete from public.accounts where id = $1`, [cash.id]);
+check('deleting a manual account deletes its transactions', (await asUser(a,
+  `select count(*)::int n from public.transactions where id = any($1)`, [[entered.id, enteredTransfer]])).rows[0].n === 0);
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

@@ -6,6 +6,25 @@ export function money(amount: number | string | null | undefined): string {
   return usd.format(Number(amount));
 }
 
+/**
+ * Reads a typed amount like "12", "1,234.5" or "$12.50" as a number rounded to
+ * cents; null if it isn't one. Negative only with `allowNegative` (a balance).
+ */
+export function parseAmount(text: string, { allowNegative = false } = {}): number | null {
+  const cleaned = text.replace(/[$,\s]/g, '');
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
+  const n = Math.round(Number(cleaned) * 100) / 100;
+  if (!Number.isFinite(n) || (n < 0 && !allowNegative) || Math.abs(n) >= 1e10) return null;
+  return n;
+}
+
+/** Today as YYYY-MM-DD in local time (what a date input expects). */
+export function todayIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function shortDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   // Dates without a time are calendar dates; don't let the timezone shift them
