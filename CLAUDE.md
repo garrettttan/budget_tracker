@@ -34,8 +34,17 @@ writes under RLS, no new database functions.
   can't write them). Trends' net worth over time has to handle that.
 - Manual transactions get no `merchant_id`, so they don't teach or use merchant memory.
 
-**Next: phase 4, Reimbursements** (Expect reimbursement, Owed to me, link + split payments,
-Venmo payments entered through Add transaction on the Venmo account).
+**Phase 4 (Reimbursements): done** (Nov 3). In a charge's tap-to-expand details,
+Expect reimbursement (who, how much with Half / The rest, note); the row then shows "Sam owes
+$40" and "your share". Money in gets "Link to what someone owes" (pick the person, untick
+items), and Transactions suggests likely paybacks under "Paid back?" (someone named in the
+text, else one unique exact amount: `src/lib/reimbursementMatch.ts`). Add transaction can
+record money in as "Pays back Sam" (a Venmo payment), which links it. A linked payment shows
+"Payback, not income" instead of a category; Unlink payment in its details undoes it. Owed to me
+(`/owed`) lists open items by person (Received for cash, Write off, × to stop expecting) and
+the last 30 settled ones (Reopen).
+
+**Next: phase 5, Trends.**
 
 The scheduled sync works: a `schedule` run on Nov 2 logged an `ok` `sync_runs` row.
 
@@ -163,6 +172,17 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
   unreviewed opposite amounts in different accounts within 5 days, computed, not stored.
   "Not a transfer" stores the pair in `dismissed_transfer_pairs` (yours only; cascades with
   either transaction), and the view skips it.
+- Reimbursement functions (security invoker, `rpc`): `expect_reimbursement(txn, who, amount,
+  note)` (posted money out only; all owed + received on a charge ≤ the charge);
+  `link_reimbursement_payment(payment, ids)` covers the given owed items oldest charge first,
+  each up to what's still owed, marks fully paid ones received, and approves the payment with
+  no category (it's excluded from spending and income); `unlink_reimbursement_payment(payment)`
+  reverses it (received → owed, payment back to Review). Status changes (received by hand,
+  written off, reopen) and removing an unpaid item are direct table writes. `spending_lines`
+  counts a written-off item's paid part as reimbursed, so only the unpaid part is your
+  spending again. Embeds between `transactions`, `reimbursements` and `reimbursement_payments`
+  must name the foreign key (`reimbursements!reimbursements_transaction_id_fkey(...)`): the
+  link table gives PostgREST a second path.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);
@@ -185,7 +205,7 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
 from any Pages subpath. Pages: Transactions (also the review inbox: filter To review /
 Approved / All via `?status=`; every row has a category picker and an Approved checkbox;
-`/review` redirects here), Accounts, Settings, SignIn.
+`/review` redirects here), Owed to me, Accounts, Settings, SignIn.
 Email + password auth (single user).
 
 Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accent teal
@@ -204,7 +224,7 @@ not-allowed cursor; give a disabled action a `title` that says why.
 2. SimpleFIN connect + daily sync (claim function, Vault, sync function, schedule, sync log): **done**
 3. Review + categorization (inbox, approve, merchant memory/cleanup, transfer pairing,
    tags, manual accounts, Add transaction, bulk actions): **done**
-4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry)
+4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry): **done**
 5. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
    per-tag totals)
 6. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)

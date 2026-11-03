@@ -13,6 +13,7 @@ export default function MerchantCell({
   postedDate,
   account,
   note,
+  summary,
   children,
 }: {
   name: string | undefined;
@@ -20,6 +21,8 @@ export default function MerchantCell({
   postedDate: string;
   account: string | undefined;
   note?: string | null;
+  /** a line always shown under the name, e.g. who owes you part of it */
+  summary?: ReactNode;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -36,6 +39,7 @@ export default function MerchantCell({
       >
         {name ?? description}
       </Button>
+      {summary}
       {open && (
         <div id={id} className="row-details">
           <span className="phone-only">

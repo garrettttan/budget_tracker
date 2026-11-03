@@ -5,6 +5,7 @@ import { isConfigured, supabase } from './lib/supabase';
 import SignIn from './pages/SignIn';
 import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
+import Owed from './pages/Owed';
 import Settings from './pages/Settings';
 import NotConfigured from './pages/NotConfigured';
 
@@ -28,6 +29,7 @@ function useUnreviewedCount(enabled: boolean) {
 
 const NAV = [
   { to: '/transactions', label: 'Transactions' },
+  { to: '/owed', label: 'Owed to me' },
   { to: '/accounts', label: 'Accounts' },
   { to: '/settings', label: 'Settings' },
 ];
@@ -64,6 +66,7 @@ export default function App() {
           <Route path="/transactions" element={<Transactions count={unreviewed} onChange={refreshUnreviewed} />} />
           {/* Review and Transactions were one page each until Nov 2026 */}
           <Route path="/review" element={<Navigate to="/transactions" replace />} />
+          <Route path="/owed" element={<Owed />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />
           <Route path="*" element={<Navigate to="/transactions" replace />} />

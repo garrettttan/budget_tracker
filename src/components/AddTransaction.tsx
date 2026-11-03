@@ -3,6 +3,7 @@ import { db } from '../lib/supabase';
 import { money, parseAmount, todayIso } from '../lib/format';
 import Button from './Button';
 import CategorySelect, { type Category, TRANSFER } from './CategorySelect';
+import { type OpenItem, allocate, byPerson, personKey, round } from '../lib/reimbursements';
 
 export type AccountOption = { id: string; name: string; manual: boolean };
 
@@ -14,11 +15,14 @@ export type AccountOption = { id: string; name: string; manual: boolean };
 export default function AddTransaction({
   accounts,
   categories,
+  open,
   onAdded,
   onClose,
 }: {
   accounts: AccountOption[];
   categories: Category[];
+  /** what people still owe you: money in can pay it back */
+  open: OpenItem[];
   onAdded: (summary: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -29,11 +33,15 @@ export default function AddTransaction({
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [payer, setPayer] = useState(''); // person key; '' = not a payback
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const descriptionInput = useRef<HTMLInputElement>(null);
 
   const parsed = parseAmount(amount);
+  const owers = byPerson(open);
+  const payback = direction === 'in' ? owers.find((g) => personKey(g.who) === payer) : undefined;
+  const plan = payback && parsed ? allocate(parsed, payback.items) : [];
   const why = !accountId
     ? 'Add an account first'
     : !date
@@ -42,18 +50,18 @@ export default function AddTransaction({
         ? 'Enter an amount'
         : !description.trim()
           ? 'Describe it'
-          : !category
+          : !category && !payback
             ? 'Choose a category'
             : undefined;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (why || parsed === null || !category) return;
+    if (why || parsed === null || (!category && !payback)) return;
     setBusy(true);
     setError(null);
     const signed = direction === 'out' ? -parsed : parsed;
-    const transfer = category === TRANSFER;
-    const { error } = await db()
+    const transfer = !payback && category === TRANSFER;
+    const { data, error } = await db()
       .from('transactions')
       .insert({
         account_id: accountId,
@@ -61,27 +69,47 @@ export default function AddTransaction({
         posted_date: date,
         amount: signed,
         description: description.trim(),
-        category_id: transfer ? null : category,
+        category_id: payback || transfer ? null : category,
         is_transfer: transfer,
         note: note.trim() || null,
-        approved: true,
-        approved_at: new Date().toISOString(),
-      });
-    setBusy(false);
-    if (error) return setError(error.message);
+        // a payback is approved by linking it, below
+        approved: !payback,
+        approved_at: payback ? null : new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (error) {
+      setBusy(false);
+      return setError(error.message);
+    }
     const account = accounts.find((a) => a.id === accountId)?.name;
-    await onAdded(`${description.trim()} (${money(signed)}) on ${account}`);
+    let summary = `${description.trim()} (${money(signed)}) on ${account}`;
+    if (payback) {
+      const linked = await db().rpc('link_reimbursement_payment', {
+        p_payment: (data as { id: string }).id,
+        p_reimbursements: payback.items.map((i) => i.id),
+      });
+      if (linked.error) {
+        setBusy(false);
+        await onAdded(`${summary}, but not linked`);
+        return setError(`Saved, but linking it failed (it's in To review): ${linked.error.message}`);
+      }
+      summary += `, paying back ${payback.who}`;
+    }
+    setBusy(false);
+    await onAdded(summary);
     setAmount('');
     setDescription('');
     setCategory(null);
     setNote('');
+    setPayer('');
     descriptionInput.current?.focus();
   }
 
   return (
     <form className="panel-form" onSubmit={save} aria-label="Add transaction">
       <h2>Add transaction</h2>
-      <p className="muted small">Saved as approved, since you entered it.</p>
+      <p className="muted small">Saved as approved, since you entered it. Money in can pay back what someone owes you.</p>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="fields">
         <label>
@@ -132,6 +160,28 @@ export default function AddTransaction({
             onChange={(e) => setDescription(e.target.value)}
           />
         </label>
+        {direction === 'in' && owers.length > 0 && (
+          <label className="span-2">
+            Pays back
+            <select value={payer} disabled={busy} onChange={(e) => setPayer(e.target.value)}>
+              <option value="">Nobody: income or a refund</option>
+              {owers.map((g) => (
+                <option key={personKey(g.who)} value={personKey(g.who)}>
+                  {g.who} (owes {money(g.remaining)})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {payback ? (
+          <p className="field payback-plan">
+            {plan.length
+              ? `Covers ${plan.map((p) => `${p.item.label} ${money(p.part)}`).join(', ')}${
+                  parsed && parsed > payback.remaining ? `; ${money(round(parsed - payback.remaining))} more than they owe` : ''
+                }. Not counted as income.`
+              : 'Enter the amount to see what it covers.'}
+          </p>
+        ) : (
         <div className="field">
           {/* the picker labels itself; this is the visible caption */}
           <span aria-hidden="true">Category</span>
@@ -143,6 +193,7 @@ export default function AddTransaction({
             }}
           />
         </div>
+        )}
         <label className="wide">
           <span>
             Note <span className="muted">(optional)</span>
