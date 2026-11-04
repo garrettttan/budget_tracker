@@ -10,6 +10,9 @@
   --out: #9a3b2e;
   --in: #2d7550;
   --danger: #9a3b2e;
+  /* chart series (Trends), validated for color-blind separation on this surface */
+  --viz-income: #00919c;
+  --viz-spending: #c25a22;
 
   --step--1: 0.8125rem;
   --step-0: 0.9375rem;
@@ -33,6 +36,8 @@
     --out: #e08a7b;
     --in: #7fc49e;
     --danger: #e08a7b;
+    --viz-income: #1c9aa3;
+    --viz-spending: #d2702f;
     color-scheme: dark;
   }
 }
@@ -323,6 +328,71 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register.settled th:nth-child(5), .register.settled td:nth-child(5) { padding-left: 1.25rem; }
 h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 
+.nav-short { display: none; }
+
+/* Trends */
+.trend-filters { display: grid; gap: 0.5rem; margin-bottom: 1.25rem; }
+.trend-filters .filter { flex-wrap: wrap; align-items: center; margin: 0; }
+.trends { transition: opacity 120ms; }
+.trends.refetching { opacity: 0.55; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; margin: 0 0 0.5rem; }
+.stat-row dt { color: var(--ink-soft); font-size: var(--step--1); }
+.stat-row dd { margin: 0; font-size: var(--step-2); font-weight: 600; }
+.chart { position: relative; margin: 0.5rem 0; }
+.chart svg { display: block; overflow: visible; }
+.chart-grid { stroke: var(--rule); stroke-width: 1; }
+.chart-baseline { stroke: var(--ink-soft); stroke-width: 1; }
+.chart-axis { fill: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart-end-label { fill: var(--ink); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { stroke: var(--paper); stroke-width: 2; }
+.chart-crosshair { stroke: var(--ink-soft); stroke-width: 1; }
+.chart-dim path { opacity: 0.35; }
+.chart-hit { fill: transparent; cursor: pointer; outline: none; }
+.chart-hit:focus-visible { stroke: var(--accent); stroke-width: 2; }
+.chart svg[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart-tip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  padding: 0.4rem 0.6rem;
+  font-size: var(--step--1);
+  white-space: nowrap;
+  z-index: 5;
+}
+.chart-tip-title { color: var(--ink-soft); margin-bottom: 0.15rem; }
+.chart-tip-row { display: flex; align-items: center; gap: 0.35rem; font-variant-numeric: tabular-nums; }
+.chart-key-line { display: inline-block; width: 12px; height: 2px; border-radius: 1px; }
+.chart-key-rect { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.35rem; vertical-align: -1px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: var(--step--1); color: var(--ink-soft); }
+.chart-table { margin: 0.25rem 0 0; font-size: var(--step--1); }
+.chart-table summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+.chart-table table { max-width: 28rem; margin-top: 0.5rem; }
+.ranked-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-width: 44rem; }
+.btn-link.ranked-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border-radius: 4px;
+  color: var(--ink);
+  font-weight: 400;
+  text-align: left;
+}
+.btn-link.ranked-row:hover:not(:disabled) { text-decoration: none; background: var(--accent-wash); }
+.btn-link.ranked-row.selected { background: var(--accent-wash); font-weight: 600; }
+.ranked-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranked-track { height: 14px; display: flex; align-items: center; }
+.ranked-bar { display: block; height: 14px; border-radius: 0 4px 4px 0; min-width: 1px; }
+.ranked-value { font-variant-numeric: tabular-nums; min-width: 5.5rem; text-align: right; }
+.register.tag-totals { max-width: 44rem; }
+
 /* Settings → Merchants */
 .merchant-filter { width: 16rem; max-width: 100%; margin-bottom: 0.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
@@ -437,7 +507,11 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
     z-index: 10;
   }
   .rail .wordmark { display: none; }
-  .rail ul { grid-template-columns: repeat(4, 1fr); }
+  .rail ul { grid-template-columns: repeat(5, 1fr); }
+  .rail a { font-size: 0.75rem; }
+  /* still read by screen readers; "Owed" is shown instead */
+  .nav-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .nav-short { display: inline; }
   .rail a { flex-direction: column; gap: 0.15rem; font-size: var(--step--1); padding: 0.5rem 0.25rem; }
   .page { padding-bottom: 6rem; }
   .tally-number { font-size: 3.25rem; }
@@ -470,6 +544,10 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .inline-form .amount-quick input { width: 100%; }
   .register.paybacks td, .register.paybacks th, .register.owed td, .register.owed th { padding-right: 0.5rem; }
   .register.owed td.action .btn + .btn { margin-left: 0.25rem; }
+  .btn-link.ranked-row { grid-template-columns: 6.5rem 1fr auto; gap: 0.5rem; }
+  .ranked-value { min-width: 0; }
+  .stat-row dd { font-size: var(--step-1); }
+  .register.tag-totals th:nth-child(2), .register.tag-totals td:nth-child(2) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
   .phone-only-block { display: block; }

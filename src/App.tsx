@@ -6,6 +6,7 @@ import SignIn from './pages/SignIn';
 import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
 import Owed from './pages/Owed';
+import Trends from './pages/Trends';
 import Settings from './pages/Settings';
 import NotConfigured from './pages/NotConfigured';
 
@@ -27,9 +28,10 @@ function useUnreviewedCount(enabled: boolean) {
   return { count, refresh };
 }
 
-const NAV = [
+const NAV: { to: string; label: string; short?: string }[] = [
   { to: '/transactions', label: 'Transactions' },
-  { to: '/owed', label: 'Owed to me' },
+  { to: '/trends', label: 'Trends' },
+  { to: '/owed', label: 'Owed to me', short: 'Owed' },
   { to: '/accounts', label: 'Accounts' },
   { to: '/settings', label: 'Settings' },
 ];
@@ -50,7 +52,16 @@ export default function App() {
           {NAV.map((item) => (
             <li key={item.to}>
               <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active' : undefined)}>
-                <span>{item.label}</span>
+                {item.short ? (
+                  <span>
+                    <span className="nav-long">{item.label}</span>
+                    <span className="nav-short" aria-hidden="true">
+                      {item.short}
+                    </span>
+                  </span>
+                ) : (
+                  <span>{item.label}</span>
+                )}
                 {item.to === '/transactions' && unreviewed !== null && unreviewed > 0 && (
                   <span className="badge" aria-label={`${unreviewed} to review`}>
                     {unreviewed}
@@ -66,6 +77,7 @@ export default function App() {
           <Route path="/transactions" element={<Transactions count={unreviewed} onChange={refreshUnreviewed} />} />
           {/* Review and Transactions were one page each until Nov 2026 */}
           <Route path="/review" element={<Navigate to="/transactions" replace />} />
+          <Route path="/trends" element={<Trends />} />
           <Route path="/owed" element={<Owed />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />
