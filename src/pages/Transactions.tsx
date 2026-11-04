@@ -59,12 +59,19 @@ const COLUMNS =
  * inner join on the tags keeps only rows carrying it, while transaction_tags
  * still lists all of each row's tags.
  */
-function fetchRows(status: Status, tag: string | null, from: number, to: number) {
+/** Narrower views Trends links to: one category (or 'none' = no category yet) and a date range. */
+type Scope = { category: string | null; start: string | null; end: string | null };
+
+function fetchRows(status: Status, tag: string | null, scope: Scope, from: number, to: number) {
   let q = db()
     .from('transactions')
     .select(tag ? `${COLUMNS}, tag_filter:transaction_tags!inner(tag_id)` : COLUMNS)
     .eq('pending', false);
   if (tag) q = q.eq('tag_filter.tag_id', tag);
+  if (scope.category === 'none') q = q.is('category_id', null).eq('is_transfer', false);
+  else if (scope.category) q = q.eq('category_id', scope.category);
+  if (scope.start) q = q.gte('posted_date', scope.start);
+  if (scope.end) q = q.lte('posted_date', scope.end);
   if (status !== 'all') q = q.eq('approved', status === 'approved');
   return q.order('posted_date', { ascending: false }).order('id', { ascending: false }).range(from, to);
 }
@@ -77,6 +84,18 @@ function fetchPending() {
     .eq('pending', true)
     .order('posted_date', { ascending: false })
     .order('id', { ascending: false });
+}
+
+/** "October 2026" for a whole month, else "Jan 1 – Mar 31, 2026"-style dates. */
+function rangeLabel(start: string | null, end: string | null): string {
+  if (start && end && start.endsWith('-01')) {
+    const s = new Date(start + 'T12:00:00');
+    const monthEnd = new Date(s.getFullYear(), s.getMonth() + 1, 0, 12);
+    if (end === `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`) {
+      return s.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+  }
+  return `${start ? shortDate(start) : 'the start'} – ${end ? shortDate(end) : 'today'}`;
 }
 
 const PENDING_OPEN_KEY = 'transactions.pendingOpen';
@@ -106,6 +125,10 @@ export default function Transactions({ count, onChange }: { count: number | null
   const [params, setParams] = useSearchParams();
   const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'review';
   const tagFilter = params.get('tag');
+  const category = params.get('category');
+  const start = params.get('from');
+  const end = params.get('to');
+  const scoped = Boolean(category || start || end);
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [pending, setPending] = useState<Row[]>([]);
@@ -153,12 +176,12 @@ export default function Transactions({ count, onChange }: { count: number | null
   const reload = useCallback(
     async (size: number) => {
       const none = Promise.resolve({ data: [], error: null });
-      const reviewing = status !== 'approved' && !tagFilter;
+      const reviewing = status !== 'approved' && !tagFilter && !scoped;
       const [t, p, s, o, w, m] = await Promise.all([
-        fetchRows(status, tagFilter, 0, size - 1),
+        fetchRows(status, tagFilter, { category, start, end }, 0, size - 1),
         // pending rows can't carry tags, so a tag filter leaves them out
-        status === 'approved' || tagFilter ? none : fetchPending(),
-        status === 'approved' || tagFilter
+        status === 'approved' || tagFilter || scoped ? none : fetchPending(),
+        status === 'approved' || tagFilter || scoped
           ? none
           : db()
               .from('transfer_suggestions')
@@ -205,7 +228,7 @@ export default function Transactions({ count, onChange }: { count: number | null
       setPending((p.data ?? []) as unknown as Row[]);
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
-    [status, tagFilter],
+    [status, tagFilter, category, start, end, scoped],
   );
 
   // categories first, so rows never flash an empty picker
@@ -220,7 +243,7 @@ export default function Transactions({ count, onChange }: { count: number | null
   async function loadMore() {
     const from = rows?.length ?? 0;
     setBusy(true);
-    const { data, error } = await fetchRows(status, tagFilter, from, from + PAGE - 1);
+    const { data, error } = await fetchRows(status, tagFilter, { category, start, end }, from, from + PAGE - 1);
     if (error) setError(error.message);
     else {
       setRows((rs) => [...(rs ?? []), ...((data ?? []) as unknown as Row[])]);
@@ -272,12 +295,22 @@ export default function Transactions({ count, onChange }: { count: number | null
     act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
 
   /** Changes the filters in the URL; `undefined` keeps a filter as it is. */
-  function setFilters(next: { status?: Status; tag?: string | null }) {
+  function setFilters(next: { status?: Status; tag?: string | null; scope?: null }) {
     setNotice(null);
     setError(null);
     const s = next.status ?? status;
     const t = next.tag === undefined ? tagFilter : next.tag;
-    setParams({ ...(s === 'review' ? {} : { status: s }), ...(t ? { tag: t } : {}) });
+    const keep = next.scope === null ? {} : { category, from: start, to: end };
+    const extra = Object.fromEntries(Object.entries(keep).filter(([, v]) => v)) as Record<string, string>;
+    setParams({ ...(s === 'review' ? {} : { status: s }), ...(t ? { tag: t } : {}), ...extra });
+  }
+
+  /** "Dining · October 2026" for the banner when Trends linked here. */
+  function scopeLabel() {
+    const parts: string[] = [];
+    if (category) parts.push(category === 'none' ? 'No category yet' : (categories?.find((c) => c.id === category)?.name ?? 'A category'));
+    if (start || end) parts.push(rangeLabel(start, end));
+    return parts.join(' · ');
   }
 
   const tagCell = (r: Row) => (
@@ -570,6 +603,15 @@ export default function Transactions({ count, onChange }: { count: number | null
         ))}
       </div>
 
+      {scoped && (
+        <p className="tag-filter">
+          Showing <strong>{scopeLabel()}</strong>
+          <Button variant="link" onClick={() => setFilters({ scope: null })}>
+            Show every transaction
+          </Button>
+        </p>
+      )}
+
       {tagFilter && (
         <p className="tag-filter">
           Tagged <strong>{tagName(tagFilter)}</strong>
@@ -679,7 +721,9 @@ export default function Transactions({ count, onChange }: { count: number | null
 
       {rows && rows.length === 0 && (
         <p className="empty">
-          {tagFilter
+          {scoped
+            ? 'No transactions match.'
+            : tagFilter
             ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
             : status === 'review'
             ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'

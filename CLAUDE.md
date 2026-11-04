@@ -45,7 +45,17 @@ record money in as "Pays back Sam" (a Venmo payment), which links it. A linked p
 (`/owed`) lists open items by person (Received for cash, Write off, × to stop expecting) and
 the last 30 settled ones (Reopen).
 
-**Next: phase 5, Trends.**
+**Phase 5 (Trends): done** (Nov 4). `/trends`: one filter row (Last 12 months / This year /
+6 / 3 months via `?range=`; "Include tagged" toggles via `?tags=`) scopes everything: Spent /
+Income / Saved; spending by category as ranked bars (pick one → `?category=`); that category by
+month; cash flow (income vs spending columns); net worth (synced accounts' latest
+`balance_snapshots` per day + manual accounts at their current balance); tag totals
+(`tag_spend`, all time). Clicking a month opens Transactions filtered with `?status=all&category=
+&from=&to=` (a "Showing Dining · September 2026" banner clears it). Charts are hand-rolled SVG in
+`src/components/charts.tsx` (no chart library): hover and keyboard focus show a tooltip, and
+every chart has "Show as table".
+
+**Next: phase 6, Backfill** (CSV/OFX import from Jan 1 2026, dedupe, undo).
 
 The scheduled sync works: a `schedule` run on Nov 2 logged an `ok` `sync_runs` row.
 
@@ -209,12 +219,17 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
 from any Pages subpath. Pages: Transactions (also the review inbox: filter To review /
-Approved / All via `?status=`; every row has a category picker and an Approved checkbox;
-`/review` redirects here), Owed to me, Accounts, Settings, SignIn.
+Approved / All via `?status=`, plus `?tag=`, `?category=` (`none` = no category yet), `?from=`
+and `?to=`; every row has a category picker and an Approved checkbox; `/review` redirects here),
+Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
 Email + password auth (single user).
 
 Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accent teal
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.
+Chart series: `--viz-income` teal `#00919C` (dark `#1C9AA3`) and `--viz-spending` orange
+`#C25A22` (dark `#D2702F`), checked with the dataviz palette validator (color-blind separation,
+contrast) on both surfaces. Don't chart the outflow/inflow red and green as two series: they
+fail the color-blind check.
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
 rules, no cards. The to-review count on Transactions is the one large element. Avoid all-caps labels.
 
@@ -231,7 +246,7 @@ not-allowed cursor; give a disabled action a `title` that says why.
    tags, manual accounts, Add transaction, bulk actions): **done**
 4. Reimbursements (Expect reimbursement, Owed to me, link + split payments, Venmo manual entry): **done**
 5. Trends (spending by category, category over time, cash flow, net worth, tag toggles and
-   per-tag totals)
+   per-tag totals): **done**
 6. Backfill (CSV/OFX import from Jan 1 2026, dedupe, undo)
 
 ## Commands
