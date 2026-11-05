@@ -118,7 +118,6 @@ export default function HeaderFilter({
         onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="th-filter-label">{children ?? label}</span>
-        {count > 0 && <span className="th-filter-dot" aria-hidden="true" />}
         <svg className="th-caret" viewBox="0 0 10 6" aria-hidden="true">
           <path d="M0.5 0.5h9L5 5.5z" />
         </svg>
