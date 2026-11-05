@@ -149,7 +149,6 @@ export default function EditAccount({
             <div className="field">
               Balance
               <span className="num static-value">{money(account.balance)}</span>
-              <span className="muted small">Updated by the daily sync.</span>
             </div>
           )}
         </div>
