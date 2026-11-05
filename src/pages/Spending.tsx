@@ -438,12 +438,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
     counts ? items.filter((i) => counts.has(i.id) || hidden.includes(i.id)).map((i) => ({ ...i, count: counts.get(i.id) ?? 0 })) : items;
   const categoryItems = listed(allCategoryItems, present?.categories, hideCategories);
   const tagItems = listed(allTagItems, present?.tags, hideTags);
-  // the banner: "Showing only Dining" when most categories are hidden, else "Hiding Housing"
-  const shownCategories = allCategoryItems.filter((i) => !hideCategories.includes(i.id));
-  const mostlyHidden = hideCategories.length > shownCategories.length;
-  const categoryNames = (mostlyHidden ? shownCategories : allCategoryItems.filter((i) => hideCategories.includes(i.id))).map((i) => i.name);
-  const hiddenTagNames = hideTags.map((id) => allTagItems.find((t) => t.id === id)?.name ?? 'a deleted tag');
-
   /** Only one category: hide every other key (the pie's own pick is cleared). */
   const onlyCategory = (key: string) =>
     // every key, not just this range's, so switching months still shows only this one
@@ -753,26 +747,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
 
       {hiding && (
         <p className="tag-filter">
-          {status !== 'all' && (
-            <>
-              {'Only '}
-              <strong>{status === 'review' ? 'to review' : 'approved'}</strong>
-              {(hideCategories.length > 0 || hideTags.length > 0) && '; '}
-            </>
-          )}
-          {hideCategories.length > 0 && (
-            <>
-              {status !== 'all' ? (mostlyHidden ? 'showing only ' : 'hiding ') : mostlyHidden ? 'Showing only ' : 'Hiding '}
-              <strong>{categoryNames.join(', ') || 'nothing'}</strong>
-            </>
-          )}
-          {hideCategories.length > 0 && hideTags.length > 0 && '; '}
-          {hideTags.length > 0 && (
-            <>
-              {hideCategories.length > 0 || status !== 'all' ? 'hiding ' : 'Hiding '}
-              <strong>{hiddenTagNames.join(', ')}</strong>
-            </>
-          )}
+          Filters are on.
           <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
             Show all
           </Button>
