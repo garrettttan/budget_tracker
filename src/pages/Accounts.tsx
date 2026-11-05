@@ -1,19 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
-import { money, parseAmount, relativeTime } from '../lib/format';
+import { money, relativeTime } from '../lib/format';
 import Button from '../components/Button';
-import AddAccount, { type AccountClass, CLASSES } from '../components/AddAccount';
+import AddAccount, { CLASSES } from '../components/AddAccount';
+import EditAccount, { type EditableAccount } from '../components/EditAccount';
+import PencilIcon from '../components/PencilIcon';
 
-type Account = {
-  id: string;
-  name: string;
-  institution: string | null;
-  class: AccountClass;
-  balance: string | null;
-  balance_date: string | null;
-  connection_id: string | null; // null = a manual account (Venmo, cash)
-};
+type Account = EditableAccount & { balance_date: string | null };
 
 type Connection = { id: string; label: string; status: string; status_message: string | null; last_synced_at: string | null };
 
@@ -26,18 +20,13 @@ function isStale(lastSyncedAt: string | null): boolean {
 
 const total = (accounts: Account[]) => accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
 
-const isManual = (a: Account) => a.connection_id === null;
-
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null); // account id
-  const [draft, setDraft] = useState('');
-  const [draftBalance, setDraftBalance] = useState('');
+  const [editing, setEditing] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [a, c] = await Promise.all([
@@ -59,120 +48,21 @@ export default function Accounts() {
     load();
   }, [load]);
 
-  function startEdit(account: Account) {
-    setEditing(account.id);
-    setDraft(account.name);
-    setDraftBalance(account.balance === null ? '' : Number(account.balance).toFixed(2));
-    setError(null);
-    setNotice(null);
-  }
-
-  const draftAmount = draftBalance.trim() === '' ? 0 : parseAmount(draftBalance, { allowNegative: true });
-  const saveBlocked = (a: Account) =>
-    !draft.trim() ? 'Type a name first' : isManual(a) && draftAmount === null ? 'The balance isn’t a number' : undefined;
-
-  /**
-   * Your name for the account (the sync sets the bank's name only once, so it
-   * sticks) and, for a manual account, its balance.
-   */
-  async function save(account: Account) {
-    if (saveBlocked(account)) return;
-    const name = draft.trim();
-    const changes: Record<string, unknown> = {};
-    if (name !== account.name) changes.name = name;
-    if (isManual(account) && draftAmount !== Number(account.balance ?? 0)) {
-      changes.balance = draftAmount;
-      changes.balance_date = new Date().toISOString();
-    }
-    if (Object.keys(changes).length === 0) return setEditing(null);
-    setBusy(true);
-    setError(null);
-    const { error } = await db().from('accounts').update(changes).eq('id', account.id);
-    if (error) setError(error.message);
-    else {
-      setNotice(changes.balance === undefined ? `Renamed to ${name}.` : `Saved ${name}.`);
-      setEditing(null);
-    }
-    await load();
-    setBusy(false);
-  }
-
-  /** Manual accounts only: synced ones would come back with the next sync. */
-  async function remove(account: Account) {
-    setError(null);
-    const { count, error: countError } = await db()
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('account_id', account.id);
-    if (countError) return setError(countError.message);
-    const what = count
-      ? `its ${count} ${count === 1 ? 'transaction' : 'transactions'} (and any tags or reimbursements on them) will be deleted too.`
-      : 'it has no transactions.';
-    if (!window.confirm(`Delete ${account.name}? This can’t be undone; ${what}`)) return;
-    setBusy(true);
-    const { error } = await db().from('accounts').delete().eq('id', account.id);
-    if (error) setError(error.message);
-    else {
-      setNotice(`Deleted ${account.name}.`);
-      setEditing(null);
-    }
-    await load();
-    setBusy(false);
-  }
-
-  async function changeClass(account: Account, next: AccountClass) {
-    setError(null);
-    if (next === 'investment') {
-      // investments are balance-only, so their imported transactions go
-      const { count } = await db()
-        .from('transactions')
-        .select('id', { count: 'exact', head: true })
-        .eq('account_id', account.id);
-      if (
-        count &&
-        !window.confirm(
-          `Move ${account.name} to Investments? Only its balance is kept: its ${count} imported ` +
-            `transactions (and any notes, reimbursements or tags on them) will be deleted.`,
-        )
-      ) {
-        return load(); // resets the menu
-      }
-      const del = await db().from('transactions').delete().eq('account_id', account.id);
-      if (del.error) return setError(del.error.message);
-    }
-    const { error } = await db().from('accounts').update({ class: next }).eq('id', account.id);
-    if (error) setError(error.message);
-    load();
-  }
-
   return (
     <section>
       <header className="page-head">
         <h1>Accounts</h1>
-        {!adding && (
-          <Button
-            onClick={() => {
-              setAdding(true);
-              setNotice(null);
-            }}
-          >
-            Add manual account
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            setAdding(true);
+            setNotice(null);
+          }}
+        >
+          Add manual account
+        </Button>
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
-
-      {adding && (
-        <AddAccount
-          onCancel={() => setAdding(false)}
-          onAdded={async (name) => {
-            setAdding(false);
-            setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
-            await load();
-          }}
-        />
-      )}
 
       {connections && connections.length === 0 && (
         <p className="empty">
@@ -202,114 +92,47 @@ export default function Accounts() {
           <p className="net-worth">
             <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
           </p>
-          {CLASSES.map(({ value, label, note }) => {
+          {CLASSES.map(({ value, label }) => {
             const group = accounts.filter((a) => a.class === value);
             if (group.length === 0) return null;
             return (
               <div key={value}>
                 <h2>{label}</h2>
-                {note && <p className="muted small">{note}</p>}
-                <table className="register accounts">
-                  <thead>
-                    <tr>
-                      <th scope="col">Account</th>
-                      <th scope="col">Institution</th>
-                      <th scope="col">Class</th>
-                      <th scope="col" className="num">Balance</th>
-                      <th scope="col">
-                        <span className="visually-hidden">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
+                <table className="register accounts" aria-label={label}>
+                  {/* no header row: fixed widths keep the class tables lined up */}
+                  <colgroup>
+                    <col />
+                    <col className="balance-col" />
+                    <col className="action-col" />
+                  </colgroup>
                   <tbody>
                     {group.map((a) => (
                       <tr key={a.id}>
                         <td>
-                          {editing === a.id ? (
-                            <input
-                              type="text"
-                              className="merchant-name-input"
-                              aria-label={`New name for ${a.name}`}
-                              value={draft}
-                              autoFocus
-                              disabled={busy}
-                              onChange={(e) => setDraft(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') save(a);
-                                if (e.key === 'Escape') setEditing(null);
-                              }}
-                            />
-                          ) : (
-                            a.name
-                          )}
+                          {a.name}
+                          <span className="account-sub">{a.institution ?? 'Manual'}</span>
                         </td>
-                        <td>{a.institution ?? <span className="muted">Manual</span>}</td>
-                        <td>
-                          <select
-                            aria-label={`Class for ${a.name}`}
-                            value={a.class}
-                            onChange={(e) => changeClass(a, e.target.value as AccountClass)}
-                          >
-                            {CLASSES.map((c) => (
-                              <option key={c.value} value={c.value}>
-                                {c.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="num">
-                          {editing === a.id && isManual(a) ? (
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              className="balance-input"
-                              aria-label={`Balance of ${a.name}`}
-                              value={draftBalance}
-                              disabled={busy}
-                              onChange={(e) => setDraftBalance(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') save(a);
-                                if (e.key === 'Escape') setEditing(null);
-                              }}
-                            />
-                          ) : (
-                            money(a.balance)
-                          )}
-                        </td>
+                        <td className="num">{money(a.balance)}</td>
                         <td className="action">
-                          {editing === a.id ? (
-                            <>
-                              <Button size="small" disabled={busy || Boolean(saveBlocked(a))} title={saveBlocked(a)} onClick={() => save(a)}>
-                                Save
-                              </Button>
-                              {isManual(a) && (
-                                <Button size="small" variant="link" className="danger" disabled={busy} onClick={() => remove(a)}>
-                                  Delete
-                                </Button>
-                              )}
-                              <Button size="small" variant="link" disabled={busy} onClick={() => setEditing(null)}>
-                                Cancel
-                              </Button>
-                            </>
-                          ) : isManual(a) ? (
-                            <Button size="small" disabled={busy} aria-label={`Edit ${a.name}`} onClick={() => startEdit(a)}>
-                              Edit
-                            </Button>
-                          ) : (
-                            <Button size="small" disabled={busy} aria-label={`Rename ${a.name}`} onClick={() => startEdit(a)}>
-                              Rename
-                            </Button>
-                          )}
+                          <Button
+                            variant="icon"
+                            aria-label={`Edit ${a.name}`}
+                            title="Edit"
+                            onClick={() => {
+                              setEditing(a);
+                              setNotice(null);
+                              setError(null);
+                            }}
+                          >
+                            <PencilIcon />
+                          </Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      {/* one cell per column, so phones can hide Institution here too */}
                       <th scope="row">Total {label.toLowerCase()}</th>
-                      <td />
-                      <td />
                       <td className="num">{money(total(group))}</td>
                       <td />
                     </tr>
@@ -319,6 +142,28 @@ export default function Accounts() {
             );
           })}
         </>
+      )}
+
+      {adding && (
+        <AddAccount
+          onCancel={() => setAdding(false)}
+          onAdded={async (name) => {
+            setAdding(false);
+            setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
+            await load();
+          }}
+        />
+      )}
+      {editing && (
+        <EditAccount
+          account={editing}
+          onClose={() => setEditing(null)}
+          onSaved={async (message) => {
+            setEditing(null);
+            setNotice(message);
+            await load();
+          }}
+        />
       )}
     </section>
   );
