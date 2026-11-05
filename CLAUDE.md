@@ -51,11 +51,16 @@ heading dropdown, `?month=YYYY-MM`, default this month; normal spending only, no
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
 into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
 to clear). All (the default) and Approved show the picked month; To review, `?tag=` and explicit `?from=&to=` aren't
-limited to it. **Filter** (next to To review / Approved / All) opens a modal of checklists: untick
-categories (plus "Uncategorized" = `none`, "Transfer" = `transfer`) or tags to hide them
-(`?hidecat=`, `?hidetag=`, URL only). Hidden categories leave the list, pie and Spent; hidden tags
-leave the list (an anti-join: `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`).
-An explicit `?category=` overrides hidden categories. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
+limited to it. The list's **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
+tap one for a searchable checklist, spreadsheet style (all ticked; untick to hide; Select all ticks or
+unticks what the search matches; Only per row). Category keys: category ids, `none` (Uncategorized),
+`transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only). Hidden
+categories leave the list, pie and Spent; hidden tags leave the list (an anti-join:
+`hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
+inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
+several tags). An explicit `?category=` (pie tap) overrides hidden categories. On phones the Tags
+column shows just a count (tags are edited in the row's details) and Approved's header is ✓, so the
+table fits at 390px. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
 `?range=`) and "Include tagged" toggles (`?tags=`), scoping cash flow (income vs spending columns),
 Categories (avg / month and total; a row opens a modal with that category by month), net worth (one
 point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts

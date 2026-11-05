@@ -20,7 +20,12 @@ import {
 } from '../components/RowReimbursements';
 import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
 import MonthSpending from '../components/MonthSpending';
-import FilterPanel, { NO_CATEGORY, TRANSFER_KEY } from '../components/FilterPanel';
+import HeaderFilter from '../components/HeaderFilter';
+
+/** Keys for `?hidecat=` beyond category ids, and for `?hidetag=` beyond tag ids. */
+const NO_CATEGORY = 'none'; // Uncategorized
+const TRANSFER_KEY = 'transfer';
+const UNTAGGED = 'untagged';
 import { type OpenItem, fetchOpen, personKey, suggestFor } from '../lib/reimbursements';
 import { monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
 
@@ -89,18 +94,22 @@ function shownCategory(r: { category_id: string | null; is_transfer: boolean }, 
  * still lists all of each row's tags.
  */
 function fetchRows(status: Status, tag: string | null, scope: Scope, from: number, to: number) {
+  const hiddenTagIds = scope.hideTags.filter((t) => t !== UNTAGGED);
+  const hideUntagged = scope.hideTags.includes(UNTAGGED);
   const embeds = [
     COLUMNS,
     tag ? 'tag_filter:transaction_tags!inner(tag_id)' : null,
     // anti-join: rows whose hidden_tags embed comes back empty carry none of them
-    scope.hideTags.length ? 'hidden_tags:transaction_tags!left(tag_id)' : null,
+    hiddenTagIds.length ? 'hidden_tags:transaction_tags!left(tag_id)' : null,
+    // "No tags" unticked: keep only rows with at least one tag
+    hideUntagged ? 'has_tag:transaction_tags!inner(tag_id)' : null,
   ];
   let q = db()
     .from('transactions')
     .select(embeds.filter(Boolean).join(', '))
     .eq('pending', false);
   if (tag) q = q.eq('tag_filter.tag_id', tag);
-  if (scope.hideTags.length) q = q.in('hidden_tags.tag_id', scope.hideTags).is('hidden_tags', null);
+  if (hiddenTagIds.length) q = q.in('hidden_tags.tag_id', hiddenTagIds).is('hidden_tags', null);
   const keep = scope.category ? null : keepCategories(scope.hideCategories);
   if (keep) q = q.or(keep);
   if (scope.category === 'none') q = q.is('category_id', null).eq('is_transfer', false);
@@ -268,8 +277,10 @@ export default function Spending({ count, onChange }: { count: number | null; on
       // drop selected rows that left the list (approved out of To review, untagged out of a tag filter)
       const visible = new Set(loaded.map((r) => r.id));
       setSelected((sel) => (sel.size && [...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
-      // pending rows carry no tags, so only hidden categories apply
-      setPending(((p.data ?? []) as unknown as Row[]).filter((r) => category || shownCategory(r, hideCategories)));
+      // pending rows carry no tags: only hidden categories apply, and unticking "No tags" hides them all
+      setPending(
+        hideTags.includes(UNTAGGED) ? [] : ((p.data ?? []) as unknown as Row[]).filter((r) => category || shownCategory(r, hideCategories)),
+      );
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
     [status, tagFilter, category, start, end, scoped, hideCategories, hideTags],
@@ -278,7 +289,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // categories first, so rows never flash an empty picker
   useEffect(() => {
     if (!categories) return;
-    setRows(null);
+    // the rows on screen stay until the new ones arrive, so the header filters stay open
     setPending([]);
     setSelected(new Set());
     reload(PAGE);
@@ -365,12 +376,29 @@ export default function Spending({ count, onChange }: { count: number | null; on
     setFilters(category === key ? { category: null } : { category: key, status: 'all', from: null, to: null });
 
   // names for the "Hiding …" banner, categories first
-  const hiddenNames = [
-    ...hideCategories.map((id) =>
-      id === NO_CATEGORY ? 'Uncategorized' : id === TRANSFER_KEY ? 'Transfer' : (categories?.find((c) => c.id === id)?.name ?? 'A category'),
-    ),
-    ...hideTags.map((id) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag'),
+
+  // the column header filters; while they hide something the table (and its headers) stays even if empty
+  const hiding = hideCategories.length > 0 || hideTags.length > 0;
+  const categoryItems = [
+    ...(categories ?? []).map((c) => ({ id: c.id, name: c.name })),
+    { id: NO_CATEGORY, name: 'Uncategorized' },
+    { id: TRANSFER_KEY, name: 'Transfer' },
   ];
+  const tagItems = [{ id: UNTAGGED, name: 'No tags' }, ...tags.map((t) => ({ id: t.id, name: t.name }))];
+  // the banner: "Showing only Dining" when most categories are hidden, else "Hiding Housing"
+  const shownCategories = categoryItems.filter((i) => !hideCategories.includes(i.id));
+  const mostlyHidden = hideCategories.length > shownCategories.length;
+  const categoryNames = (mostlyHidden ? shownCategories : categoryItems.filter((i) => hideCategories.includes(i.id))).map((i) => i.name);
+  const hiddenTagNames = hideTags.map((id) => tagItems.find((t) => t.id === id)?.name ?? 'a deleted tag');
+
+  /** Only one category: hide every other key (the pie's own pick is cleared). */
+  const onlyCategory = (key: string) =>
+    setFilters({ category: null, hidecat: categoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
+  /** Only one tag: the show-one-tag filter, so rows with that tag and others still show. */
+  const onlyTag = (id: string) =>
+    id === UNTAGGED
+      ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null })
+      : setFilters({ tag: id, hidetag: null });
 
   /** "Dining · October 2026" for the banner. */
   function scopeLabel() {
@@ -674,18 +702,23 @@ export default function Spending({ count, onChange }: { count: number | null; on
             {s === 'review' ? `To review${count ? ` (${count})` : ''}` : s === 'approved' ? 'Approved' : 'All'}
           </Button>
         ))}
-        <FilterPanel
-          categories={categories ?? []}
-          tags={tags}
-          hiddenCategories={hideCategories}
-          hiddenTags={hideTags}
-          onChange={(next) => setFilters({ hidecat: next.categories.join(',') || null, hidetag: next.tags.join(',') || null })}
-        />
       </div>
 
-      {hiddenNames.length > 0 && (
+      {hiding && (
         <p className="tag-filter">
-          Hiding <strong>{hiddenNames.join(', ')}</strong>
+          {hideCategories.length > 0 && (
+            <>
+              {mostlyHidden ? 'Showing only ' : 'Hiding '}
+              <strong>{categoryNames.join(', ') || 'nothing'}</strong>
+            </>
+          )}
+          {hideCategories.length > 0 && hideTags.length > 0 && '; '}
+          {hideTags.length > 0 && (
+            <>
+              {hideCategories.length > 0 ? 'hiding ' : 'Hiding '}
+              <strong>{hiddenTagNames.join(', ')}</strong>
+            </>
+          )}
           <Button variant="link" onClick={() => setFilters({ hidecat: null, hidetag: null })}>
             Show all
           </Button>
@@ -806,7 +839,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
 
       {rows && rows.length === 0 && (
         <p className="empty">
-          {scoped
+          {scoped || hiding
             ? 'No transactions match.'
             : monthScoped
             ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
@@ -820,7 +853,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
         </p>
       )}
 
-      {rows && rows.length > 0 && (
+      {rows && (rows.length > 0 || hiding) && (
         <>
           <h2>Transactions</h2>
           {selected.size > 0 && (
@@ -856,11 +889,32 @@ export default function Spending({ count, onChange }: { count: number | null; on
                 <th scope="col" className="date-col">Date</th>
                 <th scope="col">Merchant</th>
                 <th scope="col" className="account-col">Account</th>
-                <th scope="col">Category</th>
-                <th scope="col" className="tags-col">Tags</th>
+                <th scope="col">
+                  <HeaderFilter
+                    label="Category"
+                    items={categoryItems}
+                    hidden={hideCategories}
+                    onChange={(next) => setFilters({ hidecat: next.join(',') || null })}
+                    onOnly={onlyCategory}
+                  />
+                </th>
+                <th scope="col" className="tags-col">
+                  <HeaderFilter
+                    label="Tags"
+                    align="end"
+                    items={tagItems}
+                    hidden={hideTags}
+                    onChange={(next) => setFilters({ hidetag: next.join(',') || null })}
+                    onOnly={onlyTag}
+                  />
+                </th>
                 <th scope="col" className="num">Amount</th>
                 <th scope="col" className="approved-col">
-                  Approved
+                  {/* phones: just a check mark, to leave room for the other columns */}
+                  <span className="label-long">Approved</span>
+                  <span className="label-short" aria-hidden="true">
+                    ✓
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -929,7 +983,13 @@ export default function Spending({ count, onChange }: { count: number | null; on
                       />
                     )}
                   </td>
-                  <td className="tags-col">{tagCell(r)}</td>
+                  <td className="tags-col">
+                    <div className="tags-full">{tagCell(r)}</div>
+                    {/* phones: just how many; the tags themselves are in the row's details */}
+                    <span className="tags-count" aria-label={`${r.transaction_tags.length} tags`}>
+                      {r.transaction_tags.length || ''}
+                    </span>
+                  </td>
                   <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
                     {money(r.amount)}
                     {r.reimbursements.length > 0 && (
