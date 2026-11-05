@@ -705,11 +705,10 @@ export default function Spending({ count, onChange }: { count: number | null; on
         >
           <summary>
             <span className="pending-title">Pending</span>
-            <span className="muted">
-              {' '}
-              {pending.length} {pending.length === 1 ? 'transaction' : 'transactions'},{' '}
-              <span className={pendingTotal < 0 ? 'out' : 'in'}>{money(pendingTotal)}</span>
+            <span className="badge" aria-label={`${pending.length} ${pending.length === 1 ? 'transaction' : 'transactions'}`}>
+              {pending.length}
             </span>
+            <span className={pendingTotal < 0 ? 'out' : 'in'}>{money(pendingTotal)}</span>
           </summary>
           <table className="register txns pending-txns">
             <thead>
