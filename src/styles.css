@@ -318,6 +318,18 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
 }
 .modal::backdrop { background: rgb(22 35 47 / 0.45); }
+/* open with a short rise and fade; closing stays instant */
+.modal[open] { animation: modal-in 180ms ease-out; }
+.modal[open]::backdrop { animation: backdrop-in 180ms ease-out; }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal[open] { animation-name: backdrop-in; } /* fade only, no movement */
+}
 .modal h2 { margin: 0 0 0.15rem; }
 .modal form > p { margin: 0 0 0.75rem; }
 .fields.single { grid-template-columns: 1fr; }
