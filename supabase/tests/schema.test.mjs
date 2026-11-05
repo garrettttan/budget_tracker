@@ -63,7 +63,12 @@ const b = '22222222-2222-2222-2222-222222222222';
 await db.exec(`insert into auth.users (id, email) values ('${a}','a@x.com'), ('${b}','b@x.com');`);
 
 const cats = await db.query(`select count(*)::int n from public.categories where user_id = $1`, [a]);
-check('starter categories seeded on sign-up', cats.rows[0].n === 14, `${cats.rows[0].n} categories`);
+check('starter categories seeded on sign-up (incl. Uncategorized)', cats.rows[0].n === 15, `${cats.rows[0].n} categories`);
+const legacyUncat = await db.query(`select sort_order from public.categories where user_id = $1 and name = 'Uncategorized'`, [legacy]);
+check('existing users get Uncategorized, last in the list', legacyUncat.rows.length === 1 && legacyUncat.rows[0].sort_order === 150, JSON.stringify(legacyUncat.rows));
+await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_uncategorized_category.sql'))), 'utf8'));
+const dupes = await db.query(`select count(*)::int n from public.categories where name = 'Uncategorized' group by user_id having count(*) > 1`);
+check('Uncategorized migration is safe to re-run', dupes.rows.length === 0);
 const gas = await db.query(`select count(*)::int n from public.categories where name ilike 'gas%'`);
 check('no Gas category', gas.rows[0].n === 0);
 
@@ -177,7 +182,7 @@ const bCats = (await asUser(b, `select count(*)::int n from public.categories`))
 check('user B sees none of A\'s transactions', bTx === 0);
 const bAliases = (await asUser(b, `select count(*)::int n from public.merchant_aliases`)).rows[0].n;
 check('user B sees none of A\'s merchant aliases', bAliases === 0);
-check('user B sees only own categories', bCats === 14);
+check('user B sees only own categories', bCats === 15);
 let crossWrite = false;
 try { await asUser(b, `insert into public.transactions (user_id, account_id, source, posted_date, amount) values ($1,$2,'manual','2026-10-01',-1)`, [a, acct]); crossWrite = true; } catch {}
 check('user B cannot write rows as user A', !crossWrite);
