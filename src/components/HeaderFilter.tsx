@@ -21,7 +21,6 @@ export default function HeaderFilter({
   onOnly,
   align = 'start',
   searchable = true,
-  showCount = true,
   keepOne = false,
   children,
 }: {
@@ -35,8 +34,6 @@ export default function HeaderFilter({
   align?: 'start' | 'end';
   /** false for a short list: no search box */
   searchable?: boolean;
-  /** false where there's no room for the hidden-count badge (the header still turns accent) */
-  showCount?: boolean;
   /** true where hiding everything makes no sense: the last ticked item can't be unticked */
   keepOne?: boolean;
   /** what the header shows, if not `label` */
@@ -117,11 +114,11 @@ export default function HeaderFilter({
         className={`th-filter${count ? ' active' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Filter ${label}${count ? `, ${count} hidden` : ''}`}
+        aria-label={`Filter ${label}${count ? ', filter on' : ''}`}
         onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="th-filter-label">{children ?? label}</span>
-        {showCount && count > 0 && <span className="badge">{count}</span>}
+        {count > 0 && <span className="th-filter-dot" aria-hidden="true" />}
         <svg className="th-caret" viewBox="0 0 10 6" aria-hidden="true">
           <path d="M0.5 0.5h9L5 5.5z" />
         </svg>

@@ -212,7 +212,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .combobox li.active { background: var(--accent-wash); }
 .combobox li[aria-selected='true'] { font-weight: 600; }
 .combobox-empty { color: var(--ink-soft); cursor: default; }
-.register .approved-col { text-align: center; width: 5.5rem; padding-right: 0; }
+.register .approved-col { text-align: center; width: 6.5rem; padding-right: 0; }
 .register td.approved-col input { width: 1.1rem; height: 1.1rem; cursor: pointer; accent-color: var(--accent); }
 .register td.approved-col input:disabled { cursor: not-allowed; opacity: 0.45; }
 
@@ -343,7 +343,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .btn-link.th-filter:hover:not(:disabled) { color: var(--ink); background: var(--accent-wash); text-decoration: none; }
 .btn-link.th-filter.active { color: var(--accent); }
-.th-filter .badge { font-size: 0.7rem; padding: 0 0.4em; min-width: 1.4em; }
+.th-filter-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; } /* a filter is on */
 .th-caret { width: 10px; height: 6px; flex: none; fill: currentColor; }
 .header-filter-pop {
   position: fixed; z-index: 30;

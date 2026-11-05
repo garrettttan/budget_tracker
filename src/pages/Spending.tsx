@@ -927,7 +927,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
                     label="Approved"
                     align="end"
                     searchable={false}
-                    showCount={false}
                     keepOne
                     items={approvalItems}
                     hidden={approvalHidden}
