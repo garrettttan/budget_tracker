@@ -6,8 +6,7 @@ import ConnectSimplefin from '../components/ConnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
 import MerchantList from '../components/MerchantList';
 import TagList from '../components/TagList';
-
-type Category = { id: string; name: string; group_name: string | null; is_income: boolean; archived: boolean };
+import CategoryList from '../components/CategoryList';
 
 type Connection = { id: string; label: string; status: string; status_message: string | null; last_synced_at: string | null };
 
@@ -19,22 +18,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function Settings({ email }: { email: string }) {
-  const [categories, setCategories] = useState<Category[] | null>(null);
   const [connection, setConnection] = useState<Connection | null | undefined>(undefined); // undefined = loading
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    db()
-      .from('categories')
-      .select('id, name, group_name, is_income, archived')
-      .eq('archived', false)
-      .order('sort_order')
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else setCategories((data ?? []) as Category[]);
-      });
-  }, []);
 
   const loadSync = useCallback(async () => {
     const [c, r] = await Promise.all([
@@ -54,12 +40,6 @@ export default function Settings({ email }: { email: string }) {
   useEffect(() => {
     loadSync();
   }, [loadSync]);
-
-  const groups = new Map<string, Category[]>();
-  for (const c of categories ?? []) {
-    const g = c.group_name ?? 'Other';
-    groups.set(g, [...(groups.get(g) ?? []), c]);
-  }
 
   return (
     <section>
@@ -95,16 +75,7 @@ export default function Settings({ email }: { email: string }) {
       )}
 
       <h2>Categories</h2>
-      <dl className="category-groups">
-        {[...groups.entries()].map(([group, cats]) => (
-          <div key={group} className="category-group">
-            <dt>{group}</dt>
-            {cats.map((c) => (
-              <dd key={c.id}>{c.name}</dd>
-            ))}
-          </div>
-        ))}
-      </dl>
+      <CategoryList />
 
       <h2>Merchants</h2>
       <MerchantList />

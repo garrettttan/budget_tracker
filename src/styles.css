@@ -502,14 +502,10 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 
 /* ---- categories ---------------------------------------------------- */
 
-.category-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 1.5rem 2rem;
-  margin: 0;
-}
-.category-group dt { font-weight: 600; margin-bottom: 0.25rem; }
-.category-group dd { margin: 0; color: var(--ink-soft); }
+.register.categories td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
+.register.categories td.action .btn + .btn { margin-left: 0.25rem; }
+.fields .checkbox-field { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; font-size: var(--step-0); }
+.fields .checkbox-field input { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
 
 /* ---- forms --------------------------------------------------------- */
 

@@ -201,6 +201,10 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
   row's details. Only `source = 'manual'`; refuses a charge whose reimbursements have payments
   linked (unlink them first); unlinks a payback first (what it paid is owed again); sends the
   other side of a transfer back to Review; unpaid reimbursements and tags cascade.
+- Settings → Categories: add, reorder (`sort_order`, the order every picker uses), and an Edit
+  modal (name, group, Income) are direct table writes. `delete_category(id, into)` (security
+  invoker, `rpc`) moves its transactions and merchant memory to `into` first; `into` may be null
+  only if no transaction uses it.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);
