@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { db } from '../lib/supabase';
 import { money, parseAmount } from '../lib/format';
 import Button from './Button';
+import Modal from './Modal';
 import { type AccountClass, CLASSES } from './AddAccount';
 
 export type EditableAccount = {
@@ -35,17 +36,11 @@ export default function EditAccount({
   onSaved: (notice: string) => Promise<void>;
 }) {
   const manual = account.connection_id === null;
-  const dialog = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState(account.name);
   const [cls, setCls] = useState<AccountClass>(account.class);
   const [balance, setBalance] = useState(account.balance === null ? '' : Number(account.balance).toFixed(2));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // showModal gives the backdrop, focus trap and Esc to close
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
 
   const parsed = balance.trim() === '' ? 0 : parseAmount(balance, { allowNegative: true });
   const why = !name.trim() ? 'Type a name first' : manual && parsed === null ? 'The balance isn’t a number' : undefined;
@@ -103,69 +98,61 @@ export default function EditAccount({
   }
 
   return (
-    <dialog
-      ref={dialog}
-      className="modal"
-      aria-labelledby="edit-account-title"
-      onClose={onClose}
-      onCancel={(e) => busy && e.preventDefault()} // no Esc mid-save
-      // a click on the backdrop lands on the dialog element itself
-      onClick={(e) => {
-        if (e.target === dialog.current && !busy) dialog.current.close();
-      }}
-    >
-      <form onSubmit={save}>
-        <h2 id="edit-account-title">Edit account</h2>
-        <p className="muted small">{account.institution ?? 'Manual account'}</p>
-        {error && <p className="error" role="alert">Couldn’t save: {error}</p>}
-        <div className="fields single">
-          <label>
-            Name
-            <input type="text" value={name} autoFocus disabled={busy} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label>
-            Class
-            <select value={cls} disabled={busy} onChange={(e) => setCls(e.target.value as AccountClass)}>
-              {CLASSES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {manual ? (
+    <Modal labelledBy="edit-account-title" busy={busy} onClose={onClose}>
+      {(close) => (
+        <form onSubmit={save}>
+          <h2 id="edit-account-title">Edit account</h2>
+          <p className="muted small">{account.institution ?? 'Manual account'}</p>
+          {error && <p className="error" role="alert">Couldn’t save: {error}</p>}
+          <div className="fields single">
             <label>
-              Current balance
-              <input
-                type="text"
-                inputMode="decimal"
-                value={balance}
-                disabled={busy}
-                placeholder="0.00"
-                onChange={(e) => setBalance(e.target.value)}
-              />
+              Name
+              <input type="text" value={name} autoFocus disabled={busy} onChange={(e) => setName(e.target.value)} />
             </label>
-          ) : (
-            <div className="field">
-              Balance
-              <span className="num static-value">{money(account.balance)}</span>
-            </div>
-          )}
-        </div>
-        <div className="form-actions">
-          <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
-            Save
-          </Button>
-          <Button variant="link" disabled={busy} onClick={() => dialog.current?.close()}>
-            Cancel
-          </Button>
-          {manual && (
-            <Button variant="link" className="danger push-right" disabled={busy} onClick={remove}>
-              Delete account
+            <label>
+              Class
+              <select value={cls} disabled={busy} onChange={(e) => setCls(e.target.value as AccountClass)}>
+                {CLASSES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {manual ? (
+              <label>
+                Current balance
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={balance}
+                  disabled={busy}
+                  placeholder="0.00"
+                  onChange={(e) => setBalance(e.target.value)}
+                />
+              </label>
+            ) : (
+              <div className="field">
+                Balance
+                <span className="num static-value">{money(account.balance)}</span>
+              </div>
+            )}
+          </div>
+          <div className="form-actions">
+            <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
+              Save
             </Button>
-          )}
-        </div>
-      </form>
-    </dialog>
+            <Button variant="link" disabled={busy} onClick={close}>
+              Cancel
+            </Button>
+            {manual && (
+              <Button variant="link" className="danger push-right" disabled={busy} onClick={remove}>
+                Delete account
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }

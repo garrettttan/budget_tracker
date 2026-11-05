@@ -52,30 +52,17 @@ export default function Accounts() {
     <section>
       <header className="page-head">
         <h1>Accounts</h1>
-        {!adding && (
-          <Button
-            onClick={() => {
-              setAdding(true);
-              setNotice(null);
-            }}
-          >
-            Add manual account
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            setAdding(true);
+            setNotice(null);
+          }}
+        >
+          Add manual account
+        </Button>
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
-
-      {adding && (
-        <AddAccount
-          onCancel={() => setAdding(false)}
-          onAdded={async (name) => {
-            setAdding(false);
-            setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
-            await load();
-          }}
-        />
-      )}
 
       {connections && connections.length === 0 && (
         <p className="empty">
@@ -157,6 +144,16 @@ export default function Accounts() {
         </>
       )}
 
+      {adding && (
+        <AddAccount
+          onCancel={() => setAdding(false)}
+          onAdded={async (name) => {
+            setAdding(false);
+            setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
+            await load();
+          }}
+        />
+      )}
       {editing && (
         <EditAccount
           account={editing}

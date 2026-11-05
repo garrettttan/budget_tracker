@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { db } from '../lib/supabase';
 import { parseAmount } from '../lib/format';
 import Button from './Button';
+import Modal from './Modal';
 
 export type AccountClass = 'cash' | 'investment' | 'liability';
 
@@ -12,8 +13,9 @@ export const CLASSES: { value: AccountClass; label: string }[] = [
 ];
 
 /**
- * Adds an account the sync doesn't know about (Venmo, cash): no connection, so
- * the sync never touches it. Its balance is whatever you set here or later.
+ * Adds an account the sync doesn't know about (Venmo, cash) in a modal: no
+ * connection, so the sync never touches it. Its balance is whatever you set
+ * here or later. `onCancel` runs however the modal is closed.
  */
 export default function AddAccount({ onAdded, onCancel }: { onAdded: (name: string) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState('');
@@ -39,47 +41,52 @@ export default function AddAccount({ onAdded, onCancel }: { onAdded: (name: stri
   }
 
   return (
-    <form className="panel-form" onSubmit={save} aria-label="Add manual account">
-      <h2>Add manual account</h2>
-      <p className="muted small">
-        For accounts SimpleFIN can’t see, like Venmo. Enter their transactions with Add transaction on the Transactions page.
-      </p>
-      {error && <p className="error" role="alert">{error}</p>}
-      <div className="fields">
-        <label>
-          Name
-          <input type="text" value={name} autoFocus disabled={busy} placeholder="Venmo" onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label>
-          Class
-          <select value={cls} disabled={busy} onChange={(e) => setCls(e.target.value as AccountClass)}>
-            {CLASSES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Current balance
-          <input
-            type="text"
-            inputMode="decimal"
-            value={balance}
-            disabled={busy}
-            placeholder="0.00"
-            onChange={(e) => setBalance(e.target.value)}
-          />
-        </label>
-      </div>
-      <div className="form-actions">
-        <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
-          Add account
-        </Button>
-        <Button variant="link" disabled={busy} onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+    <Modal labelledBy="add-account-title" busy={busy} onClose={onCancel}>
+      {(close) => (
+        <form onSubmit={save}>
+          <h2 id="add-account-title">Add manual account</h2>
+          <p className="muted small">
+            For accounts SimpleFIN can’t see, like Venmo. Enter their transactions with Add transaction on the Transactions
+            page.
+          </p>
+          {error && <p className="error" role="alert">{error}</p>}
+          <div className="fields single">
+            <label>
+              Name
+              <input type="text" value={name} autoFocus disabled={busy} placeholder="Venmo" onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label>
+              Class
+              <select value={cls} disabled={busy} onChange={(e) => setCls(e.target.value as AccountClass)}>
+                {CLASSES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Current balance
+              <input
+                type="text"
+                inputMode="decimal"
+                value={balance}
+                disabled={busy}
+                placeholder="0.00"
+                onChange={(e) => setBalance(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
+              Add account
+            </Button>
+            <Button variant="link" disabled={busy} onClick={close}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }
