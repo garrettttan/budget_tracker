@@ -52,7 +52,7 @@ Spent / Income / Saved and a category donut with a ranked list (six colored slic
 into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
 to clear). All (the default) and Approved show the picked month; To review, `?tag=` and explicit `?from=&to=` aren't
 limited to it. **Filter** (next to To review / Approved / All) opens a modal of checklists: untick
-categories (plus "No category yet" = `none`, "Transfer" = `transfer`) or tags to hide them
+categories (plus "Uncategorized" = `none`, "Transfer" = `transfer`) or tags to hide them
 (`?hidecat=`, `?hidetag=`, URL only). Hidden categories leave the list, pie and Spent; hidden tags
 leave the list (an anti-join: `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`).
 An explicit `?category=` overrides hidden categories. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
@@ -122,8 +122,13 @@ PR branch can be clicked through before merge.
 - **Budgeting: tracking only for v1.** Monthly per-category targets later
   (`monthly_targets (category_id, month, amount)`, no changes to existing tables).
 - **Categories:** Groceries, Dining, Transit, Rideshare & Taxi, Housing, Utilities,
-  Subscriptions, Shopping, Health, Travel, Entertainment, Gifts, Fees, Income, Uncategorized
-  (for what you can't place; approve with it to clear To review). No Gas (NYC).
+  Subscriptions, Shopping, Health, Travel, Entertainment, Gifts, Fees, Income. No Gas (NYC).
+  **Uncategorized is no category** (`category_id` null), not a category row: the picker shows it as
+  "Uncategorized", and a row can be approved with it (Nov 5; the short-lived Uncategorized
+  category was removed by migration).
+- **Totals count only approved transactions** (Spending's pie and Spent, Trends, tag totals), and
+  money in counts toward spending only in a spending category (a refund). Uncategorized money in
+  is neither spending nor income until you categorize it.
 - **Hosting:** new Supabase project + GitHub Pages frontend.
 
 - **Daily sync trigger: GitHub Actions** (`.github/workflows/sync.yml`, 10:17 UTC), chosen to
@@ -170,7 +175,8 @@ rate-limit warning.
 14 tables: connections, accounts, categories, merchants, merchant_aliases, import_batches,
 transactions, reimbursements, reimbursement_payments, tags, transaction_tags,
 dismissed_transfer_pairs, balance_snapshots, sync_runs.
-Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`), `tag_spend`
+Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`; approved rows only,
+money in only with a non-income category), `tag_spend`
 (total per tag, e.g. a trip). Functions (call with `rpc`): `monthly_category_spend(include_tags)`,
 `monthly_cashflow(include_tags)`.
 
@@ -183,11 +189,11 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 - `connections`, `balance_snapshots`, `sync_runs` are read-only from the browser.
 - `accounts.class` (`cash` | `investment` | `liability`) replaced the unused `accounts.type`.
 - Review functions (security invoker, call with `rpc`): `approve_transactions(ids)` approves
-  rows that have a category or are transfers (never pending), updates merchant memory, and
+  any posted rows (no category = Uncategorized; never pending), updates merchant memory, and
   pre-fills other unreviewed rows of those merchants; `mark_transfer(id)`,
   `confirm_transfer(out, in)`; `merge_merchants(from, into)`. Editing approved rows
-  (Transactions page): `recategorize_transactions(ids, category)` (also teaches merchant
-  memory) and `send_to_review(ids)` (keeps the category as a pre-fill). Either one un-pairs
+  (Spending page): `recategorize_transactions(ids, category)` (null = Uncategorized; also teaches
+  merchant memory, which ignores rows with no category) and `send_to_review(ids)` (keeps the category as a pre-fill). Either one un-pairs
   a transfer and sends its other side back to Review. Merchant memory lives in
   `learn_merchant_categories(ids)`, shared by approve and recategorize. View `transfer_suggestions`:
   unreviewed opposite amounts in different accounts within 5 days, computed, not stored.
@@ -210,8 +216,8 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
   other side of a transfer back to Review; unpaid reimbursements and tags cascade.
 - Settings → Categories: add, reorder (`sort_order`, the order every picker uses), and an Edit
   modal (name, group, Income) are direct table writes. `delete_category(id, into)` (security
-  invoker, `rpc`) moves its transactions and merchant memory to `into` first; `into` may be null
-  only if no transaction uses it.
+  invoker, `rpc`) moves its transactions and merchant memory to `into` first; null `into` leaves
+  them Uncategorized (no category).
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);
@@ -234,7 +240,7 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
 from any Pages subpath. Pages: Spending (`src/pages/Spending.tsx`; the month summary from
 `components/MonthSpending.tsx`, then the list: filter All (default) / To review / Approved via
-`?status=`, plus `?month=`, `?tag=`, `?hidecat=`, `?hidetag=`, `?category=` (`none` = no category yet), `?from=` and `?to=`;
+`?status=`, plus `?month=`, `?tag=`, `?hidecat=`, `?hidetag=`, `?category=` (`none` = Uncategorized), `?from=` and `?to=`;
 every row has a category picker and an Approved checkbox; `/transactions` and `/review` redirect
 here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
 Email + password auth (single user).

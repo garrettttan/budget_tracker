@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate } from '../lib/format';
 import Button from '../components/Button';
-import CategorySelect, { type Category, TRANSFER } from '../components/CategorySelect';
+import CategorySelect, { type Category, TRANSFER, UNCATEGORIZED } from '../components/CategorySelect';
 import MerchantCell from '../components/MerchantCell';
 import TagCell, { type Tag } from '../components/TagCell';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
@@ -58,7 +58,7 @@ const COLUMNS =
   'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
 
 /**
- * Narrower views: one category (or 'none' = no category yet), a date range,
+ * Narrower views: one category (or 'none' = Uncategorized, i.e. no category), a date range,
  * and categories / tags to hide (an explicit category overrides hidden ones).
  */
 type Scope = { category: string | null; start: string | null; end: string | null; hideCategories: string[]; hideTags: string[] };
@@ -317,16 +317,17 @@ export default function Spending({ count, onChange }: { count: number | null; on
     if (value === TRANSFER) {
       return act(() => db().rpc('mark_transfer', { p_id: r.id }), () => `${name(r)} is now a transfer and approved.`);
     }
+    const id = value === UNCATEGORIZED ? null : value; // Uncategorized = no category
     if (r.approved) {
-      const category = categories?.find((c) => c.id === value)?.name;
+      const category = id ? categories?.find((c) => c.id === id)?.name : 'Uncategorized';
       return act(
-        () => db().rpc('recategorize_transactions', { p_ids: [r.id], p_category: value }),
+        () => db().rpc('recategorize_transactions', { p_ids: [r.id], p_category: id }),
         () => `${name(r)} is now ${category}.${pairNote(r)}`,
       );
     }
     // just a pre-fill: the row stays unapproved until you approve it
-    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, category_id: value } : x)) ?? null);
-    const { error } = await db().from('transactions').update({ category_id: value }).eq('id', r.id);
+    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, category_id: id } : x)) ?? null);
+    const { error } = await db().from('transactions').update({ category_id: id }).eq('id', r.id);
     if (error) setError(error.message);
     bump();
   }
@@ -366,7 +367,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // names for the "Hiding …" banner, categories first
   const hiddenNames = [
     ...hideCategories.map((id) =>
-      id === NO_CATEGORY ? 'No category yet' : id === TRANSFER_KEY ? 'Transfer' : (categories?.find((c) => c.id === id)?.name ?? 'A category'),
+      id === NO_CATEGORY ? 'Uncategorized' : id === TRANSFER_KEY ? 'Transfer' : (categories?.find((c) => c.id === id)?.name ?? 'A category'),
     ),
     ...hideTags.map((id) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag'),
   ];
@@ -374,7 +375,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   /** "Dining · October 2026" for the banner. */
   function scopeLabel() {
     const parts: string[] = [];
-    if (category) parts.push(category === 'none' ? 'No category yet' : (categories?.find((c) => c.id === category)?.name ?? 'A category'));
+    if (category) parts.push(category === 'none' ? 'Uncategorized' : (categories?.find((c) => c.id === category)?.name ?? 'A category'));
     if (start || end) parts.push(rangeLabel(start, end));
     return parts.join(' · ');
   }
@@ -556,7 +557,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // ---- selected rows -------------------------------------------------------
 
   const selectedRows = (rows ?? []).filter((r) => selected.has(r.id));
-  const canApprove = (r: Row) => !r.approved && (r.category_id !== null || r.is_transfer);
+  // no category is fine: it's approved as Uncategorized
+  const canApprove = (r: Row) => !r.approved;
   const approvable = selectedRows.filter(canApprove);
   const allSelected = Boolean(rows?.length) && rows!.every((r) => selected.has(r.id));
   const plural = (n: number) => `${n} ${n === 1 ? 'transaction' : 'transactions'}`;
@@ -574,10 +576,9 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const tagsOnSelected = tags.filter((t) => selectedRows.some((r) => r.transaction_tags.some((x) => x.tag_id === t.id)));
 
   function approveSelected() {
-    const skipped = selectedRows.filter((r) => !r.approved && !canApprove(r)).length;
     return act(
       () => db().rpc('approve_transactions', { p_ids: approvable.map((r) => r.id) }),
-      (n) => `Approved ${plural(Number(n))}.${skipped ? ` ${plural(skipped)} still ${skipped === 1 ? 'needs' : 'need'} a category.` : ''}`,
+      (n) => `Approved ${plural(Number(n))}.`,
     );
   }
 
@@ -630,9 +631,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       ? 'Linked as a payback; use Unlink payment in its details to change this'
       : r.approved
         ? 'Untick to move it back to To review'
-        : r.category_id
-          ? 'Tick to approve'
-          : 'Choose a category first';
+        : 'Tick to approve';
 
   function togglePending(open: boolean) {
     setPendingOpen(open);
@@ -943,7 +942,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
                       aria-label={`Approved: ${name(r)}`}
                       title={approvedTitle(r)}
                       checked={r.approved}
-                      disabled={busy || isLinked(r) || (!r.approved && !r.category_id && !r.is_transfer)}
+                      disabled={busy || isLinked(r)}
                       onChange={() => toggleApproved(r)}
                     />
                   </td>

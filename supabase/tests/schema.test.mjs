@@ -41,7 +41,17 @@ const check = (name, ok, detail = '') => {
 
 await db.exec(stub);
 const legacy = '33333333-3333-3333-3333-333333333333';
+let legacyUncatTxn, legacyMerchant;
 for (const file of migrations) {
+  if (file.endsWith('_uncategorized_is_no_category.sql')) {
+    // an approved row in the old Uncategorized category, remembered by its merchant
+    legacyMerchant = (await db.query(`insert into public.merchants (user_id, name, last_category_id)
+      select '${legacy}', 'Mystery', id from public.categories where user_id = '${legacy}' and name = 'Uncategorized' returning id`)).rows[0].id;
+    legacyUncatTxn = (await db.query(`insert into public.transactions (user_id, account_id, source, posted_date, amount, category_id, merchant_id, approved)
+      select '${legacy}', a.id, 'manual', '2026-10-01', -9, c.id, $1, true
+      from public.accounts a, public.categories c
+      where a.user_id = '${legacy}' and a.name = 'Old card' and c.user_id = '${legacy}' and c.name = 'Uncategorized' returning id`, [legacyMerchant])).rows[0].id;
+  }
   if (file.includes('account_classes')) {
     // rows written with the old accounts.type column, to check the backfill
     await db.exec(`insert into auth.users (id) values ('${legacy}');
@@ -63,12 +73,15 @@ const b = '22222222-2222-2222-2222-222222222222';
 await db.exec(`insert into auth.users (id, email) values ('${a}','a@x.com'), ('${b}','b@x.com');`);
 
 const cats = await db.query(`select count(*)::int n from public.categories where user_id = $1`, [a]);
-check('starter categories seeded on sign-up (incl. Uncategorized)', cats.rows[0].n === 15, `${cats.rows[0].n} categories`);
-const legacyUncat = await db.query(`select sort_order from public.categories where user_id = $1 and name = 'Uncategorized'`, [legacy]);
-check('existing users get Uncategorized, last in the list', legacyUncat.rows.length === 1 && legacyUncat.rows[0].sort_order === 150, JSON.stringify(legacyUncat.rows));
-await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_uncategorized_category.sql'))), 'utf8'));
-const dupes = await db.query(`select count(*)::int n from public.categories where name = 'Uncategorized' group by user_id having count(*) > 1`);
-check('Uncategorized migration is safe to re-run', dupes.rows.length === 0);
+check('starter categories seeded on sign-up (no Uncategorized: that is no category)', cats.rows[0].n === 14, `${cats.rows[0].n} categories`);
+const legacyTxn = (await db.query(`select category_id, approved from public.transactions where id = $1`, [legacyUncatTxn])).rows[0];
+check('Uncategorized rows become no category, approval kept', legacyTxn.category_id === null && legacyTxn.approved, JSON.stringify(legacyTxn));
+check('merchants forget Uncategorized',
+  (await db.query(`select last_category_id from public.merchants where id = $1`, [legacyMerchant])).rows[0].last_category_id === null);
+check('the Uncategorized category is gone',
+  (await db.query(`select count(*)::int n from public.categories where name = 'Uncategorized'`)).rows[0].n === 0);
+await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_uncategorized_is_no_category.sql'))), 'utf8'));
+check('uncategorized-is-no-category migration is safe to re-run', true);
 const gas = await db.query(`select count(*)::int n from public.categories where name ilike 'gas%'`);
 check('no Gas category', gas.rows[0].n === 0);
 
@@ -115,6 +128,14 @@ try {
 } catch {}
 check('upsert on (account_id, source, external_id) skips duplicates', upsertOk);
 
+// Totals count only approved rows: unreviewed spending is left out until approved
+const unreviewed = await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id)
+   values ($1,'manual','2026-10-11',-70,$2) returning id`, [acct, dining]);
+check('unapproved spending is left out of totals',
+  (await asUser(a, `select count(*)::int n from public.spending_lines where transaction_id = $1`, [unreviewed.rows[0].id])).rows[0].n === 0);
+await asUser(a, `delete from public.transactions where id = $1`, [unreviewed.rows[0].id]);
+await asUser(a, `update public.transactions set approved = true where not pending`);
+
 // Views
 const spend = (await asUser(a, `select category_name, spent::float from public.monthly_category_spend()`)).rows;
 check('dining counts only your share ($80)', spend.length === 1 && spend[0].category_name === 'Dining' && spend[0].spent === 80, JSON.stringify(spend));
@@ -136,8 +157,8 @@ check('written-off reimbursement (never paid) counts full $120', spend2[0]?.spen
 const travel = (await asUser(a, `select id from public.categories where name='Travel'`)).rows[0].id;
 const japan = (await asUser(a, `insert into public.tags (name) values ('Japan 2026') returning id`)).rows[0].id;
 const work = (await asUser(a, `insert into public.tags (name) values ('Work') returning id`)).rows[0].id;
-const sushi = (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id) values ($1,'manual','2026-10-05',-200,$2) returning id`, [acct, dining])).rows[0].id;
-const flight = (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id) values ($1,'manual','2026-10-01',-900,$2) returning id`, [acct, travel])).rows[0].id;
+const sushi = (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id, approved) values ($1,'manual','2026-10-05',-200,$2,true) returning id`, [acct, dining])).rows[0].id;
+const flight = (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id, approved) values ($1,'manual','2026-10-01',-900,$2,true) returning id`, [acct, travel])).rows[0].id;
 await asUser(a, `insert into public.transaction_tags (transaction_id, tag_id) values ($1,$3), ($2,$3), ($2,$4)`, [sushi, flight, japan, work]);
 const spendFor = async (tags) => Object.fromEntries((await asUser(a,
   `select category_name, spent::float from public.monthly_category_spend($1::uuid[])`, [tags])).rows.map(r => [r.category_name, r.spent]));
@@ -151,6 +172,17 @@ const cfNormal = (await asUser(a, `select spending::float from public.monthly_ca
 check('cashflow uses the same tag rule', cfNormal[0]?.spending === 120, JSON.stringify(cfNormal));
 const trip = (await asUser(a, `select spent::float, transaction_count::int n from public.tag_spend where tag_id=$1`, [japan])).rows[0];
 check('tag_spend totals a trip', trip.spent === 1100 && trip.n === 2, JSON.stringify(trip));
+// Money in: a refund lowers its category; an uncategorized deposit isn't spending
+const aShopping = (await asUser(a, `select id from public.categories where name='Shopping'`)).rows[0].id;
+const ins = async (amount, category) => (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id, approved)
+   values ($1,'manual','2026-09-10',$2,$3,true) returning id`, [acct, amount, category])).rows[0].id;
+const septIds = [await ins(-100, aShopping), await ins(30, aShopping), await ins(2500, null)];
+const sept = Object.fromEntries((await asUser(a, `select coalesce(category_name, 'none') k, spent::float from public.monthly_category_spend() where month = '2026-09-01'`)).rows.map((r) => [r.k, r.spent]));
+check('a refund lowers its category; an uncategorized deposit counts nowhere', sept.Shopping === 70 && sept.none === undefined, JSON.stringify(sept));
+const septFlow = (await asUser(a, `select income::float, spending::float from public.monthly_cashflow() where month = '2026-09-01'`)).rows[0];
+check('an uncategorized deposit is neither income nor negative spending', septFlow.income === 0 && septFlow.spending === 70, JSON.stringify(septFlow));
+await asUser(a, `delete from public.transactions where id = any ($1)`, [septIds]);
+
 let anonRpc = false;
 try { await db.exec(`set role anon;`); await db.query(`select * from public.monthly_category_spend()`); anonRpc = true; } catch {} finally { await db.exec(`reset role;`); }
 check('signed-out visitors cannot call reporting functions', !anonRpc);
@@ -182,7 +214,7 @@ const bCats = (await asUser(b, `select count(*)::int n from public.categories`))
 check('user B sees none of A\'s transactions', bTx === 0);
 const bAliases = (await asUser(b, `select count(*)::int n from public.merchant_aliases`)).rows[0].n;
 check('user B sees none of A\'s merchant aliases', bAliases === 0);
-check('user B sees only own categories', bCats === 15);
+check('user B sees only own categories', bCats === 14);
 let crossWrite = false;
 try { await asUser(b, `insert into public.transactions (user_id, account_id, source, posted_date, amount) values ($1,$2,'manual','2026-10-01',-1)`, [a, acct]); crossWrite = true; } catch {}
 check('user B cannot write rows as user A', !crossWrite);
@@ -279,7 +311,7 @@ const c3 = await txn({ merchant_id: coffee, category_id: dGroceries, posted_date
 const noCat = await txn({});
 const pend = await txn({ category_id: dDining, pending: true });
 const approvedCount = (await one(`select public.approve_transactions($1) as n`, [[c1, noCat, pend]])).n;
-check('approve: only rows with a category, and not pending', approvedCount === 1 && (await row(c1)).approved && !(await row(noCat)).approved && !(await row(pend)).approved);
+check('approve: rows with or without a category (Uncategorized), never pending', approvedCount === 2 && (await row(c1)).approved && (await row(noCat)).approved && (await row(noCat)).category_id === null && !(await row(pend)).approved);
 check('approve: the merchant remembers the category', (await one(`select last_category_id from public.merchants where id = $1`, [coffee])).last_category_id === dDining);
 const c2Row = await row(c2);
 check('approve: other unreviewed rows from that merchant are pre-filled, still unapproved', c2Row.category_id === dDining && !c2Row.approved);
@@ -366,6 +398,11 @@ await one(`update public.transactions set category_id = null where id = $1 retur
 const changed = (await one(`select public.recategorize_transactions($1, $2) as n`, [[b1], dGroceries])).n;
 const b1Row = await row(b1);
 check('recategorize: an approved row gets the new category and stays approved', changed === 1 && b1Row.category_id === dGroceries && b1Row.approved);
+await one(`select public.recategorize_transactions($1, null)`, [[b1]]);
+check('recategorize to Uncategorized: no category, still approved, merchant memory kept',
+  (await row(b1)).category_id === null && (await row(b1)).approved &&
+  (await one(`select last_category_id from public.merchants where id = $1`, [bakery])).last_category_id === dGroceries);
+await one(`select public.recategorize_transactions($1, $2)`, [[b1], dGroceries]);
 check('recategorize: the merchant remembers the new category, and pre-fills unreviewed rows',
   (await one(`select last_category_id from public.merchants where id = $1`, [bakery])).last_category_id === dGroceries
   && (await row(b2)).category_id === dGroceries);
@@ -556,8 +593,6 @@ check('category names are unique per user', await fails(`insert into public.cate
 const vet = await txn({ amount: -80, category_id: pets, approved: true });
 const petShop = await merchant('Pet Shop');
 await one(`update public.merchants set last_category_id = $1 where id = $2`, [pets, petShop]);
-check('delete_category: refuses without a target while transactions use it',
-  (await fails(`select public.delete_category($1)`, [pets])) && Boolean(await catId('Pet care')));
 check('delete_category: refuses moving into itself', await fails(`select public.delete_category($1, $1)`, [pets]));
 await one(`select public.delete_category($1, $2)`, [pets, dGroceries]);
 const vetAfter = await row(vet);
@@ -566,6 +601,11 @@ check('delete_category: merchant memory moves over',
   (await one(`select last_category_id from public.merchants where id = $1`, [petShop])).last_category_id === dGroceries);
 check('delete_category: the category is gone',
   (await one(`select count(*)::int n from public.categories where name = 'Pet care'`)).n === 0);
+const toys = (await one(`insert into public.categories (name) values ('Toys') returning id`)).id;
+const ball = await txn({ amount: -12, category_id: toys, approved: true });
+await one(`select public.delete_category($1)`, [toys]);
+check('delete_category: without a target, its transactions become Uncategorized (no category), still approved',
+  (await row(ball)).category_id === null && (await row(ball)).approved);
 const unused = (await one(`insert into public.categories (name) values ('Unused') returning id`)).id;
 await one(`select public.delete_category($1)`, [unused]);
 check('delete_category: an unused category goes without a target',

@@ -39,7 +39,7 @@ export default function BulkBar({
         variant="primary"
         size="small"
         disabled={busy || approvable === 0}
-        title={approvable === 0 ? 'None of the selected rows is waiting for review with a category' : undefined}
+        title={approvable === 0 ? 'None of the selected rows is waiting for review' : undefined}
         onClick={onApprove}
       >
         Approve{approvable ? ` ${approvable}` : ''}
