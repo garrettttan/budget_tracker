@@ -122,9 +122,9 @@ export default function HeaderFilter({
       >
         <span className="th-filter-label">{children ?? label}</span>
         {showCount && count > 0 && <span className="badge">{count}</span>}
-        <span className="th-caret" aria-hidden="true">
-          ▾
-        </span>
+        <svg className="th-caret" viewBox="0 0 10 6" aria-hidden="true">
+          <path d="M0.5 0.5h9L5 5.5z" />
+        </svg>
       </Button>
       {open && (
         <div
