@@ -1,15 +1,16 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Button from './Button';
 
 /*
  * Small hand-rolled SVG charts for Trends. Rules (see the dataviz notes in the
  * PR): thin marks (columns <= 24px, 4px rounded tops, square at the baseline),
  * 2px lines, hairline solid gridlines, one y-axis, text in ink colors (never
- * the series color), a tooltip on hover AND keyboard focus that never gates a
- * value (every chart has a table view beside it).
+ * the series color), a tooltip on hover AND keyboard focus, and each mark's
+ * accessible name carries its value for screen readers.
  *
- * Series colors are CSS variables (--viz-income, --viz-spending), validated
- * for color-blind separation in light and dark.
+ * Series colors are CSS variables (--viz-income, --viz-spending, and
+ * --viz-cat-1..6 for pie slices), validated for color-blind separation in
+ * light and dark.
  */
 
 export type Series = { name: string; color: string; values: number[] };
@@ -301,55 +302,135 @@ export function TimeLine({
   );
 }
 
+/** Slice colors in fixed order (validated adjacent-pair color-blind separation, light and dark). */
+export const SLICE_COLORS = ['var(--viz-cat-1)', 'var(--viz-cat-2)', 'var(--viz-cat-3)', 'var(--viz-cat-4)', 'var(--viz-cat-5)', 'var(--viz-cat-6)'];
+export const OTHER_COLOR = 'var(--viz-cat-other)';
+
+export type Slice = { key: string; name: string; value: number; color: string };
+
+// drawing units; the SVG scales to its column (up to 440px across)
+const PIE_R = 200;
+const PIE_HOLE = 126;
+
+/** A donut segment from angle a0 to a1 (radians, 0 = 12 o'clock, clockwise). */
+function arcPath(a0: number, a1: number, r: number, hole: number): string {
+  if (a1 - a0 >= Math.PI * 2 - 1e-6) a1 = a0 + Math.PI * 2 - 1e-4; // a lone slice: a near-full ring
+  const pt = (a: number, rad: number) => `${PIE_R + 4 + rad * Math.sin(a)},${PIE_R + 4 - rad * Math.cos(a)}`;
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  return `M${pt(a0, r)}A${r},${r} 0 ${large} 1 ${pt(a1, r)}L${pt(a1, hole)}A${hole},${hole} 0 ${large} 0 ${pt(a0, hole)}Z`;
+}
+
 /**
- * Ranked horizontal bars, largest first, one hue. Names and values are
- * printed, so the bars are their own table. Each row is a button.
+ * Part-to-whole donut with a ranked list beside it. The list carries every
+ * name, amount and share (so color is never the only key and no hover is
+ * needed); the donut shows the split at a glance. Slices beyond the colored
+ * ones share the gray "Other" slice, but each still has its own list row.
+ * Hovering a slice or a row highlights both; rows are the buttons.
  */
-export function RankedBars({
+export function CategoryPie({
   rows,
-  color,
   format,
+  total,
+  totalLabel,
   selected,
   onSelect,
   selectHint,
+  label,
 }: {
   rows: { key: string; name: string; value: number }[];
-  color: string;
   format: (n: number) => string;
+  total: number;
+  totalLabel: string;
   selected?: string | null;
   onSelect: (key: string) => void;
   selectHint: string;
+  label: string;
 }) {
-  const max = Math.max(0, ...rows.map((r) => r.value)) || 1;
-  return (
-    <ul className="ranked-bars">
-      {rows.map((r) => (
-        <li key={r.key}>
-          <Button
-            variant="link"
-            className={`ranked-row${selected === r.key ? ' selected' : ''}`}
-            aria-pressed={selected === r.key}
-            aria-label={`${r.name}: ${format(r.value)}. ${selectHint}`}
-            onClick={() => onSelect(r.key)}
-          >
-            <span className="ranked-name">{r.name}</span>
-            <span className="ranked-track">
-              <span className="ranked-bar" style={{ width: `${(Math.max(0, r.value) / max) * 100}%`, background: color }} />
-            </span>
-            <span className="ranked-value">{format(r.value)}</span>
-          </Button>
-        </li>
-      ))}
-    </ul>
-  );
-}
+  const [hover, setHover] = useState<string | null>(null);
+  // more than six categories: the sixth slot onward folds into Other
+  const colored = rows.length > SLICE_COLORS.length ? rows.slice(0, SLICE_COLORS.length - 1) : rows;
+  const rest = rows.slice(colored.length);
+  const slices: Slice[] = colored.map((r, i) => ({ ...r, color: SLICE_COLORS[i] }));
+  if (rest.length) slices.push({ key: 'other', name: `Other (${rest.length})`, value: rest.reduce((a, r) => a + r.value, 0), color: OTHER_COLOR });
+  const sliceOf = (key: string) => (rest.some((r) => r.key === key) ? 'other' : key);
+  const whole = slices.reduce((a, s) => a + s.value, 0) || 1;
+  const share = (v: number) => `${Math.round((v / whole) * 100)}%`;
 
-/** "Show as table": the chart's values without hovering. */
-export function TableView({ children }: { children: ReactNode }) {
+  let angle = 0;
+  const arcs = slices.map((s) => {
+    const a0 = angle;
+    angle += (s.value / whole) * Math.PI * 2;
+    return { ...s, a0, a1: angle };
+  });
+  const hot = hover ? sliceOf(hover) : null;
+  const picked = selected ? sliceOf(selected) : null;
+  const tipArc = arcs.find((a) => a.key === hot);
+  const mid = tipArc ? (tipArc.a0 + tipArc.a1) / 2 : 0;
+  const size = (PIE_R + 4) * 2;
+
   return (
-    <details className="chart-table">
-      <summary>Show as table</summary>
-      {children}
-    </details>
+    <div className="pie-layout">
+      <div className="chart pie">
+        <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${label}: ${slices.map((s) => `${s.name} ${share(s.value)}`).join(', ')}`}>
+          {arcs.map((a) => (
+            <path
+              key={a.key}
+              d={arcPath(a.a0, a.a1, a.key === picked ? PIE_R + 4 : PIE_R, PIE_HOLE)}
+              className={`pie-slice${hot && hot !== a.key ? ' dim' : ''}${a.key === 'other' ? '' : ' clickable'}`}
+              style={{ fill: a.color }}
+              onPointerEnter={() => setHover(a.key)}
+              onPointerLeave={() => setHover(null)}
+              onClick={() => a.key !== 'other' && onSelect(a.key)}
+            />
+          ))}
+          <text x={size / 2} y={size / 2 - 6} textAnchor="middle" className="pie-total">
+            {format(total)}
+          </text>
+          <text x={size / 2} y={size / 2 + 24} textAnchor="middle" className="pie-total-label">
+            {totalLabel}
+          </text>
+        </svg>
+        {tipArc && (
+          <div
+            className="chart-tip"
+            role="presentation"
+            style={{
+              left: `${(0.5 + ((PIE_R - 20) * Math.sin(mid)) / size) * 100}%`,
+              top: `${(0.5 - ((PIE_R - 20) * Math.cos(mid)) / size) * 100}%`,
+            }}
+          >
+            <div className="chart-tip-row">
+              <span className="chart-key-rect" style={{ background: tipArc.color }} />
+              <strong>{format(tipArc.value)}</strong> <span className="muted">{tipArc.name} · {share(tipArc.value)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+      <ul className="pie-list">
+        {rows.map((r) => {
+          const color = slices.find((s) => s.key === sliceOf(r.key))!.color;
+          return (
+            <li key={r.key}>
+              <Button
+                variant="link"
+                className={`pie-row${selected === r.key ? ' selected' : ''}${hot && hot !== sliceOf(r.key) ? ' dim' : ''}`}
+                aria-pressed={selected === r.key}
+                aria-label={`${r.name}: ${format(r.value)}, ${share(r.value)}. ${selectHint}`}
+                onPointerEnter={() => setHover(r.key)}
+                onPointerLeave={() => setHover(null)}
+                onFocus={() => setHover(r.key)}
+                onBlur={() => setHover(null)}
+                onClick={() => onSelect(r.key)}
+              >
+                <span className="chart-key-rect" style={{ background: color }} />
+                <span className="pie-name">{r.name}</span>
+                <span className="pie-share">{share(r.value)}</span>
+                <span className="pie-value">{format(r.value)}</span>
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
