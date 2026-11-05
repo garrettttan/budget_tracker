@@ -540,5 +540,37 @@ check('signed-out visitors cannot delete transactions', !anonDel);
 await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_delete_manual_transactions.sql'))), 'utf8'));
 check('delete migration is safe to re-run', true);
 
+// ---------------------------------------------------------------------------
+// Editing categories (Settings → Categories): direct writes + delete_category
+// ---------------------------------------------------------------------------
+const pets = (await one(`insert into public.categories (name, group_name, sort_order) values ('Pets', 'Lifestyle', 150) returning id`)).id;
+check('add a category', Boolean(pets));
+await one(`update public.categories set name = 'Pet care', is_income = false where id = $1`, [pets]);
+check('rename a category', (await one(`select name from public.categories where id = $1`, [pets])).name === 'Pet care');
+check('category names are unique per user', await fails(`insert into public.categories (name) values ('Dining')`));
+const vet = await txn({ amount: -80, category_id: pets, approved: true });
+const petShop = await merchant('Pet Shop');
+await one(`update public.merchants set last_category_id = $1 where id = $2`, [pets, petShop]);
+check('delete_category: refuses without a target while transactions use it',
+  (await fails(`select public.delete_category($1)`, [pets])) && Boolean(await catId('Pet care')));
+check('delete_category: refuses moving into itself', await fails(`select public.delete_category($1, $1)`, [pets]));
+await one(`select public.delete_category($1, $2)`, [pets, dGroceries]);
+const vetAfter = await row(vet);
+check('delete_category: transactions move over and stay approved', vetAfter.category_id === dGroceries && vetAfter.approved);
+check('delete_category: merchant memory moves over',
+  (await one(`select last_category_id from public.merchants where id = $1`, [petShop])).last_category_id === dGroceries);
+check('delete_category: the category is gone',
+  (await one(`select count(*)::int n from public.categories where name = 'Pet care'`)).n === 0);
+const unused = (await one(`insert into public.categories (name) values ('Unused') returning id`)).id;
+await one(`select public.delete_category($1)`, [unused]);
+check('delete_category: an unused category goes without a target',
+  (await one(`select count(*)::int n from public.categories where id = $1`, [unused])).n === 0);
+check("delete_category: another user can't delete your category", await (async () => {
+  try { await asUser(b, `select public.delete_category($1, $2)`, [dDining, dGroceries]); } catch {}
+  return Boolean(await catId('Dining'));
+})());
+await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_delete_category.sql'))), 'utf8'));
+check('delete_category migration is safe to re-run', true);
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);
