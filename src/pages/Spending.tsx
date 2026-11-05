@@ -19,7 +19,9 @@ import {
   yourShare,
 } from '../components/RowReimbursements';
 import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
+import MonthSpending from '../components/MonthSpending';
 import { type OpenItem, fetchOpen, personKey, suggestFor } from '../lib/reimbursements';
+import { monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
 
 const PAGE = 100;
 
@@ -54,14 +56,14 @@ const COLUMNS =
   'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
   'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
 
+/** Narrower views: one category (or 'none' = no category yet) and a date range. */
+type Scope = { category: string | null; start: string | null; end: string | null };
+
 /**
  * Posted rows only: pending ones have their own section. With a tag, a second,
  * inner join on the tags keeps only rows carrying it, while transaction_tags
  * still lists all of each row's tags.
  */
-/** Narrower views Trends links to: one category (or 'none' = no category yet) and a date range. */
-type Scope = { category: string | null; start: string | null; end: string | null };
-
 function fetchRows(status: Status, tag: string | null, scope: Scope, from: number, to: number) {
   let q = db()
     .from('transactions')
@@ -88,13 +90,7 @@ function fetchPending() {
 
 /** "October 2026" for a whole month, else "Jan 1 – Mar 31, 2026"-style dates. */
 function rangeLabel(start: string | null, end: string | null): string {
-  if (start && end && start.endsWith('-01')) {
-    const s = new Date(start + 'T12:00:00');
-    const monthEnd = new Date(s.getFullYear(), s.getMonth() + 1, 0, 12);
-    if (end === `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`) {
-      return s.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    }
-  }
+  if (start && end && start.endsWith('-01') && end === monthEnd(start)) return monthLong(start);
   return `${start ? shortDate(start) : 'the start'} – ${end ? shortDate(end) : 'today'}`;
 }
 
@@ -117,18 +113,28 @@ function savePendingOpen(open: boolean) {
 }
 
 /**
- * Every transaction, filtered by review status (and optionally by tag). Each
- * posted row can get or change its category and tags, and is approved or
- * unapproved from here.
+ * A month's spending by category on top, then every transaction, filtered by
+ * review status (and optionally by tag or category). Each posted row can get
+ * or change its category and tags, and is approved or unapproved from here.
+ * Approved and All show the picked month (`?month=`); To review, a tag, or an
+ * explicit `?from=`/`?to=` aren't limited to it.
  */
-export default function Transactions({ count, onChange }: { count: number | null; onChange: () => Promise<void> }) {
+export default function Spending({ count, onChange }: { count: number | null; onChange: () => Promise<void> }) {
   const [params, setParams] = useSearchParams();
   const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'review';
   const tagFilter = params.get('tag');
   const category = params.get('category');
-  const start = params.get('from');
-  const end = params.get('to');
-  const scoped = Boolean(category || start || end);
+  const current = thisMonth();
+  const asked = parseMonth(params.get('month'));
+  const month = asked && asked <= current ? asked : current;
+  const monthScoped = !params.get('from') && !params.get('to') && status !== 'review' && !tagFilter;
+  const start = params.get('from') ?? (monthScoped ? month : null);
+  const end = params.get('to') ?? (monthScoped ? monthEnd(month) : null);
+  // category or explicit dates: pending rows and suggestions don't apply
+  const scoped = Boolean(category || params.get('from') || params.get('to'));
+  // bumped after edits so the month's totals follow them
+  const [version, setVersion] = useState(0);
+  const bump = () => setVersion((v) => v + 1);
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [pending, setPending] = useState<Row[]>([]);
@@ -261,6 +267,7 @@ export default function Transactions({ count, onChange }: { count: number | null
     if (error) setError(error.message);
     await reload(Math.max(rows?.length ?? 0, PAGE));
     await onChange();
+    bump();
     if (!error) setNotice(success(data)); // after the reload, so the list already shows it
     setBusy(false);
   }
@@ -283,6 +290,7 @@ export default function Transactions({ count, onChange }: { count: number | null
     setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, category_id: value } : x)) ?? null);
     const { error } = await db().from('transactions').update({ category_id: value }).eq('id', r.id);
     if (error) setError(error.message);
+    bump();
   }
 
   const approve = (ids: string[]) =>
@@ -294,18 +302,28 @@ export default function Transactions({ count, onChange }: { count: number | null
   const unapprove = (r: Row) =>
     act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
 
-  /** Changes the filters in the URL; `undefined` keeps a filter as it is. */
-  function setFilters(next: { status?: Status; tag?: string | null; scope?: null }) {
+  /** Changes the filters in the URL; a filter left out keeps its value, null clears it. */
+  function setFilters(next: Partial<Record<'status' | 'tag' | 'category' | 'from' | 'to' | 'month', string | null>>) {
     setNotice(null);
     setError(null);
-    const s = next.status ?? status;
-    const t = next.tag === undefined ? tagFilter : next.tag;
-    const keep = next.scope === null ? {} : { category, from: start, to: end };
-    const extra = Object.fromEntries(Object.entries(keep).filter(([, v]) => v)) as Record<string, string>;
-    setParams({ ...(s === 'review' ? {} : { status: s }), ...(t ? { tag: t } : {}), ...extra });
+    const merged = {
+      status: status === 'review' ? null : status,
+      tag: tagFilter,
+      category,
+      from: params.get('from'),
+      to: params.get('to'),
+      month: params.get('month'),
+      ...next,
+    };
+    if (merged.status === 'review') merged.status = null;
+    setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  /** "Dining · October 2026" for the banner when Trends linked here. */
+  /** A pie category narrows the list to it for the month; picking it again clears it. */
+  const pickCategory = (key: string) =>
+    setFilters(category === key ? { category: null } : { category: key, status: 'all', from: null, to: null });
+
+  /** "Dining · October 2026" for the banner. */
   function scopeLabel() {
     const parts: string[] = [];
     if (category) parts.push(category === 'none' ? 'No category yet' : (categories?.find((c) => c.id === category)?.name ?? 'A category'));
@@ -342,6 +360,7 @@ export default function Transactions({ count, onChange }: { count: number | null
       setError(error.message);
       await reload(Math.max(rows?.length ?? 0, PAGE));
     }
+    bump(); // tagged spending leaves the month's totals
   }
 
   const ids = (r: Row) => r.transaction_tags.map((x) => x.tag_id);
@@ -577,7 +596,7 @@ export default function Transactions({ count, onChange }: { count: number | null
   return (
     <section>
       <header className="page-head">
-        <h1>Transactions</h1>
+        <h1>Spending</h1>
         {!adding && (
           <Button
             onClick={() => {
@@ -595,6 +614,16 @@ export default function Transactions({ count, onChange }: { count: number | null
         <span className="tally-label">{count === 1 ? 'transaction to review' : 'transactions to review'}</span>
       </div>
 
+      <MonthSpending
+        month={month}
+        current={current}
+        selected={category}
+        version={version}
+        onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7), from: null, to: null })}
+        onSelect={pickCategory}
+        onError={setError}
+      />
+
       <div className="filter" role="group" aria-label="Show">
         {STATUSES.map((s) => (
           <Button key={s} size="small" aria-pressed={status === s} onClick={() => setFilters({ status: s })}>
@@ -606,7 +635,7 @@ export default function Transactions({ count, onChange }: { count: number | null
       {scoped && (
         <p className="tag-filter">
           Showing <strong>{scopeLabel()}</strong>
-          <Button variant="link" onClick={() => setFilters({ scope: null })}>
+          <Button variant="link" onClick={() => setFilters({ category: null, from: null, to: null })}>
             Show every transaction
           </Button>
         </p>
@@ -631,6 +660,7 @@ export default function Transactions({ count, onChange }: { count: number | null
             setError(null);
             setNotice(`Added ${summary}, approved.`);
             await reload(Math.max(rows?.length ?? 0, PAGE));
+            bump();
           }}
         />
       )}
@@ -723,6 +753,8 @@ export default function Transactions({ count, onChange }: { count: number | null
         <p className="empty">
           {scoped
             ? 'No transactions match.'
+            : monthScoped
+            ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
             : tagFilter
             ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
             : status === 'review'
@@ -735,7 +767,7 @@ export default function Transactions({ count, onChange }: { count: number | null
 
       {rows && rows.length > 0 && (
         <>
-          {(suggestions.length > 0 || paybacks.length > 0 || pending.length > 0) && <h2>Transactions</h2>}
+          <h2>Transactions</h2>
           <p className="muted small">
             Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
             unreviewed charges from it. Approved by mistake? Untick it. Tags group transactions across categories (like a

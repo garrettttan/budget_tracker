@@ -13,7 +13,7 @@ plan: https://claude.ai/artifact/Vy9euCxBXrLegJXUcK2UBz
 ## Status (Nov 3, 2026)
 
 **Done:** phase 1 (foundation), phase 2 (SimpleFIN connect + daily sync), and phase 3:
-review/transfer/merge database functions; one Transactions page that is also the
+review/transfer/merge database functions; one Transactions page (now Spending) that is also the
 review inbox (filter To review / Approved / All, searchable category picker on every row,
 an Approved checkbox to approve or unapprove, transfer suggestions with
 Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
@@ -45,15 +45,18 @@ record money in as "Pays back Sam" (a Venmo payment), which links it. A linked p
 (`/owed`) lists open items by person (Received for cash, Write off, × to stop expecting) and
 the last 30 settled ones (Reopen).
 
-**Phase 5 (Trends): done** (Nov 4; cleaned up Nov 4). `/trends`, top to bottom: "Include tagged"
-toggles (`?tags=`, scope everything); **Spending in [month ▾]** (a heading dropdown, `?month=YYYY-MM`,
-default this month): Spent / Income / Saved for that month and a category donut with a ranked list
-(six colored slices, the rest fold into gray "Other"); tapping a category opens a modal with that
-category by month. Then the range buttons (Last 12 months / This year / 6 / 3 months, `?range=`)
-scoping cash flow (income vs spending columns), net worth (one point per month: synced accounts'
-latest `balance_snapshots` on or before month end + manual accounts at their current balance) and the
-category modal; then tag totals (`tag_spend`, all time). Clicking a month opens Transactions filtered
-with `?status=all&category=&from=&to=` (a "Showing Dining · September 2026" banner clears it). Charts
+**Phase 5 (Trends): done** (Nov 4; reorganized Nov 5). The month view lives on **Spending**
+(the old Transactions page, `/spending`): under the to-review count, **Spending in [month ▾]** (a
+heading dropdown, `?month=YYYY-MM`, default this month; normal spending only, no tag toggles):
+Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
+into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
+to clear). Approved / All show the picked month; To review, `?tag=` and explicit `?from=&to=` aren't
+limited to it. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
+`?range=`) and "Include tagged" toggles (`?tags=`), scoping cash flow (income vs spending columns),
+Categories (avg / month and total; a row opens a modal with that category by month), net worth (one
+point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts
+at their current balance); then tag totals (`tag_spend`, all time). Clicking a month opens Spending
+with `?status=all&month=` (+ `category=` from the modal). Charts
 are hand-rolled SVG in `src/components/charts.tsx` (no chart library): hover and keyboard focus show a
 tooltip. Garrett removed the explanatory text and "Show as table" views on purpose; don't add them back.
 
@@ -225,10 +228,11 @@ Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`)
 ## Web app
 
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
-from any Pages subpath. Pages: Transactions (also the review inbox: filter To review /
-Approved / All via `?status=`, plus `?tag=`, `?category=` (`none` = no category yet), `?from=`
-and `?to=`; every row has a category picker and an Approved checkbox; `/review` redirects here),
-Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
+from any Pages subpath. Pages: Spending (`src/pages/Spending.tsx`; the month summary from
+`components/MonthSpending.tsx`, then the review inbox: filter To review / Approved / All via
+`?status=`, plus `?month=`, `?tag=`, `?category=` (`none` = no category yet), `?from=` and `?to=`;
+every row has a category picker and an Approved checkbox; `/transactions` and `/review` redirect
+here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
 Email + password auth (single user).
 
 Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accent teal
@@ -239,7 +243,7 @@ contrast) on both surfaces. Pie slices use `--viz-cat-1..6` (blue, orange, aqua,
 magenta, green, in that order) + `--viz-cat-other` gray, also validated. Don't chart the
 outflow/inflow red and green as two series: they fail the color-blind check.
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
-rules, no cards. The to-review count on Transactions is the one large element. Avoid all-caps labels.
+rules, no cards. The to-review count on Spending is the one large element. Avoid all-caps labels.
 
 Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
 `primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`

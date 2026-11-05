@@ -135,7 +135,7 @@ export default function TagList() {
                   </td>
                   <td className="num">
                     {count(t) > 0 ? (
-                      <Link to={`/transactions?status=all&tag=${t.id}`} title={`Show transactions tagged ${t.name}`}>
+                      <Link to={`/spending?status=all&tag=${t.id}`} title={`Show transactions tagged ${t.name}`}>
                         {count(t)}
                       </Link>
                     ) : (

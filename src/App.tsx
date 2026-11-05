@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/auth';
 import { isConfigured, supabase } from './lib/supabase';
 import SignIn from './pages/SignIn';
-import Transactions from './pages/Transactions';
+import Spending from './pages/Spending';
 import Accounts from './pages/Accounts';
 import Owed from './pages/Owed';
 import Trends from './pages/Trends';
@@ -28,8 +28,12 @@ function useUnreviewedCount(enabled: boolean) {
   return { count, refresh };
 }
 
+function ToSpending() {
+  return <Navigate to={`/spending${useLocation().search}`} replace />;
+}
+
 const NAV: { to: string; label: string; short?: string }[] = [
-  { to: '/transactions', label: 'Transactions' },
+  { to: '/spending', label: 'Spending' },
   { to: '/trends', label: 'Trends' },
   { to: '/owed', label: 'Owed to me', short: 'Owed' },
   { to: '/accounts', label: 'Accounts' },
@@ -62,7 +66,7 @@ export default function App() {
                 ) : (
                   <span>{item.label}</span>
                 )}
-                {item.to === '/transactions' && unreviewed !== null && unreviewed > 0 && (
+                {item.to === '/spending' && unreviewed !== null && unreviewed > 0 && (
                   <span className="badge" aria-label={`${unreviewed} to review`}>
                     {unreviewed}
                   </span>
@@ -74,14 +78,15 @@ export default function App() {
       </nav>
       <main className="page">
         <Routes>
-          <Route path="/transactions" element={<Transactions count={unreviewed} onChange={refreshUnreviewed} />} />
-          {/* Review and Transactions were one page each until Nov 2026 */}
-          <Route path="/review" element={<Navigate to="/transactions" replace />} />
+          <Route path="/spending" element={<Spending count={unreviewed} onChange={refreshUnreviewed} />} />
+          {/* the page was Review, then Transactions, until Nov 2026; old links keep their filters */}
+          <Route path="/transactions" element={<ToSpending />} />
+          <Route path="/review" element={<ToSpending />} />
           <Route path="/trends" element={<Trends />} />
           <Route path="/owed" element={<Owed />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />
-          <Route path="*" element={<Navigate to="/transactions" replace />} />
+          <Route path="*" element={<Navigate to="/spending" replace />} />
         </Routes>
       </main>
     </div>

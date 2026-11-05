@@ -390,7 +390,8 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 /* Trends */
 .trend-filters { display: grid; gap: 0.5rem; margin-bottom: 1.25rem; }
 .trend-filters .filter { flex-wrap: wrap; align-items: center; margin: 0; }
-.filter.range-filter { flex-wrap: wrap; margin: 2.5rem 0 0; }
+.filter.range-filter { flex-wrap: wrap; }
+.trends > h2:first-child { margin-top: 0; }
 .trends { transition: opacity 120ms; }
 .trends.refetching { opacity: 0.55; }
 .stat-row { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; margin: 0 0 0.5rem; }
@@ -469,7 +470,7 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .pie-total-label { fill: var(--ink-soft); font-size: 18px; }
 .pie-share { color: var(--ink-soft); font-size: var(--step--1); font-variant-numeric: tabular-nums; text-align: right; padding-left: 1rem; }
 .pie-value { font-variant-numeric: tabular-nums; text-align: right; padding-left: 0.6rem; }
-.register.tag-totals { max-width: 44rem; }
+.register.tag-totals, .register.category-totals { max-width: 44rem; }
 
 /* Settings → Merchants */
 .merchant-filter { width: 16rem; max-width: 100%; margin-bottom: 0.5rem; }
