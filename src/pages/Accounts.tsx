@@ -52,6 +52,11 @@ export default function Accounts() {
     <section>
       <header className="page-head">
         <h1>Accounts</h1>
+        {accounts && accounts.length > 0 && (
+          <p className="net-worth">
+            <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
+          </p>
+        )}
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -81,9 +86,6 @@ export default function Accounts() {
 
       {accounts && accounts.length > 0 && (
         <>
-          <p className="net-worth">
-            <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
-          </p>
           {CLASSES.map(({ value, label }) => {
             const group = accounts.filter((a) => a.class === value);
             if (group.length === 0) return null;
