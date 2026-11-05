@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Button from './Button';
 
 type Item = { id: string; name: string };
@@ -19,6 +19,10 @@ export default function HeaderFilter({
   onChange,
   onOnly,
   align = 'start',
+  searchable = true,
+  showCount = true,
+  keepOne = false,
+  children,
 }: {
   label: string;
   items: Item[];
@@ -28,6 +32,14 @@ export default function HeaderFilter({
   onOnly: (id: string) => void;
   /** which edge of the header the popover lines up with */
   align?: 'start' | 'end';
+  /** false for a short list: no search box */
+  searchable?: boolean;
+  /** false where there's no room for the hidden-count badge (the header still turns accent) */
+  showCount?: boolean;
+  /** true where hiding everything makes no sense: the last ticked item can't be unticked */
+  keepOne?: boolean;
+  /** what the header shows, if not `label` */
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -41,6 +53,9 @@ export default function HeaderFilter({
   const matches = typed ? items.filter((i) => i.name.toLowerCase().includes(typed)) : items;
   const shownMatches = matches.filter((i) => !hidden.includes(i.id)).length;
   const allShown = matches.length > 0 && shownMatches === matches.length;
+  const lastShown = keepOne && items.filter((i) => !hidden.includes(i.id)).length === 1;
+  // with keepOne, unticking every match would hide everything
+  const cantClearAll = keepOne && allShown && matches.length === items.length;
 
   function close(refocus = true) {
     setOpen(false);
@@ -100,8 +115,8 @@ export default function HeaderFilter({
         aria-label={`Filter ${label}${count ? `, ${count} hidden` : ''}`}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        <span className="th-filter-label">{label}</span>
-        {count > 0 && <span className="badge">{count}</span>}
+        <span className="th-filter-label">{children ?? label}</span>
+        {showCount && count > 0 && <span className="badge">{count}</span>}
         <span className="th-caret" aria-hidden="true">
           ▾
         </span>
@@ -117,20 +132,25 @@ export default function HeaderFilter({
           <span id={titleId} className="visually-hidden">
             Filter {label}
           </span>
-          <input
-            type="search"
-            className="header-filter-search"
-            placeholder={`Search ${label.toLowerCase()}`}
-            aria-label={`Search ${label.toLowerCase()}`}
-            value={query}
-            autoFocus
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          {searchable && (
+            <input
+              type="search"
+              className="header-filter-search"
+              placeholder={`Search ${label.toLowerCase()}`}
+              aria-label={`Search ${label.toLowerCase()}`}
+              value={query}
+              autoFocus
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
           <label className="header-filter-all">
+            {/* without a search box, focus lands here */}
             <input
               type="checkbox"
+              autoFocus={!searchable}
               checked={allShown}
-              disabled={matches.length === 0}
+              disabled={matches.length === 0 || cantClearAll}
+              title={cantClearAll ? 'At least one has to stay ticked' : undefined}
               ref={(el) => {
                 if (el) el.indeterminate = shownMatches > 0 && !allShown;
               }}
@@ -142,7 +162,13 @@ export default function HeaderFilter({
             {matches.map((i) => (
               <li key={i.id}>
                 <label>
-                  <input type="checkbox" checked={!hidden.includes(i.id)} onChange={() => toggle(i.id)} />
+                  <input
+                    type="checkbox"
+                    checked={!hidden.includes(i.id)}
+                    disabled={lastShown && !hidden.includes(i.id)}
+                    title={lastShown && !hidden.includes(i.id) ? 'At least one has to stay ticked' : undefined}
+                    onChange={() => toggle(i.id)}
+                  />
                   <span>{i.name}</span>
                 </label>
                 <Button

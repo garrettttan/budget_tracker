@@ -378,7 +378,17 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // names for the "Hiding …" banner, categories first
 
   // the column header filters; while they hide something the table (and its headers) stays even if empty
-  const hiding = hideCategories.length > 0 || hideTags.length > 0;
+  const hiding = hideCategories.length > 0 || hideTags.length > 0 || status !== 'all';
+  // Approved column: both ticked = All (`?status=` absent); one unticked = To review or Approved only
+  const approvalItems = [
+    { id: 'review', name: `To review${count ? ` (${count})` : ''}` },
+    { id: 'approved', name: 'Approved' },
+  ];
+  const approvalHidden = status === 'review' ? ['approved'] : status === 'approved' ? ['review'] : [];
+  function setApprovalHidden(next: string[]) {
+    if (next.length > 1) return; // hiding both would show nothing
+    setFilters({ status: next.includes('approved') ? 'review' : next.includes('review') ? 'approved' : 'all' });
+  }
   const categoryItems = [
     ...(categories ?? []).map((c) => ({ id: c.id, name: c.name })),
     { id: NO_CATEGORY, name: 'Uncategorized' },
@@ -696,30 +706,30 @@ export default function Spending({ count, onChange }: { count: number | null; on
         onError={setError}
       />
 
-      <div className="filter" role="group" aria-label="Show">
-        {STATUSES.map((s) => (
-          <Button key={s} size="small" aria-pressed={status === s} onClick={() => setFilters({ status: s })}>
-            {s === 'review' ? `To review${count ? ` (${count})` : ''}` : s === 'approved' ? 'Approved' : 'All'}
-          </Button>
-        ))}
-      </div>
 
       {hiding && (
         <p className="tag-filter">
+          {status !== 'all' && (
+            <>
+              {'Only '}
+              <strong>{status === 'review' ? 'to review' : 'approved'}</strong>
+              {(hideCategories.length > 0 || hideTags.length > 0) && '; '}
+            </>
+          )}
           {hideCategories.length > 0 && (
             <>
-              {mostlyHidden ? 'Showing only ' : 'Hiding '}
+              {status !== 'all' ? (mostlyHidden ? 'showing only ' : 'hiding ') : mostlyHidden ? 'Showing only ' : 'Hiding '}
               <strong>{categoryNames.join(', ') || 'nothing'}</strong>
             </>
           )}
           {hideCategories.length > 0 && hideTags.length > 0 && '; '}
           {hideTags.length > 0 && (
             <>
-              {hideCategories.length > 0 ? 'hiding ' : 'Hiding '}
+              {hideCategories.length > 0 || status !== 'all' ? 'hiding ' : 'Hiding '}
               <strong>{hiddenTagNames.join(', ')}</strong>
             </>
           )}
-          <Button variant="link" onClick={() => setFilters({ hidecat: null, hidetag: null })}>
+          <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
             Show all
           </Button>
         </p>
@@ -837,23 +847,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
         </details>
       )}
 
-      {rows && rows.length === 0 && (
-        <p className="empty">
-          {scoped || hiding
-            ? 'No transactions match.'
-            : monthScoped
-            ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
-            : tagFilter
-            ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
-            : status === 'review'
-            ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'
-            : status === 'approved'
-              ? 'No approved transactions yet.'
-              : "No transactions yet. They'll appear here after your first sync or import."}
-        </p>
-      )}
-
-      {rows && (rows.length > 0 || hiding) && (
+      {/* always the table, so its header filters (Approved, Category, Tags) are reachable even when empty */}
+      {rows && (
         <>
           <h2>Transactions</h2>
           {selected.size > 0 && (
@@ -910,11 +905,23 @@ export default function Spending({ count, onChange }: { count: number | null; on
                 </th>
                 <th scope="col" className="num">Amount</th>
                 <th scope="col" className="approved-col">
-                  {/* phones: just a check mark, to leave room for the other columns */}
-                  <span className="label-long">Approved</span>
-                  <span className="label-short" aria-hidden="true">
-                    ✓
-                  </span>
+                  <HeaderFilter
+                    label="Approved"
+                    align="end"
+                    searchable={false}
+                    showCount={false}
+                    keepOne
+                    items={approvalItems}
+                    hidden={approvalHidden}
+                    onChange={setApprovalHidden}
+                    onOnly={(id) => setFilters({ status: id === 'review' ? 'review' : 'approved' })}
+                  >
+                    {/* phones: just a check mark, to leave room for the other columns */}
+                    <span className="label-long">Approved</span>
+                    <span className="label-short" aria-hidden="true">
+                      ✓
+                    </span>
+                  </HeaderFilter>
                 </th>
               </tr>
             </thead>
@@ -1010,6 +1017,19 @@ export default function Spending({ count, onChange }: { count: number | null; on
               ))}
             </tbody>
           </table>
+          {rows.length === 0 && (
+            <p className="empty">
+              {scoped || hideCategories.length > 0 || hideTags.length > 0
+                ? 'No transactions match.'
+                : tagFilter
+                ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
+                : status === 'review'
+                ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'
+                : monthScoped
+                ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
+                : "No transactions yet. They'll appear here after your first sync or import."}
+            </p>
+          )}
           {hasMore && (
             <div className="load-more">
               <Button disabled={busy} onClick={loadMore}>

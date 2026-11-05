@@ -51,14 +51,16 @@ heading dropdown, `?month=YYYY-MM`, default this month; normal spending only, no
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
 into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
 to clear). All (the default) and Approved show the picked month; To review, `?tag=` and explicit `?from=&to=` aren't
-limited to it. The list's **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
+limited to it. The list's **Approved**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
 tap one for a searchable checklist, spreadsheet style (all ticked; untick to hide; Select all ticks or
 unticks what the search matches; Only per row). Category keys: category ids, `none` (Uncategorized),
 `transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only). Hidden
 categories leave the list, pie and Spent; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
-several tags). An explicit `?category=` (pie tap) overrides hidden categories. On phones the Tags
+several tags). The Approved header sets `?status=` (both ticked = All, the default; untick one for
+To review or Approved; the last ticked can't be unticked) and replaced the To review / Approved / All
+buttons; the table and its headers always render, even for an empty month. An explicit `?category=` (pie tap) overrides hidden categories. On phones the Tags
 column shows just a count (tags are edited in the row's details) and Approved's header is ✓, so the
 table fits at 390px. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
 `?range=`) and "Include tagged" toggles (`?tags=`), scoping cash flow (income vs spending columns),
@@ -244,7 +246,7 @@ money in only with a non-income category), `tag_spend`
 
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
 from any Pages subpath. Pages: Spending (`src/pages/Spending.tsx`; the month summary from
-`components/MonthSpending.tsx`, then the list: filter All (default) / To review / Approved via
+`components/MonthSpending.tsx`, then the list: filter All (default) / To review / Approved from the Approved header via
 `?status=`, plus `?month=`, `?tag=`, `?hidecat=`, `?hidetag=`, `?category=` (`none` = Uncategorized), `?from=` and `?to=`;
 every row has a category picker and an Approved checkbox; `/transactions` and `/review` redirect
 here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
