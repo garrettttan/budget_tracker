@@ -711,10 +711,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
               <span className={pendingTotal < 0 ? 'out' : 'in'}>{money(pendingTotal)}</span>
             </span>
           </summary>
-          <p className="muted small">
-            Not posted by the bank yet, so the amount can still change. Each one moves into the list below, ready to
-            review, once it posts.
-          </p>
           <table className="register txns pending-txns">
             <thead>
               <tr>
@@ -764,13 +760,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
       {rows && rows.length > 0 && (
         <>
           <h2>Transactions</h2>
-          <p className="muted small">
-            Pick a category, then tick Approved. Approving teaches the merchant its category and pre-fills your other
-            unreviewed charges from it. Approved by mistake? Untick it. Tags group transactions across categories (like a
-            trip); tagged spending is kept apart from your normal spending. Tick the boxes on the left to approve or tag
-            several at once. Someone owes you part of a charge? Open its details (tap the merchant) and choose Expect
-            reimbursement.
-          </p>
           {selected.size > 0 && (
             <BulkBar
               count={selected.size}
