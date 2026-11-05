@@ -111,22 +111,20 @@ export default function Accounts() {
             return (
               <div key={value}>
                 <h2>{label}</h2>
-                <table className="register accounts">
-                  <thead>
-                    <tr>
-                      <th scope="col">Account</th>
-                      <th scope="col" className="inst-col">Institution</th>
-                      <th scope="col" className="num balance-col">Balance</th>
-                      <th scope="col" className="action-col">
-                        <span className="visually-hidden">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
+                <table className="register accounts" aria-label={label}>
+                  {/* no header row: fixed widths keep the class tables lined up */}
+                  <colgroup>
+                    <col />
+                    <col className="balance-col" />
+                    <col className="action-col" />
+                  </colgroup>
                   <tbody>
                     {group.map((a) => (
                       <tr key={a.id}>
-                        <td>{a.name}</td>
-                        <td>{a.institution ?? <span className="muted">Manual</span>}</td>
+                        <td>
+                          {a.name}
+                          <span className="account-sub">{a.institution ?? 'Manual'}</span>
+                        </td>
                         <td className="num">{money(a.balance)}</td>
                         <td className="action">
                           <Button
@@ -147,9 +145,7 @@ export default function Accounts() {
                   </tbody>
                   <tfoot>
                     <tr>
-                      {/* one cell per column, so phones can hide Institution here too */}
                       <th scope="row">Total {label.toLowerCase()}</th>
-                      <td />
                       <td className="num">{money(total(group))}</td>
                       <td />
                     </tr>

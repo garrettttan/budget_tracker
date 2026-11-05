@@ -178,9 +178,9 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register td.action { text-align: right; white-space: nowrap; padding-left: 1.25rem; padding-right: 0; }
 .register td.action .btn + .btn { margin-left: 0.5rem; }
 /* Accounts: one table per class; fixed widths line their columns up */
-.register.accounts { table-layout: fixed; }
+.register.accounts { table-layout: fixed; border-top: 1px solid var(--ink); }
 .register.accounts td { overflow-wrap: anywhere; }
-.register.accounts .inst-col { width: 30%; }
+.account-sub { display: block; margin-top: 0.1rem; font-size: var(--step--1); color: var(--ink-soft); }
 .register.accounts .balance-col { width: 9rem; }
 .register.accounts .action-col { width: 3.25rem; }
 
@@ -550,8 +550,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .panel-form { padding: 0.75rem 0.875rem 1rem; }
   /* merchants: hide the remembered category */
   .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
-  /* accounts: hide the institution */
-  .register.accounts th:nth-child(2), .register.accounts td:nth-child(2) { display: none; }
   /* transfers: hide the dates column */
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
   /* owed: hide the date and paid columns; settled: date and status */
