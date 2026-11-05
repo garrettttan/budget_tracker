@@ -183,6 +183,9 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .account-sub { display: block; margin-top: 0.1rem; font-size: var(--step--1); color: var(--ink-soft); }
 .register.accounts .balance-col { width: 9rem; }
 .register.accounts .action-col { width: 3.25rem; }
+.account-group h2 { margin: 1.75rem 0 0.5rem; }
+.register.accounts td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
+.register.accounts tfoot th, .register.accounts tfoot td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
 
 
 /* merchant name in Review: looks like text; click/tap shows the row's details */
@@ -275,6 +278,8 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 /* Add transaction / Add manual account: a form above the list */
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.page-foot { margin-top: 2rem; }
+.page-sub { margin: 0.2rem 0 0; font-size: var(--step--1); }
 .panel-form {
   margin: 0 0 1.5rem;
   padding: 1rem 1.25rem 1.25rem;
@@ -434,6 +439,7 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 
 .net-worth { font-size: var(--step-1); margin: 1.5rem 0 0; font-variant-numeric: tabular-nums; }
 .net-worth strong { margin-left: 0.5rem; }
+.page-head .net-worth { margin: 0; }
 
 .tag {
   margin-left: 0.5rem;

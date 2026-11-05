@@ -51,15 +51,20 @@ export default function Accounts() {
   return (
     <section>
       <header className="page-head">
-        <h1>Accounts</h1>
-        <Button
-          onClick={() => {
-            setAdding(true);
-            setNotice(null);
-          }}
-        >
-          Add manual account
-        </Button>
+        <div>
+          <h1>Accounts</h1>
+          {connections?.map((c) => (
+            <p key={c.id} className={`page-sub ${c.status === 'active' && !isStale(c.last_synced_at) ? 'muted' : 'error'}`}>
+              Last synced {relativeTime(c.last_synced_at)}.
+              {c.status_message ? ` ${c.status_message}` : ''}
+            </p>
+          ))}
+        </div>
+        {accounts && accounts.length > 0 && (
+          <p className="net-worth">
+            <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
+          </p>
+        )}
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -69,34 +74,20 @@ export default function Accounts() {
           No banks connected yet. <Link to="/settings">Connect SimpleFIN Bridge in Settings.</Link>
         </p>
       )}
-      {connections?.map((c) => {
-        const stale = isStale(c.last_synced_at);
-        return (
-          <div key={c.id}>
-            <p className={c.status === 'active' && !stale ? 'muted' : 'error'}>
-              {c.label}: last synced {relativeTime(c.last_synced_at)}
-              {c.status_message ? `. ${c.status_message}` : ''}
-            </p>
-            {stale && (
-              <p className="error" role="alert">
-                The daily sync hasn't run in over a day and a half. Check the "Daily SimpleFIN sync" workflow in
-                GitHub Actions (it may have been disabled), or the <Link to="/settings">sync log</Link>.
-              </p>
-            )}
-          </div>
-        );
-      })}
+      {connections?.some((c) => isStale(c.last_synced_at)) && (
+        <p className="error" role="alert">
+          The daily sync hasn't run in over a day and a half. Check the "Daily SimpleFIN sync" workflow in
+          GitHub Actions (it may have been disabled), or the <Link to="/settings">sync log</Link>.
+        </p>
+      )}
 
       {accounts && accounts.length > 0 && (
         <>
-          <p className="net-worth">
-            <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
-          </p>
           {CLASSES.map(({ value, label }) => {
             const group = accounts.filter((a) => a.class === value);
             if (group.length === 0) return null;
             return (
-              <div key={value}>
+              <div key={value} className="account-group">
                 <h2>{label}</h2>
                 <table className="register accounts" aria-label={label}>
                   {/* no header row: fixed widths keep the class tables lined up */}
@@ -143,6 +134,18 @@ export default function Accounts() {
           })}
         </>
       )}
+
+      {/* rarely used, so it sits below the accounts */}
+      <div className="page-foot">
+          <Button
+            onClick={() => {
+              setAdding(true);
+              setNotice(null);
+            }}
+          >
+            Add manual account
+          </Button>
+      </div>
 
       {adding && (
         <AddAccount
