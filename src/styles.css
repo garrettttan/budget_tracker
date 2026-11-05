@@ -296,6 +296,23 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .balance-input { width: 7rem; padding: 0.2rem 0.4rem; text-align: right; }
 .btn-link.danger { color: var(--danger); }
 
+/* Modal (native <dialog>; Edit account) */
+.modal {
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.25rem 1.25rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+}
+.modal::backdrop { background: rgb(22 35 47 / 0.45); }
+.modal h2 { margin: 0 0 0.15rem; }
+.modal form > p { margin: 0 0 0.75rem; }
+.fields.single { grid-template-columns: 1fr; }
+.static-value { font-size: var(--step-0); font-weight: 400; padding: 0.45rem 0; }
+.form-actions .push-right { margin-left: auto; }
+
 /* Reimbursements: a charge's line, your share, row forms, Owed to me */
 .reimb-line { font-size: var(--step--1); color: var(--accent); margin-top: 0.15rem; }
 .register td .share { font-size: var(--step--1); color: var(--ink-soft); font-weight: 400; white-space: normal; }
@@ -526,7 +543,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .panel-form { padding: 0.75rem 0.875rem 1rem; }
   /* merchants: hide the remembered category */
   .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
-  /* accounts: hide the institution (room for Rename) */
+  /* accounts: hide the institution */
   .register.accounts th:nth-child(2), .register.accounts td:nth-child(2) { display: none; }
   /* transfers: hide the dates column */
   .register.transfers th:nth-child(3), .register.transfers td:nth-child(3) { display: none; }
