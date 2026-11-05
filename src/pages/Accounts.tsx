@@ -104,13 +104,12 @@ export default function Accounts() {
           <p className="net-worth">
             <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
           </p>
-          {CLASSES.map(({ value, label, note }) => {
+          {CLASSES.map(({ value, label }) => {
             const group = accounts.filter((a) => a.class === value);
             if (group.length === 0) return null;
             return (
               <div key={value}>
                 <h2>{label}</h2>
-                {note && <p className="muted small">{note}</p>}
                 <table className="register accounts">
                   <thead>
                     <tr>

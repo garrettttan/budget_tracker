@@ -5,9 +5,9 @@ import Button from './Button';
 
 export type AccountClass = 'cash' | 'investment' | 'liability';
 
-export const CLASSES: { value: AccountClass; label: string; note?: string }[] = [
+export const CLASSES: { value: AccountClass; label: string }[] = [
   { value: 'cash', label: 'Cash' },
-  { value: 'investment', label: 'Investments', note: 'Balance only; transactions aren’t imported.' },
+  { value: 'investment', label: 'Investments' },
   { value: 'liability', label: 'Liabilities' },
 ];
 
