@@ -609,10 +609,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
           </Button>
         )}
       </header>
-      <div className="tally">
-        <span className="tally-number">{count ?? '–'}</span>
-        <span className="tally-label">{count === 1 ? 'transaction to review' : 'transactions to review'}</span>
-      </div>
 
       <MonthSpending
         month={month}

@@ -46,7 +46,7 @@ record money in as "Pays back Sam" (a Venmo payment), which links it. A linked p
 the last 30 settled ones (Reopen).
 
 **Phase 5 (Trends): done** (Nov 4; reorganized Nov 5). The month view lives on **Spending**
-(the old Transactions page, `/spending`): under the to-review count, **Spending in [month ▾]** (a
+(the old Transactions page, `/spending`): at the top, **Spending in [month ▾]** (a
 heading dropdown, `?month=YYYY-MM`, default this month; normal spending only, no tag toggles):
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
 into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
@@ -243,7 +243,7 @@ contrast) on both surfaces. Pie slices use `--viz-cat-1..6` (blue, orange, aqua,
 magenta, green, in that order) + `--viz-cat-other` gray, also validated. Don't chart the
 outflow/inflow red and green as two series: they fail the color-blind check.
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
-rules, no cards. The to-review count on Spending is the one large element. Avoid all-caps labels.
+rules, no cards. The to-review count shows only on the To review button and the nav badge. Avoid all-caps labels.
 
 Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
 `primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`

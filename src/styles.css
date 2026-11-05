@@ -142,25 +142,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 .page-head { margin-bottom: 1.5rem; }
 
-/* ---- review tally: the one loud element ---------------------------- */
-
-.tally {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  padding: 1.5rem 0 2rem;
-  border-bottom: 1px solid var(--rule);
-}
-.tally-number {
-  font-size: var(--step-5);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
-}
-.tally-label { color: var(--ink-soft); font-size: var(--step-1); }
-
 .empty { color: var(--ink-soft); max-width: 36rem; margin-top: 1.5rem; }
 
 /* ---- register tables ----------------------------------------------- */
@@ -591,7 +572,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .nav-short { display: inline; }
   .rail a { flex-direction: column; gap: 0.15rem; font-size: var(--step--1); padding: 0.5rem 0.25rem; }
   .page { padding-bottom: 6rem; }
-  .tally-number { font-size: 3.25rem; }
 
   /* transactions: hide date and account columns (they're in the row's details) */
   .register.txns .date-col, .register.txns .account-col { display: none; }
