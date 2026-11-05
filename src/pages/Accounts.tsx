@@ -5,6 +5,7 @@ import { money, relativeTime } from '../lib/format';
 import Button from '../components/Button';
 import AddAccount, { CLASSES } from '../components/AddAccount';
 import EditAccount, { type EditableAccount } from '../components/EditAccount';
+import PencilIcon from '../components/PencilIcon';
 
 type Account = EditableAccount & { balance_date: string | null };
 
@@ -129,15 +130,16 @@ export default function Accounts() {
                         <td className="num">{money(a.balance)}</td>
                         <td className="action">
                           <Button
-                            size="small"
+                            variant="icon"
                             aria-label={`Edit ${a.name}`}
+                            title="Edit"
                             onClick={() => {
                               setEditing(a);
                               setNotice(null);
                               setError(null);
                             }}
                           >
-                            Edit
+                            <PencilIcon />
                           </Button>
                         </td>
                       </tr>

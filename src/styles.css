@@ -182,7 +182,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register.accounts td { overflow-wrap: anywhere; }
 .register.accounts .inst-col { width: 30%; }
 .register.accounts .balance-col { width: 9rem; }
-.register.accounts .action-col { width: 5rem; }
+.register.accounts .action-col { width: 3.25rem; }
 
 
 /* merchant name in Review: looks like text; click/tap shows the row's details */
@@ -506,6 +506,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
 
 .btn-icon { border: none; background: none; color: var(--ink-soft); font-size: var(--step-1); line-height: 1; padding: 0.15rem 0.4rem; }
 .btn-icon:hover:not(:disabled) { color: var(--ink); background: var(--accent-wash); }
+.btn-icon .icon { display: block; }
 
 .small { font-size: var(--step--1); }
 
