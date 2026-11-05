@@ -36,8 +36,8 @@ export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return 'never';
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60) return `${mins} ${mins === 1 ? 'minute' : 'minutes'} ago`;
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   return shortDate(iso);
 }

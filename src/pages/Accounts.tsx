@@ -71,8 +71,8 @@ export default function Accounts() {
         return (
           <div key={c.id}>
             <p className={c.status === 'active' && !stale ? 'muted' : 'error'}>
-              {c.label}: last synced {relativeTime(c.last_synced_at)}
-              {c.status_message ? `. ${c.status_message}` : ''}
+              Last synced {relativeTime(c.last_synced_at)}.
+              {c.status_message ? ` ${c.status_message}` : ''}
             </p>
             {stale && (
               <p className="error" role="alert">
