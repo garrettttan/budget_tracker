@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Button from './Button';
 
-type Item = { id: string; name: string };
+/** `count`: how many transactions have it in the current range, shown beside the name. */
+type Item = { id: string; name: string; count?: number };
 
 const WIDTH = 288; // 18rem
 const GUTTER = 16;
@@ -43,7 +44,7 @@ export default function HeaderFilter({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -63,13 +64,17 @@ export default function HeaderFilter({
     if (refocus) trigger.current?.focus();
   }
 
-  // under the header, kept inside the screen
+  // under the header (above it when there's more room there), kept inside the screen
   function place() {
     if (!trigger.current) return;
     const r = trigger.current.getBoundingClientRect();
     const width = Math.min(WIDTH, window.innerWidth - 2 * GUTTER);
     const wanted = align === 'end' ? r.right - width : r.left;
-    setPos({ top: r.bottom + 4, left: Math.max(GUTTER, Math.min(wanted, window.innerWidth - width - GUTTER)) });
+    const left = Math.max(GUTTER, Math.min(wanted, window.innerWidth - width - GUTTER));
+    const below = window.innerHeight - r.bottom - 4 - GUTTER;
+    const above = r.top - 4 - GUTTER;
+    if (below >= 320 || below >= above) setPos({ top: r.bottom + 4, left, maxHeight: below });
+    else setPos({ bottom: window.innerHeight - r.top + 4, left, maxHeight: above });
   }
 
   useLayoutEffect(() => {
@@ -127,7 +132,7 @@ export default function HeaderFilter({
           className="header-filter-pop"
           role="dialog"
           aria-labelledby={titleId}
-          style={pos ? { top: pos.top, left: pos.left, width: Math.min(WIDTH, window.innerWidth - 2 * GUTTER) } : { visibility: 'hidden' }}
+          style={pos ? { ...pos, width: Math.min(WIDTH, window.innerWidth - 2 * GUTTER) } : { visibility: 'hidden' }}
         >
           <span id={titleId} className="visually-hidden">
             Filter {label}
@@ -170,6 +175,7 @@ export default function HeaderFilter({
                     onChange={() => toggle(i.id)}
                   />
                   <span>{i.name}</span>
+                  {i.count !== undefined && <span className="header-filter-count">{i.count}</span>}
                 </label>
                 <Button
                   variant="link"

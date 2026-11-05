@@ -53,7 +53,9 @@ into gray "Other"). Tapping a category sets `?category=&status=all` and narrows 
 to clear). All (the default) and Approved show the picked month; To review, `?tag=` and explicit `?from=&to=` aren't
 limited to it. The list's **Approved**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
 tap one for a searchable checklist, spreadsheet style (all ticked; untick to hide; Select all ticks or
-unticks what the search matches; Only per row). Category keys: category ids, `none` (Uncategorized),
+unticks what the search matches; Only per row). Category and Tags list only what the list's range
+and approval filter hold, with a count each (`fetchPresent`, three columns paged 1,000 at a time;
+the header filters themselves don't narrow it, and unticked items stay listed so they can come back). Category keys: category ids, `none` (Uncategorized),
 `transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only). Hidden
 categories leave the list, pie and Spent; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an

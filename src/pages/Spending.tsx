@@ -120,6 +120,39 @@ function fetchRows(status: Status, tag: string | null, scope: Scope, from: numbe
   return q.order('posted_date', { ascending: false }).order('id', { ascending: false }).range(from, to);
 }
 
+/** How many transactions in the current range have each category key and each tag (`UNTAGGED` = none). */
+type Present = { categories: Map<string, number>; tags: Map<string, number> };
+
+/**
+ * For the header filters: what the list's range and approval filter hold,
+ * ignoring the header filters themselves (so unticked items can be ticked
+ * again). Only three small columns, a page of 1,000 at a time.
+ */
+async function fetchPresent(status: Status, tag: string | null, start: string | null, end: string | null) {
+  const present: Present = { categories: new Map(), tags: new Map() };
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (let from = 0; from < 50_000; from += 1000) {
+    let q = db()
+      .from('transactions')
+      .select(tag ? 'category_id, is_transfer, transaction_tags(tag_id), tag_filter:transaction_tags!inner(tag_id)' : 'category_id, is_transfer, transaction_tags(tag_id)')
+      .eq('pending', false);
+    if (tag) q = q.eq('tag_filter.tag_id', tag);
+    if (start) q = q.gte('posted_date', start);
+    if (end) q = q.lte('posted_date', end);
+    if (status !== 'all') q = q.eq('approved', status === 'approved');
+    const { data, error } = await q.order('id').range(from, from + 999);
+    if (error) return { present, error };
+    const page = (data ?? []) as unknown as { category_id: string | null; is_transfer: boolean; transaction_tags: { tag_id: string }[] }[];
+    for (const r of page) {
+      bump(present.categories, r.is_transfer ? TRANSFER_KEY : (r.category_id ?? NO_CATEGORY));
+      if (r.transaction_tags.length === 0) bump(present.tags, UNTAGGED);
+      for (const t of r.transaction_tags) bump(present.tags, t.tag_id);
+    }
+    if (page.length < 1000) break;
+  }
+  return { present, error: null };
+}
+
 /** Pending rows are never approved, and there are only ever a few, so all of them at once. */
 function fetchPending() {
   return db()
@@ -183,6 +216,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const bump = () => setVersion((v) => v + 1);
 
   const [rows, setRows] = useState<Row[] | null>(null);
+  // what the range holds, for the header filters (null until loaded: everything is listed)
+  const [present, setPresent] = useState<Present | null>(null);
   const [pending, setPending] = useState<Row[]>([]);
   const [pendingOpen, setPendingOpen] = useState(readPendingOpen);
   const [hasMore, setHasMore] = useState(false);
@@ -229,7 +264,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
     async (size: number) => {
       const none = Promise.resolve({ data: [], error: null });
       const reviewing = status !== 'approved' && !tagFilter && !scoped;
-      const [t, p, s, o, w, m] = await Promise.all([
+      const [t, p, s, o, w, m, h] = await Promise.all([
         fetchRows(status, tagFilter, { category, start, end, hideCategories, hideTags }, 0, size - 1),
         // pending rows can't carry tags, so a tag filter leaves them out
         status === 'approved' || tagFilter || scoped ? none : fetchPending(),
@@ -253,7 +288,10 @@ export default function Spending({ count, onChange }: { count: number | null; on
               .order('posted_date')
               .limit(200)
           : none,
+        fetchPresent(status, tagFilter, start, end),
       ]);
+      if (h.error) setError(h.error.message);
+      setPresent(h.present);
       const failed = t.error ?? p.error ?? s.error ?? w.error ?? m.error;
       if (failed) setError(failed.message);
       if (o.error) setError(o.error);
@@ -389,21 +427,27 @@ export default function Spending({ count, onChange }: { count: number | null; on
     if (next.length > 1) return; // hiding both would show nothing
     setFilters({ status: next.includes('approved') ? 'review' : next.includes('review') ? 'approved' : 'all' });
   }
-  const categoryItems = [
+  const allCategoryItems = [
     ...(categories ?? []).map((c) => ({ id: c.id, name: c.name })),
     { id: NO_CATEGORY, name: 'Uncategorized' },
     { id: TRANSFER_KEY, name: 'Transfer' },
   ];
-  const tagItems = [{ id: UNTAGGED, name: 'No tags' }, ...tags.map((t) => ({ id: t.id, name: t.name }))];
+  const allTagItems = [{ id: UNTAGGED, name: 'No tags' }, ...tags.map((t) => ({ id: t.id, name: t.name }))];
+  // the headers list only what this range holds, with counts; unticked items stay so they can come back
+  const listed = (items: { id: string; name: string }[], counts: Map<string, number> | undefined, hidden: string[]) =>
+    counts ? items.filter((i) => counts.has(i.id) || hidden.includes(i.id)).map((i) => ({ ...i, count: counts.get(i.id) ?? 0 })) : items;
+  const categoryItems = listed(allCategoryItems, present?.categories, hideCategories);
+  const tagItems = listed(allTagItems, present?.tags, hideTags);
   // the banner: "Showing only Dining" when most categories are hidden, else "Hiding Housing"
-  const shownCategories = categoryItems.filter((i) => !hideCategories.includes(i.id));
+  const shownCategories = allCategoryItems.filter((i) => !hideCategories.includes(i.id));
   const mostlyHidden = hideCategories.length > shownCategories.length;
-  const categoryNames = (mostlyHidden ? shownCategories : categoryItems.filter((i) => hideCategories.includes(i.id))).map((i) => i.name);
-  const hiddenTagNames = hideTags.map((id) => tagItems.find((t) => t.id === id)?.name ?? 'a deleted tag');
+  const categoryNames = (mostlyHidden ? shownCategories : allCategoryItems.filter((i) => hideCategories.includes(i.id))).map((i) => i.name);
+  const hiddenTagNames = hideTags.map((id) => allTagItems.find((t) => t.id === id)?.name ?? 'a deleted tag');
 
   /** Only one category: hide every other key (the pie's own pick is cleared). */
   const onlyCategory = (key: string) =>
-    setFilters({ category: null, hidecat: categoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
+    // every key, not just this range's, so switching months still shows only this one
+    setFilters({ category: null, hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
   /** Only one tag: the show-one-tag filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
     id === UNTAGGED
