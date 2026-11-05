@@ -52,14 +52,6 @@ export default function Accounts() {
     <section>
       <header className="page-head">
         <h1>Accounts</h1>
-        <Button
-          onClick={() => {
-            setAdding(true);
-            setNotice(null);
-          }}
-        >
-          Add manual account
-        </Button>
       </header>
       {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -143,6 +135,18 @@ export default function Accounts() {
           })}
         </>
       )}
+
+      {/* rarely used, so it sits below the accounts */}
+      <div className="page-foot">
+          <Button
+            onClick={() => {
+              setAdding(true);
+              setNotice(null);
+            }}
+          >
+            Add manual account
+          </Button>
+      </div>
 
       {adding && (
         <AddAccount
