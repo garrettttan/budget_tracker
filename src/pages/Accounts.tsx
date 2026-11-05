@@ -114,9 +114,9 @@ export default function Accounts() {
                   <thead>
                     <tr>
                       <th scope="col">Account</th>
-                      <th scope="col">Institution</th>
-                      <th scope="col" className="num">Balance</th>
-                      <th scope="col">
+                      <th scope="col" className="inst-col">Institution</th>
+                      <th scope="col" className="num balance-col">Balance</th>
+                      <th scope="col" className="action-col">
                         <span className="visually-hidden">Actions</span>
                       </th>
                     </tr>
