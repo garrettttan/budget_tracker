@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
-import { Legend, MonthColumns, RankedBars, TableView, TimeLine } from '../components/charts';
+import Modal from '../components/Modal';
+import { CategoryPie, Legend, MonthColumns, TimeLine } from '../components/charts';
 
 const INCOME = 'var(--viz-income)';
 const SPENDING = 'var(--viz-spending)';
@@ -56,7 +57,6 @@ export default function Trends() {
   const navigate = useNavigate();
   const range: RangeKey = RANGES.find((r) => r.key === params.get('range'))?.key ?? '12m';
   const included = useMemo(() => (params.get('tags') ?? '').split(',').filter(Boolean), [params]);
-  const picked = params.get('category');
 
   const [spend, setSpend] = useState<SpendRow[] | null>(null);
   const [flow, setFlow] = useState<FlowRow[]>([]);
@@ -98,55 +98,77 @@ export default function Trends() {
   const months = useMemo(() => monthsFor(range), [range]);
   const start = months[0].key;
   const end = todayIso();
-  const inRange = (month: string) => month >= start && month <= end;
 
-  // spending by category over the range, largest first
-  const byCategory = useMemo(() => {
+  /** Category totals for the months matching `keep`, largest first (positive only). */
+  const totalsBy = (keep: (month: string) => boolean) => {
     const totals = new Map<string, { key: string; name: string; value: number }>();
     for (const r of spend ?? []) {
-      if (!inRange(r.month)) continue;
+      if (!keep(r.month)) continue;
       const key = r.category_id ?? 'none';
       const t = totals.get(key) ?? { key, name: r.category_name ?? 'No category yet', value: 0 };
       t.value = Math.round((t.value + Number(r.spent)) * 100) / 100;
       totals.set(key, t);
     }
-    return [...totals.values()].filter((t) => t.value !== 0).sort((a, b) => b.value - a.value);
-  }, [spend, start, end]);
+    return [...totals.values()].filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
+  };
 
-  const category = byCategory.find((c) => c.key === picked) ?? byCategory[0];
-  const categoryMonths = months.map(
-    (m) => sum((spend ?? []).filter((r) => r.month === m.key && (r.category_id ?? 'none') === category?.key).map((r) => Number(r.spent))),
-  );
+  // the pie: one month (`?month=YYYY-MM`, default this month), whatever the range,
+  // stepping back as far as the earliest month with spending
+  const currentMonth = months[months.length - 1].key;
+  const earliestMonth = (spend ?? []).reduce((a, r) => (r.month < a ? r.month : a), currentMonth);
+  const asked = /^\d{4}-\d{2}$/.test(params.get('month') ?? '') ? `${params.get('month')}-01` : null;
+  const pieMonth = asked && asked <= currentMonth ? asked : currentMonth;
+  const pieDate = new Date(pieMonth + 'T12:00:00');
+  const pieMonthName = pieDate.toLocaleDateString('en-US', { month: 'long', ...(pieDate.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+  const pieMonthLong = pieDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  // every month with spending, newest first, for the heading's dropdown
+  const pieMonthOptions: { key: string; long: string }[] = [];
+  for (let d = new Date(currentMonth + 'T12:00:00'); iso(d) >= earliestMonth; d = new Date(d.getFullYear(), d.getMonth() - 1, 1, 12)) {
+    pieMonthOptions.push({ key: iso(d), long: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) });
+  }
+  const byCategory = useMemo(() => totalsBy((m) => m === pieMonth), [spend, pieMonth]);
+  const pieTotal = sum(byCategory.map((c) => c.value));
+  // tapping a category opens its months (over the page's range) in a modal
+  const [opened, setOpened] = useState<{ key: string; name: string } | null>(null);
 
   const flowFor = (key: string) => flow.find((f) => f.month === key);
   const income = months.map((m) => Number(flowFor(m.key)?.income ?? 0));
   const spending = months.map((m) => Number(flowFor(m.key)?.spending ?? 0));
-  const totalIncome = sum(income);
-  const totalSpending = sum(spending);
+  // the stat row follows the month picked for the pie
+  const monthIncome = Number(flowFor(pieMonth)?.income ?? 0);
+  const monthSpending = Number(flowFor(pieMonth)?.spending ?? 0);
 
-  // net worth: each synced account's latest snapshot on or before each day,
-  // plus manual accounts at their current balance (they keep no history)
+  // net worth, one point per month: each synced account's latest snapshot on or
+  // before the month's last day (today, for this month), plus manual accounts at
+  // their current balance (they keep no history). Months before the first
+  // snapshot are left out.
   const netWorth = useMemo(() => {
     const visible = new Set(accounts.filter((a) => !a.hidden).map((a) => a.id));
     const manual = sum(accounts.filter((a) => !a.hidden && a.connection_id === null).map((a) => Number(a.balance ?? 0)));
     const latest = new Map<string, number>();
-    const byDay = new Map<string, number>();
-    for (const s of snapshots) {
-      if (!visible.has(s.account_id)) continue;
-      latest.set(s.account_id, Number(s.balance));
-      if (s.date >= start) byDay.set(s.date, sum([...latest.values()]) + manual);
+    const synced = snapshots.filter((s) => visible.has(s.account_id)); // ordered by date
+    let i = 0;
+    const points: { date: string; long: string; value: number }[] = [];
+    for (const m of months) {
+      const asOf = monthEnd(m.key) < end ? monthEnd(m.key) : end;
+      for (; i < synced.length && synced[i].date <= asOf; i++) latest.set(synced[i].account_id, Number(synced[i].balance));
+      if (latest.size) points.push({ date: m.key, long: m.long, value: sum([...latest.values()]) + manual });
     }
-    const points = [...byDay.entries()].map(([date, value]) => ({ date, long: shortDate(date), value: Math.round(value * 100) / 100 }));
     if (points.length === 0 && accounts.length) {
-      points.push({ date: end, long: shortDate(end), value: sum(accounts.filter((a) => !a.hidden).map((a) => Number(a.balance ?? 0))) });
+      const now = months[months.length - 1];
+      points.push({ date: now.key, long: now.long, value: sum(accounts.filter((a) => !a.hidden).map((a) => Number(a.balance ?? 0))) });
     }
-    return { points, hasManual: accounts.some((a) => !a.hidden && a.connection_id === null) };
-  }, [snapshots, accounts, start, end]);
-  const nwFirst = netWorth.points[0];
+    return { points };
+  }, [snapshots, accounts, months, end]);
   const nwLast = netWorth.points[netWorth.points.length - 1];
 
   function set(next: Record<string, string | null>) {
-    const merged = { range: range === '12m' ? null : range, tags: included.join(',') || null, category: picked, ...next };
+    const merged = {
+      range: range === '12m' ? null : range,
+      tags: included.join(',') || null,
+      month: params.get('month'),
+      ...next,
+    };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
@@ -166,15 +188,8 @@ export default function Trends() {
       </header>
       {error && <p className="error" role="alert">{error}</p>}
 
-      <div className="trend-filters">
-        <div className="filter" role="group" aria-label="Months">
-          {RANGES.map((r) => (
-            <Button key={r.key} size="small" aria-pressed={range === r.key} onClick={() => set({ range: r.key === '12m' ? null : r.key })}>
-              {r.label}
-            </Button>
-          ))}
-        </div>
-        {tags.length > 0 && (
+      {tags.length > 0 && (
+        <div className="trend-filters">
           <div className="filter tag-toggles" role="group" aria-label="Include tagged spending">
             <span className="muted small">Include tagged:</span>
             {tags.map((t) => (
@@ -183,95 +198,63 @@ export default function Trends() {
               </Button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className={loading && spend ? 'trends refetching' : 'trends'}>
+        <h2>
+          Spending in{' '}
+          <select
+            className="heading-select"
+            aria-label="Month"
+            value={pieMonth}
+            onChange={(e) => set({ month: e.target.value === currentMonth ? null : e.target.value.slice(0, 7) })}
+          >
+            {pieMonthOptions.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.long}
+              </option>
+            ))}
+          </select>
+        </h2>
         <dl className="stat-row">
           <div>
             <dt>Spent</dt>
-            <dd>{money(totalSpending)}</dd>
+            <dd>{money(monthSpending)}</dd>
           </div>
           <div>
             <dt>Income</dt>
-            <dd>{money(totalIncome)}</dd>
+            <dd>{money(monthIncome)}</dd>
           </div>
           <div>
-            <dt>{totalIncome - totalSpending >= 0 ? 'Saved' : 'Spent more than earned'}</dt>
-            <dd>{money(Math.abs(totalIncome - totalSpending))}</dd>
+            <dt>{monthIncome - monthSpending >= 0 ? 'Saved' : 'Spent more than earned'}</dt>
+            <dd>{money(Math.abs(monthIncome - monthSpending))}</dd>
           </div>
         </dl>
-        <p className="muted small">
-          Your share of spending ({rangeLabel}), after what people owe you back. Transfers are left out
-          {tags.length ? ', and so is tagged spending unless you include its tag above' : ''}. Unreviewed transactions with a
-          category count too.
-        </p>
-
-        <h2>Spending by category</h2>
-        {spend && byCategory.length === 0 && <p className="empty">No spending in these months yet.</p>}
+        {spend && byCategory.length === 0 && <p className="empty">No spending in {pieMonthLong}.</p>}
         {byCategory.length > 0 && (
           <>
-            <p className="muted small">Pick a category to see it month by month below.</p>
-            <RankedBars
+            <CategoryPie
               rows={byCategory}
-              color={SPENDING}
               format={money}
-              selected={category?.key}
+              total={pieTotal}
+              totalLabel={`spent in ${pieMonthName}`}
+              label={`Spending by category, ${pieMonthLong}`}
               selectHint="Shows it month by month"
-              onSelect={(key) => {
-                set({ category: key });
-                document.getElementById('category-by-month')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
+              onSelect={(key) => setOpened(byCategory.find((c) => c.key === key) ?? null)}
             />
           </>
         )}
 
-        {category && (
-          <>
-            <h2 id="category-by-month">
-              {category.name} by month
-            </h2>
-            <p className="muted small">
-              {money(sum(categoryMonths))} {rangeLabel}, {money(sum(categoryMonths) / months.length)} a month on average. Pick a
-              month to see its transactions, or{' '}
-              <Link
-                to={`/transactions?${new URLSearchParams({ status: 'all', category: category.key, from: start, to: end })}`}
-              >
-                see all of them
-              </Link>
-              .
-            </p>
-            <MonthColumns
-              months={months}
-              series={[{ name: category.name, color: SPENDING, values: categoryMonths }]}
-              format={money}
-              label={`${category.name} spending by month`}
-              selectHint="Opens its transactions"
-              onSelect={(key) => openTransactions({ category: category.key, from: key, to: monthEnd(key) })}
-            />
-            <TableView>
-              <table className="register">
-                <thead>
-                  <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col" className="num">{category.name}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {months.map((m, i) => (
-                    <tr key={m.key}>
-                      <td>{m.long}</td>
-                      <td className="num">{money(categoryMonths[i])}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableView>
-          </>
-        )}
+        <div className="filter range-filter" role="group" aria-label="Months">
+          {RANGES.map((r) => (
+            <Button key={r.key} size="small" aria-pressed={range === r.key} onClick={() => set({ range: r.key === '12m' ? null : r.key })}>
+              {r.label}
+            </Button>
+          ))}
+        </div>
 
         <h2>Cash flow</h2>
-        <p className="muted small">Income and spending each month. Pick a month to see its transactions.</p>
         <Legend shape="rect" items={[{ name: 'Income', color: INCOME }, { name: 'Spending', color: SPENDING }]} />
         <MonthColumns
           months={months}
@@ -284,62 +267,11 @@ export default function Trends() {
           selectHint="Opens its transactions"
           onSelect={(key) => openTransactions({ from: key, to: monthEnd(key) })}
         />
-        <TableView>
-          <table className="register">
-            <thead>
-              <tr>
-                <th scope="col">Month</th>
-                <th scope="col" className="num">Income</th>
-                <th scope="col" className="num">Spending</th>
-                <th scope="col" className="num">Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {months.map((m, i) => (
-                <tr key={m.key}>
-                  <td>{m.long}</td>
-                  <td className="num">{money(income[i])}</td>
-                  <td className="num">{money(spending[i])}</td>
-                  <td className="num">{money(income[i] - spending[i])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableView>
 
         <h2>Net worth</h2>
         {nwLast ? (
           <>
-            <p className="muted small">
-              {money(nwLast.value)} now
-              {nwFirst && nwFirst !== nwLast
-                ? `, ${nwLast.value >= nwFirst.value ? 'up' : 'down'} ${money(Math.abs(nwLast.value - nwFirst.value))} since ${nwFirst.long}`
-                : ''}
-              . Cash and investments minus card balances, from the daily sync’s balance history
-              {netWorth.hasManual ? '; manual accounts count at their current balance throughout' : ''}.
-            </p>
-            <TimeLine points={netWorth.points} color={INCOME} format={money} label="Net worth over time" />
-            {netWorth.points.length < 2 && (
-              <p className="muted small">The line grows one point a day as the daily sync records balances.</p>
-            )}
-            <TableView>
-              <table className="register">
-                <thead>
-                  <tr>
-                    <th scope="col">Date</th>
-                    <th scope="col" className="num">Net worth</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...netWorth.points].reverse().map((p) => (
-                    <tr key={p.date}>
-                      <td>{p.long}</td>
-                      <td className="num">{money(p.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableView>
+            <TimeLine points={netWorth.points} color={INCOME} format={money} label="Net worth by month" />
           </>
         ) : (
           <p className="empty">No balances yet. They appear after the first sync.</p>
@@ -348,7 +280,6 @@ export default function Trends() {
         {tags.length > 0 && (
           <>
             <h2>Tags</h2>
-            <p className="muted small">Total cost of each tag, all time (your share, after reimbursements).</p>
             <table className="register tag-totals">
               <thead>
                 <tr>
@@ -374,6 +305,75 @@ export default function Trends() {
           </>
         )}
       </div>
+
+      {opened && (
+        <CategoryMonths
+          category={opened}
+          months={months}
+          spend={spend ?? []}
+          rangeLabel={rangeLabel}
+          start={start}
+          end={end}
+          onClose={() => setOpened(null)}
+          onOpenMonth={(key) => openTransactions({ category: opened.key, from: key, to: monthEnd(key) })}
+        />
+      )}
     </section>
+  );
+}
+
+/** A category's spending month by month over the page's range, in a modal. */
+function CategoryMonths({
+  category,
+  months,
+  spend,
+  rangeLabel,
+  start,
+  end,
+  onClose,
+  onOpenMonth,
+}: {
+  category: { key: string; name: string };
+  months: { key: string; short: string; long: string }[];
+  spend: SpendRow[];
+  rangeLabel: string;
+  start: string;
+  end: string;
+  onClose: () => void;
+  onOpenMonth: (monthKey: string) => void;
+}) {
+  const values = months.map((m) =>
+    sum(spend.filter((r) => r.month === m.key && (r.category_id ?? 'none') === category.key).map((r) => Number(r.spent))),
+  );
+  const total = sum(values);
+  return (
+    <Modal labelledBy="category-months-title" onClose={onClose} className="modal-wide">
+      {(close) => (
+        <>
+          <div className="modal-head">
+            <h2 id="category-months-title">{category.name} by month</h2>
+            <Button variant="icon" aria-label="Close" onClick={close}>
+              ×
+            </Button>
+          </div>
+          <p className="muted small">
+            {money(total)} {rangeLabel}, {money(total / months.length)} a month on average. Pick a month to see its
+            transactions, or{' '}
+            <Link to={`/transactions?${new URLSearchParams({ status: 'all', category: category.key, from: start, to: end })}`}>
+              see all of them
+            </Link>
+            .
+          </p>
+          <MonthColumns
+            months={months}
+            series={[{ name: category.name, color: SPENDING, values }]}
+            format={money}
+            label={`${category.name} spending by month`}
+            selectHint="Opens its transactions"
+            onSelect={onOpenMonth}
+          />
+        </>
+      )}
+    </Modal>
   );
 }

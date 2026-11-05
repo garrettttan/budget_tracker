@@ -10,11 +10,14 @@ export default function Modal({
   labelledBy,
   busy = false,
   onClose,
+  className,
   children,
 }: {
   labelledBy: string; // id of the modal's heading
   busy?: boolean;
   onClose: () => void;
+  /** extra class, e.g. modal-wide for a chart */
+  className?: string;
   children: (close: () => void) => ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -28,7 +31,7 @@ export default function Modal({
   return (
     <dialog
       ref={dialog}
-      className="modal"
+      className={className ? `modal ${className}` : 'modal'}
       aria-labelledby={labelledBy}
       onClose={onClose}
       onCancel={(e) => busy && e.preventDefault()}

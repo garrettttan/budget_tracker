@@ -45,15 +45,17 @@ record money in as "Pays back Sam" (a Venmo payment), which links it. A linked p
 (`/owed`) lists open items by person (Received for cash, Write off, × to stop expecting) and
 the last 30 settled ones (Reopen).
 
-**Phase 5 (Trends): done** (Nov 4). `/trends`: one filter row (Last 12 months / This year /
-6 / 3 months via `?range=`; "Include tagged" toggles via `?tags=`) scopes everything: Spent /
-Income / Saved; spending by category as ranked bars (pick one → `?category=`); that category by
-month; cash flow (income vs spending columns); net worth (synced accounts' latest
-`balance_snapshots` per day + manual accounts at their current balance); tag totals
-(`tag_spend`, all time). Clicking a month opens Transactions filtered with `?status=all&category=
-&from=&to=` (a "Showing Dining · September 2026" banner clears it). Charts are hand-rolled SVG in
-`src/components/charts.tsx` (no chart library): hover and keyboard focus show a tooltip, and
-every chart has "Show as table".
+**Phase 5 (Trends): done** (Nov 4; cleaned up Nov 4). `/trends`, top to bottom: "Include tagged"
+toggles (`?tags=`, scope everything); **Spending in [month ▾]** (a heading dropdown, `?month=YYYY-MM`,
+default this month): Spent / Income / Saved for that month and a category donut with a ranked list
+(six colored slices, the rest fold into gray "Other"); tapping a category opens a modal with that
+category by month. Then the range buttons (Last 12 months / This year / 6 / 3 months, `?range=`)
+scoping cash flow (income vs spending columns), net worth (one point per month: synced accounts'
+latest `balance_snapshots` on or before month end + manual accounts at their current balance) and the
+category modal; then tag totals (`tag_spend`, all time). Clicking a month opens Transactions filtered
+with `?status=all&category=&from=&to=` (a "Showing Dining · September 2026" banner clears it). Charts
+are hand-rolled SVG in `src/components/charts.tsx` (no chart library): hover and keyboard focus show a
+tooltip. Garrett removed the explanatory text and "Show as table" views on purpose; don't add them back.
 
 **Next: phase 6, Backfill** (CSV/OFX import from Jan 1 2026, dedupe, undo).
 
@@ -228,8 +230,9 @@ Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accen
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.
 Chart series: `--viz-income` teal `#00919C` (dark `#1C9AA3`) and `--viz-spending` orange
 `#C25A22` (dark `#D2702F`), checked with the dataviz palette validator (color-blind separation,
-contrast) on both surfaces. Don't chart the outflow/inflow red and green as two series: they
-fail the color-blind check.
+contrast) on both surfaces. Pie slices use `--viz-cat-1..6` (blue, orange, aqua, yellow,
+magenta, green, in that order) + `--viz-cat-other` gray, also validated. Don't chart the
+outflow/inflow red and green as two series: they fail the color-blind check.
 Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
 rules, no cards. The to-review count on Transactions is the one large element. Avoid all-caps labels.
 
