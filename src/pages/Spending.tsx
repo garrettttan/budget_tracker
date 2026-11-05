@@ -409,12 +409,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  /** A pie category narrows the list to it for the month; picking it again clears it. */
-  const pickCategory = (key: string) =>
-    setFilters(category === key ? { category: null } : { category: key, status: 'all', from: null, to: null });
-
-  // names for the "Hiding …" banner, categories first
-
   // the column header filters; while they hide something the table (and its headers) stays even if empty
   const hiding = hideCategories.length > 0 || hideTags.length > 0 || status !== 'all';
   // Approved column: both ticked = All (`?status=` absent); one unticked = To review or Approved only
@@ -442,6 +436,11 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const onlyCategory = (key: string) =>
     // every key, not just this range's, so switching months still shows only this one
     setFilters({ category: null, hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
+  // the one category left showing, if just one is (the pie highlights it)
+  const visibleCategories = allCategoryItems.filter((i) => !hideCategories.includes(i.id));
+  const onlyKey = hideCategories.length > 0 && visibleCategories.length === 1 ? visibleCategories[0].id : null;
+  /** A pie category: the same as its Only in the Category header; tapping it again shows every category. */
+  const pickCategory = (key: string) => (onlyKey === key ? setFilters({ category: null, hidecat: null }) : onlyCategory(key));
   /** Only one tag: the show-one-tag filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
     id === UNTAGGED
@@ -736,7 +735,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       <MonthSpending
         month={month}
         current={current}
-        selected={category}
+        selected={category ?? onlyKey}
         hidden={category ? [] : hideCategories}
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7), from: null, to: null })}
