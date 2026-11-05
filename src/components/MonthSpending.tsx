@@ -17,6 +17,7 @@ export default function MonthSpending({
   month,
   current,
   selected,
+  hidden,
   version,
   onMonth,
   onSelect,
@@ -27,6 +28,8 @@ export default function MonthSpending({
   /** this month, YYYY-MM-01 */
   current: string;
   selected: string | null;
+  /** category keys to leave out of the pie and Spent */
+  hidden: string[];
   version: number;
   onMonth: (key: string) => void;
   onSelect: (key: string, name: string) => void;
@@ -60,7 +63,8 @@ export default function MonthSpending({
     return list;
   }, [spend, month, current]);
 
-  const byCategory = useMemo(() => {
+  // every category's total for the month, hidden ones included (Spent subtracts them)
+  const allCategories = useMemo(() => {
     const totals = new Map<string, { key: string; name: string; value: number }>();
     for (const r of spend ?? []) {
       if (r.month !== month) continue;
@@ -69,12 +73,14 @@ export default function MonthSpending({
       t.value = Math.round((t.value + Number(r.spent)) * 100) / 100;
       totals.set(key, t);
     }
-    return [...totals.values()].filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
+    return [...totals.values()];
   }, [spend, month]);
+  const byCategory = allCategories.filter((t) => t.value > 0 && !hidden.includes(t.key)).sort((a, b) => b.value - a.value);
+  const hiddenSpent = sum(allCategories.filter((t) => hidden.includes(t.key)).map((t) => t.value));
 
   const flowRow = flow.find((f) => f.month === month);
   const income = Number(flowRow?.income ?? 0);
-  const spending = Number(flowRow?.spending ?? 0);
+  const spending = Number(flowRow?.spending ?? 0) - hiddenSpent;
   const date = new Date(month + 'T12:00:00');
   const shortName = date.toLocaleDateString('en-US', {
     month: 'long',

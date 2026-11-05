@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate } from '../lib/format';
@@ -20,6 +20,7 @@ import {
 } from '../components/RowReimbursements';
 import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
 import MonthSpending from '../components/MonthSpending';
+import FilterPanel, { NO_CATEGORY, TRANSFER_KEY } from '../components/FilterPanel';
 import { type OpenItem, fetchOpen, personKey, suggestFor } from '../lib/reimbursements';
 import { monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
 
@@ -56,8 +57,31 @@ const COLUMNS =
   'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
   'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
 
-/** Narrower views: one category (or 'none' = no category yet) and a date range. */
-type Scope = { category: string | null; start: string | null; end: string | null };
+/**
+ * Narrower views: one category (or 'none' = no category yet), a date range,
+ * and categories / tags to hide (an explicit category overrides hidden ones).
+ */
+type Scope = { category: string | null; start: string | null; end: string | null; hideCategories: string[]; hideTags: string[] };
+
+/** PostgREST `or` filter keeping rows outside the hidden categories ('none' and 'transfer' included); null if none hidden. */
+function keepCategories(hidden: string[]): string | null {
+  if (hidden.length === 0) return null;
+  const ids = hidden.filter((h) => h !== NO_CATEGORY && h !== TRANSFER_KEY);
+  // transfers have no category, so each kind of row gets its own branch
+  return [
+    hidden.includes(TRANSFER_KEY) ? null : 'is_transfer.eq.true',
+    hidden.includes(NO_CATEGORY) ? null : 'and(category_id.is.null,is_transfer.eq.false)',
+    ids.length ? `category_id.not.in.(${ids.join(',')})` : 'category_id.not.is.null',
+  ]
+    .filter(Boolean)
+    .join(',');
+}
+
+/** The same rule for rows already loaded (pending ones). */
+function shownCategory(r: { category_id: string | null; is_transfer: boolean }, hidden: string[]) {
+  const key = r.is_transfer ? TRANSFER_KEY : (r.category_id ?? NO_CATEGORY);
+  return !hidden.includes(key);
+}
 
 /**
  * Posted rows only: pending ones have their own section. With a tag, a second,
@@ -65,11 +89,20 @@ type Scope = { category: string | null; start: string | null; end: string | null
  * still lists all of each row's tags.
  */
 function fetchRows(status: Status, tag: string | null, scope: Scope, from: number, to: number) {
+  const embeds = [
+    COLUMNS,
+    tag ? 'tag_filter:transaction_tags!inner(tag_id)' : null,
+    // anti-join: rows whose hidden_tags embed comes back empty carry none of them
+    scope.hideTags.length ? 'hidden_tags:transaction_tags!left(tag_id)' : null,
+  ];
   let q = db()
     .from('transactions')
-    .select(tag ? `${COLUMNS}, tag_filter:transaction_tags!inner(tag_id)` : COLUMNS)
+    .select(embeds.filter(Boolean).join(', '))
     .eq('pending', false);
   if (tag) q = q.eq('tag_filter.tag_id', tag);
+  if (scope.hideTags.length) q = q.in('hidden_tags.tag_id', scope.hideTags).is('hidden_tags', null);
+  const keep = scope.category ? null : keepCategories(scope.hideCategories);
+  if (keep) q = q.or(keep);
   if (scope.category === 'none') q = q.is('category_id', null).eq('is_transfer', false);
   else if (scope.category) q = q.eq('category_id', scope.category);
   if (scope.start) q = q.gte('posted_date', scope.start);
@@ -132,6 +165,10 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const end = params.get('to') ?? (monthScoped ? monthEnd(month) : null);
   // category or explicit dates: pending rows and suggestions don't apply
   const scoped = Boolean(category || params.get('from') || params.get('to'));
+  const hidecat = params.get('hidecat') ?? '';
+  const hidetag = params.get('hidetag') ?? '';
+  const hideCategories = useMemo(() => hidecat.split(',').filter(Boolean), [hidecat]);
+  const hideTags = useMemo(() => hidetag.split(',').filter(Boolean), [hidetag]);
   // bumped after edits so the month's totals follow them
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
@@ -184,7 +221,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       const none = Promise.resolve({ data: [], error: null });
       const reviewing = status !== 'approved' && !tagFilter && !scoped;
       const [t, p, s, o, w, m] = await Promise.all([
-        fetchRows(status, tagFilter, { category, start, end }, 0, size - 1),
+        fetchRows(status, tagFilter, { category, start, end, hideCategories, hideTags }, 0, size - 1),
         // pending rows can't carry tags, so a tag filter leaves them out
         status === 'approved' || tagFilter || scoped ? none : fetchPending(),
         status === 'approved' || tagFilter || scoped
@@ -231,10 +268,11 @@ export default function Spending({ count, onChange }: { count: number | null; on
       // drop selected rows that left the list (approved out of To review, untagged out of a tag filter)
       const visible = new Set(loaded.map((r) => r.id));
       setSelected((sel) => (sel.size && [...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
-      setPending((p.data ?? []) as unknown as Row[]);
+      // pending rows carry no tags, so only hidden categories apply
+      setPending(((p.data ?? []) as unknown as Row[]).filter((r) => category || shownCategory(r, hideCategories)));
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
-    [status, tagFilter, category, start, end, scoped],
+    [status, tagFilter, category, start, end, scoped, hideCategories, hideTags],
   );
 
   // categories first, so rows never flash an empty picker
@@ -249,7 +287,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   async function loadMore() {
     const from = rows?.length ?? 0;
     setBusy(true);
-    const { data, error } = await fetchRows(status, tagFilter, { category, start, end }, from, from + PAGE - 1);
+    const { data, error } = await fetchRows(status, tagFilter, { category, start, end, hideCategories, hideTags }, from, from + PAGE - 1);
     if (error) setError(error.message);
     else {
       setRows((rs) => [...(rs ?? []), ...((data ?? []) as unknown as Row[])]);
@@ -303,7 +341,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
     act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
 
   /** Changes the filters in the URL; a filter left out keeps its value, null clears it. */
-  function setFilters(next: Partial<Record<'status' | 'tag' | 'category' | 'from' | 'to' | 'month', string | null>>) {
+  function setFilters(next: Partial<Record<'status' | 'tag' | 'category' | 'from' | 'to' | 'month' | 'hidecat' | 'hidetag', string | null>>) {
     setNotice(null);
     setError(null);
     const merged = {
@@ -313,6 +351,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
       from: params.get('from'),
       to: params.get('to'),
       month: params.get('month'),
+      hidecat: hidecat || null,
+      hidetag: hidetag || null,
       ...next,
     };
     if (merged.status === 'review') merged.status = null;
@@ -322,6 +362,14 @@ export default function Spending({ count, onChange }: { count: number | null; on
   /** A pie category narrows the list to it for the month; picking it again clears it. */
   const pickCategory = (key: string) =>
     setFilters(category === key ? { category: null } : { category: key, status: 'all', from: null, to: null });
+
+  // names for the "Hiding …" banner, categories first
+  const hiddenNames = [
+    ...hideCategories.map((id) =>
+      id === NO_CATEGORY ? 'No category yet' : id === TRANSFER_KEY ? 'Transfer' : (categories?.find((c) => c.id === id)?.name ?? 'A category'),
+    ),
+    ...hideTags.map((id) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag'),
+  ];
 
   /** "Dining · October 2026" for the banner. */
   function scopeLabel() {
@@ -614,6 +662,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
         month={month}
         current={current}
         selected={category}
+        hidden={category ? [] : hideCategories}
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7), from: null, to: null })}
         onSelect={pickCategory}
@@ -626,7 +675,23 @@ export default function Spending({ count, onChange }: { count: number | null; on
             {s === 'review' ? `To review${count ? ` (${count})` : ''}` : s === 'approved' ? 'Approved' : 'All'}
           </Button>
         ))}
+        <FilterPanel
+          categories={categories ?? []}
+          tags={tags}
+          hiddenCategories={hideCategories}
+          hiddenTags={hideTags}
+          onChange={(next) => setFilters({ hidecat: next.categories.join(',') || null, hidetag: next.tags.join(',') || null })}
+        />
       </div>
+
+      {hiddenNames.length > 0 && (
+        <p className="tag-filter">
+          Hiding <strong>{hiddenNames.join(', ')}</strong>
+          <Button variant="link" onClick={() => setFilters({ hidecat: null, hidetag: null })}>
+            Show all
+          </Button>
+        </p>
+      )}
 
       {scoped && (
         <p className="tag-filter">
