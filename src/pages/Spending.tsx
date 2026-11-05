@@ -154,7 +154,7 @@ function savePendingOpen(open: boolean) {
  */
 export default function Spending({ count, onChange }: { count: number | null; onChange: () => Promise<void> }) {
   const [params, setParams] = useSearchParams();
-  const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'review';
+  const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'all';
   const tagFilter = params.get('tag');
   const category = params.get('category');
   const current = thisMonth();
@@ -345,7 +345,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
     setNotice(null);
     setError(null);
     const merged = {
-      status: status === 'review' ? null : status,
+      status: status === 'all' ? null : status,
       tag: tagFilter,
       category,
       from: params.get('from'),
@@ -355,7 +355,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       hidetag: hidetag || null,
       ...next,
     };
-    if (merged.status === 'review') merged.status = null;
+    if (merged.status === 'all') merged.status = null; // the default
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
