@@ -88,7 +88,7 @@ export default function Owed() {
 
       {items && open.length === 0 && (
         <p className="empty">
-          Nobody owes you anything. On <Link to="/transactions">Transactions</Link>, open a charge’s details and choose
+          Nobody owes you anything. On <Link to="/spending">Spending</Link>, open a charge’s details and choose
           Expect reimbursement when someone owes you part of it.
         </p>
       )}

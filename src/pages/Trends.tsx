@@ -4,7 +4,8 @@ import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
-import { CategoryPie, Legend, MonthColumns, TimeLine } from '../components/charts';
+import { Legend, MonthColumns, TimeLine } from '../components/charts';
+import { iso, monthEnd, sum } from '../lib/months';
 
 const INCOME = 'var(--viz-income)';
 const SPENDING = 'var(--viz-spending)';
@@ -23,12 +24,6 @@ type TagTotal = { tag_id: string; name: string; spent: string; transaction_count
 type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const monthEnd = (key: string) => {
-  const d = new Date(key + 'T12:00:00');
-  return iso(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12));
-};
-
 /** The months a range covers, oldest first, as YYYY-MM-01 keys (the current month included). */
 function monthsFor(range: RangeKey) {
   const now = new Date();
@@ -44,11 +39,10 @@ function monthsFor(range: RangeKey) {
   });
 }
 
-const sum = (ns: number[]) => Math.round(ns.reduce((a, b) => a + b, 0) * 100) / 100;
-
 /**
- * Trends: where the money went over a range of months. Everything below the
- * filter row uses the same months and tag toggles. Spending is your share
+ * Trends: where the money went over a range of months (a single month's
+ * category split is on Spending). Everything uses the same months and tag
+ * toggles. Spending is your share
  * (net of reimbursements), excludes transfers, and leaves out tagged spending
  * unless its tag is toggled on.
  */
@@ -112,31 +106,13 @@ export default function Trends() {
     return [...totals.values()].filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
   };
 
-  // the pie: one month (`?month=YYYY-MM`, default this month), whatever the range,
-  // stepping back as far as the earliest month with spending
-  const currentMonth = months[months.length - 1].key;
-  const earliestMonth = (spend ?? []).reduce((a, r) => (r.month < a ? r.month : a), currentMonth);
-  const asked = /^\d{4}-\d{2}$/.test(params.get('month') ?? '') ? `${params.get('month')}-01` : null;
-  const pieMonth = asked && asked <= currentMonth ? asked : currentMonth;
-  const pieDate = new Date(pieMonth + 'T12:00:00');
-  const pieMonthName = pieDate.toLocaleDateString('en-US', { month: 'long', ...(pieDate.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
-  const pieMonthLong = pieDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  // every month with spending, newest first, for the heading's dropdown
-  const pieMonthOptions: { key: string; long: string }[] = [];
-  for (let d = new Date(currentMonth + 'T12:00:00'); iso(d) >= earliestMonth; d = new Date(d.getFullYear(), d.getMonth() - 1, 1, 12)) {
-    pieMonthOptions.push({ key: iso(d), long: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) });
-  }
-  const byCategory = useMemo(() => totalsBy((m) => m === pieMonth), [spend, pieMonth]);
-  const pieTotal = sum(byCategory.map((c) => c.value));
+  const byCategory = useMemo(() => totalsBy((m) => m >= start), [spend, start]);
   // tapping a category opens its months (over the page's range) in a modal
   const [opened, setOpened] = useState<{ key: string; name: string } | null>(null);
 
   const flowFor = (key: string) => flow.find((f) => f.month === key);
   const income = months.map((m) => Number(flowFor(m.key)?.income ?? 0));
   const spending = months.map((m) => Number(flowFor(m.key)?.spending ?? 0));
-  // the stat row follows the month picked for the pie
-  const monthIncome = Number(flowFor(pieMonth)?.income ?? 0);
-  const monthSpending = Number(flowFor(pieMonth)?.spending ?? 0);
 
   // net worth, one point per month: each synced account's latest snapshot on or
   // before the month's last day (today, for this month), plus manual accounts at
@@ -166,7 +142,6 @@ export default function Trends() {
     const merged = {
       range: range === '12m' ? null : range,
       tags: included.join(',') || null,
-      month: params.get('month'),
       ...next,
     };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
@@ -175,9 +150,9 @@ export default function Trends() {
   const toggleTag = (id: string) =>
     set({ tags: (included.includes(id) ? included.filter((t) => t !== id) : [...included, id]).join(',') || null });
 
-  /** Opens Transactions on the matching rows. */
-  const openTransactions = (extra: Record<string, string>) =>
-    navigate(`/transactions?${new URLSearchParams({ status: 'all', ...extra }).toString()}`);
+  /** Opens Spending on a month's rows (`YYYY-MM-01`), optionally one category. */
+  const openMonth = (key: string, category?: string) =>
+    navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7), ...(category ? { category } : {}) })}`);
 
   const rangeLabel = RANGES.find((r) => r.key === range)!.label.toLowerCase();
 
@@ -188,8 +163,15 @@ export default function Trends() {
       </header>
       {error && <p className="error" role="alert">{error}</p>}
 
-      {tags.length > 0 && (
-        <div className="trend-filters">
+      <div className="trend-filters">
+        <div className="filter range-filter" role="group" aria-label="Months">
+          {RANGES.map((r) => (
+            <Button key={r.key} size="small" aria-pressed={range === r.key} onClick={() => set({ range: r.key === '12m' ? null : r.key })}>
+              {r.label}
+            </Button>
+          ))}
+        </div>
+        {tags.length > 0 && (
           <div className="filter tag-toggles" role="group" aria-label="Include tagged spending">
             <span className="muted small">Include tagged:</span>
             {tags.map((t) => (
@@ -198,62 +180,10 @@ export default function Trends() {
               </Button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className={loading && spend ? 'trends refetching' : 'trends'}>
-        <h2>
-          Spending in{' '}
-          <select
-            className="heading-select"
-            aria-label="Month"
-            value={pieMonth}
-            onChange={(e) => set({ month: e.target.value === currentMonth ? null : e.target.value.slice(0, 7) })}
-          >
-            {pieMonthOptions.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.long}
-              </option>
-            ))}
-          </select>
-        </h2>
-        <dl className="stat-row">
-          <div>
-            <dt>Spent</dt>
-            <dd>{money(monthSpending)}</dd>
-          </div>
-          <div>
-            <dt>Income</dt>
-            <dd>{money(monthIncome)}</dd>
-          </div>
-          <div>
-            <dt>{monthIncome - monthSpending >= 0 ? 'Saved' : 'Spent more than earned'}</dt>
-            <dd>{money(Math.abs(monthIncome - monthSpending))}</dd>
-          </div>
-        </dl>
-        {spend && byCategory.length === 0 && <p className="empty">No spending in {pieMonthLong}.</p>}
-        {byCategory.length > 0 && (
-          <>
-            <CategoryPie
-              rows={byCategory}
-              format={money}
-              total={pieTotal}
-              totalLabel={`spent in ${pieMonthName}`}
-              label={`Spending by category, ${pieMonthLong}`}
-              selectHint="Shows it month by month"
-              onSelect={(key) => setOpened(byCategory.find((c) => c.key === key) ?? null)}
-            />
-          </>
-        )}
-
-        <div className="filter range-filter" role="group" aria-label="Months">
-          {RANGES.map((r) => (
-            <Button key={r.key} size="small" aria-pressed={range === r.key} onClick={() => set({ range: r.key === '12m' ? null : r.key })}>
-              {r.label}
-            </Button>
-          ))}
-        </div>
-
         <h2>Cash flow</h2>
         <Legend shape="rect" items={[{ name: 'Income', color: INCOME }, { name: 'Spending', color: SPENDING }]} />
         <MonthColumns
@@ -265,8 +195,36 @@ export default function Trends() {
           format={money}
           label="Income and spending by month"
           selectHint="Opens its transactions"
-          onSelect={(key) => openTransactions({ from: key, to: monthEnd(key) })}
+          onSelect={(key) => openMonth(key)}
         />
+
+        {byCategory.length > 0 && (
+          <>
+            <h2>Categories</h2>
+            <table className="register category-totals">
+              <thead>
+                <tr>
+                  <th scope="col">Category</th>
+                  <th scope="col" className="num">Avg / month</th>
+                  <th scope="col" className="num">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byCategory.map((c) => (
+                  <tr key={c.key}>
+                    <td>
+                      <Button variant="link" onClick={() => setOpened(c)}>
+                        {c.name}
+                      </Button>
+                    </td>
+                    <td className="num">{money(c.value / months.length)}</td>
+                    <td className="num">{money(c.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
 
         <h2>Net worth</h2>
         {nwLast ? (
@@ -293,7 +251,7 @@ export default function Trends() {
                 {tags.map((t) => (
                   <tr key={t.tag_id}>
                     <td>
-                      <Link to={`/transactions?status=all&tag=${t.tag_id}`}>{t.name}</Link>
+                      <Link to={`/spending?status=all&tag=${t.tag_id}`}>{t.name}</Link>
                     </td>
                     <td>{t.first_date ? `${shortDate(t.first_date)} – ${shortDate(t.last_date)}` : '—'}</td>
                     <td className="num">{t.transaction_count}</td>
@@ -315,7 +273,7 @@ export default function Trends() {
           start={start}
           end={end}
           onClose={() => setOpened(null)}
-          onOpenMonth={(key) => openTransactions({ category: opened.key, from: key, to: monthEnd(key) })}
+          onOpenMonth={(key) => openMonth(key, opened.key)}
         />
       )}
     </section>
@@ -359,7 +317,7 @@ function CategoryMonths({
           <p className="muted small">
             {money(total)} {rangeLabel}, {money(total / months.length)} a month on average. Pick a month to see its
             transactions, or{' '}
-            <Link to={`/transactions?${new URLSearchParams({ status: 'all', category: category.key, from: start, to: end })}`}>
+            <Link to={`/spending?${new URLSearchParams({ status: 'all', category: category.key, from: start, to: end })}`}>
               see all of them
             </Link>
             .
