@@ -204,6 +204,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const latestReload = useRef(0);
+  // the list fades while new rows load (only if it takes a moment: see .refetching)
+  const [reloading, setReloading] = useState(false);
   // what the range holds, for the header filters (null until loaded: everything is listed)
   const [present, setPresent] = useState<Present | null>(null);
   const [pending, setPending] = useState<Row[]>([]);
@@ -251,6 +253,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
     async (size: number) => {
       // a later reload (e.g. the next filter tap) wins, even if this one answers last
       const mine = ++latestReload.current;
+      setReloading(true);
       const none = Promise.resolve({ data: [], error: null });
       const reviewing = status !== 'approved' && !tagFilter && !scoped;
       const [t, p, s, o, w, m, h] = await Promise.all([
@@ -282,6 +285,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       if (h.error) setError(h.error.message);
       setPresent(h.present);
       if (mine !== latestReload.current) return;
+      setReloading(false);
       const failed = t.error ?? p.error ?? s.error ?? w.error ?? m.error;
       if (failed) setError(failed.message);
       if (o.error) setError(o.error);
@@ -324,8 +328,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // categories first, so rows never flash an empty picker
   useEffect(() => {
     if (!categories) return;
-    // the rows on screen stay until the new ones arrive, so the header filters stay open
-    setPending([]);
+    // the rows on screen (pending ones too) stay until the new ones arrive: no blink, and an open header filter stays open
     setSelected(new Set());
     reload(PAGE);
   }, [categories, reload]);
@@ -739,15 +742,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
       />
 
 
-      {hiding && (
-        <p className="tag-filter">
-          Filters are on.
-          <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
-            Show all
-          </Button>
-        </p>
-      )}
-
       {scoped && (
         <p className="tag-filter">
           Showing <strong>{scopeLabel()}</strong>
@@ -821,7 +815,18 @@ export default function Spending({ count, onChange }: { count: number | null; on
       {/* always the table, so its header filters (Approved, Category, Tags) are reachable even when empty */}
       {rows && (
         <>
-          <h2>Transactions</h2>
+          {/* the filter note sits beside the heading, so turning a filter on doesn't push the list down */}
+          <div className="list-head">
+            <h2>Transactions</h2>
+            {hiding && (
+              <p className="filters-on">
+                Filters are on.
+                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
+                  Show all
+                </Button>
+              </p>
+            )}
+          </div>
           {selected.size > 0 && (
             <BulkBar
               count={selected.size}
@@ -836,7 +841,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
               onClear={() => setSelected(new Set())}
             />
           )}
-          <table className="register txns">
+          <table className={`register txns${reloading ? ' refetching' : ''}`}>
             <thead>
               <tr>
                 <th scope="col" className="select-col">
