@@ -115,7 +115,8 @@ PR branch can be clicked through before merge.
 - **Budgeting: tracking only for v1.** Monthly per-category targets later
   (`monthly_targets (category_id, month, amount)`, no changes to existing tables).
 - **Categories:** Groceries, Dining, Transit, Rideshare & Taxi, Housing, Utilities,
-  Subscriptions, Shopping, Health, Travel, Entertainment, Gifts, Fees, Income. No Gas (NYC).
+  Subscriptions, Shopping, Health, Travel, Entertainment, Gifts, Fees, Income, Uncategorized
+  (for what you can't place; approve with it to clear To review). No Gas (NYC).
 - **Hosting:** new Supabase project + GitHub Pages frontend.
 
 - **Daily sync trigger: GitHub Actions** (`.github/workflows/sync.yml`, 10:17 UTC), chosen to
