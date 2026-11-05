@@ -87,7 +87,7 @@ export default function Accounts() {
             const group = accounts.filter((a) => a.class === value);
             if (group.length === 0) return null;
             return (
-              <div key={value}>
+              <div key={value} className="account-group">
                 <h2>{label}</h2>
                 <table className="register accounts" aria-label={label}>
                   {/* no header row: fixed widths keep the class tables lined up */}
