@@ -10,8 +10,8 @@ const plural = (n: number) => `${n} ${n === 1 ? 'transaction' : 'transactions'}`
 /**
  * Edit one category in a modal: name, group, and whether it's income (income
  * categories are left out of spending and count as income in cash flow).
- * Delete moves its transactions and merchant memory to another category first
- * (`delete_category`).
+ * Delete moves its transactions and merchant memory to another category, or
+ * leaves them Uncategorized (`delete_category`).
  */
 export default function EditCategory({
   category,
@@ -60,8 +60,8 @@ export default function EditCategory({
     setError(null);
     const { error } = await db().rpc('delete_category', { p_id: category.id, p_into: into || null });
     if (error) return fail(error.message);
-    const target = others.find((c) => c.id === into)?.name;
-    await onSaved(target ? `Deleted ${category.name}; its transactions are now ${target}.` : `Deleted ${category.name}.`);
+    const target = others.find((c) => c.id === into)?.name ?? 'Uncategorized';
+    await onSaved(needsTarget ? `Deleted ${category.name}; its transactions are now ${target}.` : `Deleted ${category.name}.`);
   }
 
   function fail(message: string) {
@@ -76,7 +76,7 @@ export default function EditCategory({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!needsTarget || into) remove();
+              remove();
             }}
           >
             <h2 id="edit-category-title">Delete {category.name}?</h2>
@@ -86,7 +86,7 @@ export default function EditCategory({
                 <label>
                   Move its {plural(transactionCount)} to
                   <select value={into} autoFocus disabled={busy} onChange={(e) => setInto(e.target.value)}>
-                    <option value="">Pick a category</option>
+                    <option value="">Uncategorized</option>
                     {others.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -102,8 +102,7 @@ export default function EditCategory({
               <Button
                 type="submit"
                 variant="primary"
-                disabled={busy || (needsTarget && !into)}
-                title={needsTarget && !into ? 'Pick a category first' : undefined}
+                disabled={busy}
               >
                 Delete
               </Button>

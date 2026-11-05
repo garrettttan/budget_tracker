@@ -29,7 +29,7 @@ export default function FilterPanel({
   const count = hiddenCategories.length + hiddenTags.length;
   const categoryItems: Item[] = [
     ...categories,
-    { id: NO_CATEGORY, name: 'No category yet' },
+    { id: NO_CATEGORY, name: 'Uncategorized' },
     { id: TRANSFER_KEY, name: 'Transfer' },
   ];
   const flip = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);

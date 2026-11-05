@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { db } from '../lib/supabase';
 import { money, parseAmount, todayIso } from '../lib/format';
 import Button from './Button';
-import CategorySelect, { type Category, TRANSFER } from './CategorySelect';
+import CategorySelect, { type Category, TRANSFER, UNCATEGORIZED } from './CategorySelect';
 import { type OpenItem, allocate, byPerson, personKey, round } from '../lib/reimbursements';
 
 export type AccountOption = { id: string; name: string; manual: boolean };
@@ -50,13 +50,11 @@ export default function AddTransaction({
         ? 'Enter an amount'
         : !description.trim()
           ? 'Describe it'
-          : !category && !payback
-            ? 'Choose a category'
-            : undefined;
+          : undefined;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (why || parsed === null || (!category && !payback)) return;
+    if (why || parsed === null) return;
     setBusy(true);
     setError(null);
     const signed = direction === 'out' ? -parsed : parsed;
@@ -187,7 +185,7 @@ export default function AddTransaction({
           <span aria-hidden="true">Category</span>
           <CategorySelect categories={categories} value={category} disabled={busy} label="Category"
             onChange={(value) => {
-              setCategory(value);
+              setCategory(value === UNCATEGORIZED ? null : value);
               // a paycheck or refund into Income is money in
               if (categories.find((c) => c.id === value)?.is_income) setDirection('in');
             }}

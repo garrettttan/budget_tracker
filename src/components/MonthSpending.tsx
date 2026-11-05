@@ -69,7 +69,7 @@ export default function MonthSpending({
     for (const r of spend ?? []) {
       if (r.month !== month) continue;
       const key = r.category_id ?? 'none';
-      const t = totals.get(key) ?? { key, name: r.category_name ?? 'No category yet', value: 0 };
+      const t = totals.get(key) ?? { key, name: r.category_name ?? 'Uncategorized', value: 0 };
       t.value = Math.round((t.value + Number(r.spent)) * 100) / 100;
       totals.set(key, t);
     }
