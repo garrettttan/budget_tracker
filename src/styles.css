@@ -621,7 +621,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* transactions: hide date and account columns (they're in the row's details) */
   .register.txns .date-col, .register.txns .account-col { display: none; }
   .register .approved-col { width: auto; font-size: var(--step--1); }
-  .page-head .btn { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
+  .page-head .btn:not(.btn-link) { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
   .bulk-bar { top: 0; }
   .fields { grid-template-columns: 1fr; }
   .fields .span-2 { grid-column: auto; }

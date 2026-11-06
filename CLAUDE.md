@@ -278,7 +278,9 @@ rules, no cards. The to-review count shows only on the To review button and the 
 
 Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
 `primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`
-(needs `aria-label`); `size="small"` inside table rows. Disabled buttons fade with a
+(needs `aria-label`); `size="small"` inside table rows. **Acts right away → `secondary`** (outlined:
+Sync now, Sign out, Load more); **opens a modal → `link`** (teal text, no "…": Add transaction, Add manual
+account, Sync log, Reconnect), except the edit pencil (`icon`). Disabled buttons fade with a
 not-allowed cursor; give a disabled action a `title` that says why.
 
 ## Build phases
