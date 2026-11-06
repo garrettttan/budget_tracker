@@ -8,8 +8,8 @@ type SpendRow = { month: string; category_id: string | null; category_name: stri
 type FlowRow = { month: string; income: string; spending: string };
 
 /**
- * One month's normal spending (untagged, your share, no transfers): a heading
- * that picks the month, Spent / Income / Saved, and a category donut whose
+ * One month's normal spending (untagged, your share, no transfers): a month
+ * dropdown in line with Spent / Income / Saved, and a category donut whose
  * categories filter the list below it. `version` changes after edits so the
  * numbers follow them.
  */
@@ -28,7 +28,7 @@ export default function MonthSpending({
   /** this month, YYYY-MM-01 */
   current: string;
   selected: string | null;
-  /** category keys to leave out of the pie and Spent */
+  /** category keys filtered out: faded in the pie (the summary numbers ignore them) */
   hidden: string[];
   version: number;
   onMonth: (key: string) => void;
@@ -63,7 +63,7 @@ export default function MonthSpending({
     return list;
   }, [spend, month, current]);
 
-  // every category's total for the month, hidden ones included (Spent subtracts them)
+  // every category's total for the month, hidden ones included
   const allCategories = useMemo(() => {
     const totals = new Map<string, { key: string; name: string; value: number }>();
     for (const r of spend ?? []) {
@@ -78,11 +78,11 @@ export default function MonthSpending({
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it
   const byCategory = allCategories.filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
   const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
-  const hiddenSpent = sum(allCategories.filter((t) => hidden.includes(t.key)).map((t) => t.value));
 
   const flowRow = flow.find((f) => f.month === month);
   const income = Number(flowRow?.income ?? 0);
-  const spending = Number(flowRow?.spending ?? 0) - hiddenSpent;
+  // Spent / Income / Saved are the whole month, whatever the filters hide
+  const spending = Number(flowRow?.spending ?? 0);
   const date = new Date(month + 'T12:00:00');
   const shortName = date.toLocaleDateString('en-US', {
     month: 'long',
@@ -91,17 +91,17 @@ export default function MonthSpending({
 
   return (
     <div className={loading && spend ? 'trends refetching' : 'trends'}>
-      <h2>
-        Spending in{' '}
-        <select className="heading-select" aria-label="Month" value={month} onChange={(e) => onMonth(e.target.value)}>
-          {options.map((key) => (
-            <option key={key} value={key}>
-              {monthLong(key)}
-            </option>
-          ))}
-        </select>
-      </h2>
       <dl className="stat-row">
+        {/* the month sits in line with its numbers; the page title already says "Spending" */}
+        <div className="stat-month">
+          <select className="heading-select" aria-label="Month" value={month} onChange={(e) => onMonth(e.target.value)}>
+            {options.map((key) => (
+              <option key={key} value={key}>
+                {monthLong(key)}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <dt>Spent</dt>
           <dd>{money(spending)}</dd>
