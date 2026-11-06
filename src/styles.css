@@ -171,6 +171,10 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
 .register select { padding: 0.2rem 0.4rem; }
 /* row buttons: compact, and set apart from the amount column */
+/* Settings → Bank connection: Last synced, Sync now, Sync log on one line (wraps on phones) */
+.sync-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1rem; margin: 0 0 1rem; }
+.sync-line p { margin: 0; }
+
 /* sync log (Settings → Sync log modal): a gap between the number columns, dates on one line */
 .register.sync-log .num { padding-left: 0.75rem; }
 .register.sync-log td:first-child { white-space: nowrap; }

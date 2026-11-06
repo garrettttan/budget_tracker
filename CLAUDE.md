@@ -185,7 +185,8 @@ Access URL stored in **Supabase Vault** via `save_simplefin_access_url` /
 
 Code: `supabase/functions/_shared/simplefin.ts` (pure protocol helpers, unit-tested with
 Node), `_shared/run-sync.ts` (DB writes, read top-down: plan → fetch → accounts →
-transactions), `sync/` (Bearer `SYNC_SECRET`), `simplefin-claim/` (user JWT). Run guard:
+transactions), `sync/` (Bearer `SYNC_SECRET`), `simplefin-claim/` (user JWT), `sync-now/` (user JWT;
+Settings → Sync now, logged as a `manual` run). Run guard:
 ≤ 12 SimpleFIN requests per 24 h however often it's called, and skip a day after a
 rate-limit warning.
 
@@ -299,5 +300,5 @@ npm run build
 npm run test:db    # applies every migration to in-memory Postgres (PGlite) with stubbed
                    # auth + Vault schemas; checks RLS, grants, seeding, reports, Vault
 npm run test:sync  # unit tests for the SimpleFIN helpers (Node's built-in test runner)
-deno check supabase/functions/sync/index.ts supabase/functions/simplefin-claim/index.ts
+deno check supabase/functions/sync/index.ts supabase/functions/simplefin-claim/index.ts supabase/functions/sync-now/index.ts
 ```
