@@ -78,7 +78,9 @@ pie category is the same as Only in the Category header. Filtering is meant to f
 the list keeps its rows (pending too) until new ones arrive and fades only if that takes over 100ms; the
 "Filters are on · Show all" note sits beside the Transactions heading so it doesn't push the list. All
 motion is off under prefers-reduced-motion. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
-`?range=`) and "Include tagged" toggles (`?tags=`), scoping cash flow (income vs spending columns),
+`?range=`) and "Include tagged" toggles (`?tags=`); This month (`PaceLines`: spending so far, day by day, from
+`spending_lines`, against last month and, dashed, the average of the 3 months before with data; tags apply,
+the range doesn't); then, scoped by both, cash flow (income vs spending columns),
 one category over time (a dropdown picks it, `?cat=`), net worth (one
 point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts
 at their current balance); then tag totals (`tag_spend`, all time). Clicking a month opens Spending
