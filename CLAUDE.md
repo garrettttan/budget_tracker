@@ -49,8 +49,8 @@ the last 30 settled ones (Reopen).
 (the old Transactions page, `/spending`): at the top, a **month dropdown** with ‹ › arrows, in line
 with the summary numbers (no "Spending in" prefix; its own line on phones), `?month=YYYY-MM`, default this month; normal spending only, no tag toggles):
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
-into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
-to clear). All (the default) and Approved show the picked month; To review, `?tag=` and explicit `?from=&to=` aren't
+into gray "Other"). Tapping a category is Only in the Category header (tap again
+to clear). All (the default) and Approved show the picked month; To review and `?tag=` aren't
 limited to it. The list's **Approved**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
 tap one for a searchable checklist, spreadsheet style (all ticked; untick to hide; Select all ticks or
 unticks what the search matches; Only per row). Category and Tags list only what the list's range
@@ -62,7 +62,9 @@ categories leave the list and fade in the pie (its middle shows what's visible);
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
 several tags). The Approved header sets `?status=` (both ticked = All, the default; untick one for
 To review or Approved; the last ticked can't be unticked) and replaced the To review / Approved / All
-buttons; the table and its headers always render, even for an empty month. An explicit `?category=` (pie tap) overrides hidden categories. On phones the Tags
+buttons; the table and its headers always render, even for an empty month. Every filter shows the same way (teal header + "Filters are on · Show all", which clears them all); there are no other
+filter banners. A link's `?category=` (Settings → Categories, Trends) is rewritten on arrival to Only that category; `?tag=`
+(one tag, from a row's tag, Only in the Tags header, or a tag link) shows in the Tags header as every other tag unticked. `?from=&to=` is gone. On phones the Tags
 column shows just a count (tags are edited in the row's details) and Approved's header is ✓, so the
 table fits at 390px. **Pending transactions** sit in the list by date (All and To review, not Approved),
 following the date range and category filters, **read-only**: when a charge posts, the bank usually
@@ -257,7 +259,7 @@ money in only with a non-income category), `tag_spend`
 Vite + React 18 + TypeScript + supabase-js, `HashRouter` and `base: './'` so it works
 from any Pages subpath. Pages: Spending (`src/pages/Spending.tsx`; the month summary from
 `components/MonthSpending.tsx`, then the list: filter All (default) / To review / Approved from the Approved header via
-`?status=`, plus `?month=`, `?tag=`, `?hidecat=`, `?hidetag=`, `?category=` (`none` = Uncategorized), `?from=` and `?to=`;
+`?status=`, plus `?month=`, `?tag=`, `?hidecat=`, `?hidetag=`, and `?category=` (links only; becomes `?hidecat=`);
 every row has a category picker and an Approved checkbox; `/transactions` and `/review` redirect
 here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
 Email + password auth (single user).
