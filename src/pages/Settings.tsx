@@ -173,9 +173,16 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
         </SettingsModal>
       )}
 
+      {/* laid out like Bank connection: a status line, then a compact action */}
       <h2>Account</h2>
-      <p className="muted">Signed in as {email}</p>
-      <Button onClick={() => db().auth.signOut()}>Sign out</Button>
+      <div className="sync-status">
+        <p>Signed in as {email}</p>
+      </div>
+      <div className="sync-actions">
+        <Button size="small" onClick={() => db().auth.signOut()}>
+          Sign out
+        </Button>
+      </div>
     </section>
   );
 }
