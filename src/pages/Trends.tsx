@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
+import Combobox from '../components/Combobox';
 import Switch from '../components/Switch';
 import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
 import { iso, monthEnd, sum, thisMonth } from '../lib/months';
@@ -410,13 +411,12 @@ function CategoryOverTime({
     <>
       <h2>Categories over time</h2>
       <div className="category-picker">
-        <select className="heading-select" aria-label="Category" value={category.key} onChange={(e) => onPick(e.target.value)}>
-          {options.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.name}
-            </option>
-          ))}
-        </select>
+        <Combobox
+          label="Category"
+          options={options.map((o) => ({ value: o.key, text: o.name }))}
+          value={category.key}
+          onChange={onPick}
+        />
         <span className="muted small">
           {money(total)} total · {money(total / activeMonths)} avg / month
         </span>
