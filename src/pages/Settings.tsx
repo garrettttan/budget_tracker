@@ -4,6 +4,7 @@ import { db } from '../lib/supabase';
 import { relativeTime } from '../lib/format';
 import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
+import ReconnectSimplefin from '../components/ReconnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
 import MerchantList from '../components/MerchantList';
 import TagList from '../components/TagList';
@@ -30,6 +31,7 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [showReconnect, setShowReconnect] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<{ text: string; error: boolean } | null>(null);
 
@@ -83,7 +85,7 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
       {error && <p className="error" role="alert">Couldn't load settings: {error}</p>}
 
       <h2>Bank connection</h2>
-      {connection === null && <ConnectSimplefin onConnected={loadSync} />}
+      {connection === null && <ConnectSimplefin onConnected={() => loadSync()} />}
       {connection && (
         <>
           {connection.status !== 'active' && (
@@ -99,6 +101,9 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
                 Sync log
               </Button>
             )}
+            <Button variant="link" onClick={() => setShowReconnect(true)}>
+              Reconnect
+            </Button>
           </div>
           {syncing && <p className="muted small">A sync can take up to a minute.</p>}
           {syncNote && (
@@ -107,14 +112,20 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
             </p>
           )}
           {connection.status_message && <p className="muted">{connection.status_message}</p>}
-          <details className="reconnect">
-            <summary>Reconnect with a new Setup Token</summary>
-            <ConnectSimplefin onConnected={loadSync} />
-          </details>
         </>
       )}
 
       {showLog && <SyncLog runs={runs} onClose={() => setShowLog(false)} />}
+      {showReconnect && (
+        <ReconnectSimplefin
+          onClose={() => setShowReconnect(false)}
+          onConnected={(message) => {
+            setSyncNote({ text: message, error: false });
+            loadSync();
+            onSynced();
+          }}
+        />
+      )}
 
       <h2>Categories</h2>
       <CategoryList />

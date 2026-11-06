@@ -7,8 +7,18 @@ type ClaimResponse = {
   sync: { status: 'skipped'; reason: string } | { status: 'ok' | 'warning' | 'error'; new: number };
 };
 
-/** Paste a one-time SimpleFIN Setup Token; the server claims it and runs the first sync. */
-export default function ConnectSimplefin({ onConnected }: { onConnected: () => void }) {
+/**
+ * Paste a one-time SimpleFIN Setup Token; the server claims it and runs the first sync.
+ * onConnected gets the result message (the Reconnect modal shows it on the page after closing);
+ * onBusyChange lets a modal refuse to close mid-connect.
+ */
+export default function ConnectSimplefin({
+  onConnected,
+  onBusyChange,
+}: {
+  onConnected: (message: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +27,7 @@ export default function ConnectSimplefin({ onConnected }: { onConnected: () => v
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     setNotice(null);
     const { data, error } = await db().functions.invoke<ClaimResponse>('simplefin-claim', { body: { setupToken: token } });
@@ -27,10 +38,13 @@ export default function ConnectSimplefin({ onConnected }: { onConnected: () => v
     } else if (data) {
       setToken('');
       const s = data.sync;
-      setNotice(s.status === 'skipped' ? `Connected. The first sync was skipped: ${s.reason}.` : `Connected. First sync: ${s.new} new transactions.`);
-      onConnected();
+      const message =
+        s.status === 'skipped' ? `Connected. The first sync was skipped: ${s.reason}.` : `Connected. First sync: ${s.new} new transactions.`;
+      setNotice(message);
+      onConnected(message);
     }
     setBusy(false);
+    onBusyChange?.(false);
   }
 
   return (
@@ -41,7 +55,7 @@ export default function ConnectSimplefin({ onConnected }: { onConnected: () => v
       </p>
       <label>
         Setup Token
-        <input type="text" autoComplete="off" spellCheck={false} required value={token} onChange={(e) => setToken(e.target.value)} />
+        <input type="text" autoComplete="off" spellCheck={false} required data-autofocus value={token} onChange={(e) => setToken(e.target.value)} />
       </label>
       <Button type="submit" variant="primary" disabled={busy}>
         {busy ? 'Connecting and syncing…' : 'Connect SimpleFIN'}
