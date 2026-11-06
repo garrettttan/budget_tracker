@@ -25,7 +25,7 @@ type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
 type Category = { id: string; name: string };
 type MonthKey = { key: string; short: string; long: string };
-type Line = { posted_date: string; spent: string; tag_ids: string[] };
+type Line = { posted_date: string; category_id: string | null; spent: string; tag_ids: string[] };
 
 /** The YYYY-MM-01 key `n` months before (negative) or after `key`. */
 const addMonths = (key: string, n: number) => {
@@ -39,7 +39,7 @@ async function fetchLines(start: string) {
   for (let from = 0; from < 50_000; from += 1000) {
     const { data, error } = await db()
       .from('spending_lines')
-      .select('posted_date, spent, tag_ids')
+      .select('posted_date, category_id, spent, tag_ids')
       .gte('posted_date', start)
       .order('transaction_id')
       .range(from, from + 999);
@@ -228,6 +228,7 @@ export default function Trends() {
       range: range === '12m' ? null : range,
       tags: included.join(',') || null,
       cat: params.get('cat'),
+      housing: params.get('housing'),
       ...next,
     };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
@@ -238,11 +239,17 @@ export default function Trends() {
 
   // this month's spending so far, day by day, against last month and an average month (the
   // earlier three that have any spending; shown when two or more do, else it's just last month)
+  // rent is the biggest bill and lands on a different day each month, so it swamps the pace
+  // lines; Housing is left out unless its toggle (?housing=1) is on
+  const housing = categories.find((c) => c.name === 'Housing')?.id ?? null;
+  const withHousing = params.get('housing') === '1';
   const pace = useMemo(() => {
     if (!lines) return null;
     const days = Number(monthEnd(current).slice(8, 10));
     const today = Number(end.slice(8, 10));
-    const shown = lines.filter((l) => l.tag_ids.length === 0 || l.tag_ids.some((t) => included.includes(t)));
+    const shown = lines.filter(
+      (l) => (withHousing || l.category_id !== housing) && (l.tag_ids.length === 0 || l.tag_ids.some((t) => included.includes(t))),
+    );
     const has = new Set(lines.map((l) => l.posted_date.slice(0, 7)));
     const earlier = [1, 2, 3].map((n) => addMonths(current, -n)).filter((m) => has.has(m.slice(0, 7)));
     const series: PaceSeries[] = [{ name: 'This month', color: SPENDING, values: runningTotals(shown, current, days, today) }];
@@ -258,7 +265,7 @@ export default function Trends() {
       });
     }
     return { days, series };
-  }, [lines, included, current, end]);
+  }, [lines, included, current, end, housing, withHousing]);
   const dayLabel = (day: number) =>
     new Date(`${current.slice(0, 8)}${String(day).padStart(2, '0')}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -297,7 +304,14 @@ export default function Trends() {
         {pace && (
           <>
             <h2>This month</h2>
-            {pace.series.length > 1 && <Legend shape="line" items={pace.series} />}
+            <div className="pace-controls">
+              {pace.series.length > 1 && <Legend shape="line" items={pace.series} />}
+              {housing && (
+                <Button size="small" aria-pressed={withHousing} onClick={() => set({ housing: withHousing ? null : '1' })}>
+                  Include Housing
+                </Button>
+              )}
+            </div>
             <PaceLines days={pace.days} series={pace.series} format={money} label="Spending so far this month, day by day" dayLabel={dayLabel} />
           </>
         )}
