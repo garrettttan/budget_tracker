@@ -26,6 +26,7 @@
   --step-0: 0.9375rem;
   --step-1: 1.125rem;
   --step-2: 1.5rem;
+  --step-3: 1.75rem;
   --step-5: 4.5rem;
 
   color-scheme: light;
@@ -70,8 +71,10 @@ html, body {
 }
 
 h1, h2 { line-height: 1.2; margin: 0; }
-h1 { font-size: var(--step-2); font-weight: 700; letter-spacing: -0.01em; }
-h2 { font-size: var(--step-1); font-weight: 600; margin: 2.5rem 0 0.75rem; }
+/* text levels: page title (h1, 28px bold) > section (h2, 20px semibold) > body (15px regular)
+   > secondary (muted, or 13px). Body text isn't bold, so it never reads as a heading. */
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.015em; }
+h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 0.75rem; }
 
 a { color: var(--accent); }
 code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; border-radius: 3px; }
@@ -174,7 +177,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 /* Settings → Bank connection: Last synced, Sync now, Sync log on one line (wraps on phones) */
 .sync-status { margin: 0 0 0.75rem; }
 .sync-status p { margin: 0; }
-.sync-status .sync-state { font-weight: 600; }
 /* one even gap between Sync now, Sync log and Reconnect */
 .sync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin: 0 0 1.5rem; }
 /* Sync now: a compact box, but the same text size as the links beside it */

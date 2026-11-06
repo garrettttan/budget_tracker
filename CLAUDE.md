@@ -268,7 +268,8 @@ every row has a category picker and an Approved checkbox; `/transactions` and `/
 here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
 Email + password auth (single user).
 
-Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accent teal
+Design: Public Sans (tabular figures); text levels: page title h1 28px bold > section h2 20px
+semibold > body 15px regular (never bold, so it can't pass for a heading) > secondary (muted or 13px); paper `#F4F6F7`, ink `#16232F`, one accent teal
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.
 Chart series: `--viz-income` teal `#00919C` (dark `#1C9AA3`) and `--viz-spending` orange
 `#C25A22` (dark `#D2702F`), checked with the dataviz palette validator (color-blind separation,
