@@ -7,6 +7,7 @@ import ConnectSimplefin from '../components/ConnectSimplefin';
 import ReconnectSimplefin from '../components/ReconnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
 import MerchantsModal from '../components/MerchantsModal';
+import SettingsRow from '../components/SettingsRow';
 import TagList from '../components/TagList';
 import CategoryList from '../components/CategoryList';
 
@@ -146,16 +147,11 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
       <h2>Categories</h2>
       <CategoryList />
 
-      <h2>Merchants</h2>
-      {merchantCount === 0 && <p className="muted">Merchants appear after your first sync.</p>}
-      {!!merchantCount && (
-        <p className="settings-line">
-          {merchantCount} {merchantCount === 1 ? 'merchant' : 'merchants'}
-          <Button variant="link" onClick={() => setShowMerchants(true)}>
-            Manage
-          </Button>
-        </p>
-      )}
+      <SettingsRow
+        label="Merchants"
+        detail={merchantCount === null ? undefined : merchantCount === 0 ? 'None yet' : String(merchantCount)}
+        onOpen={() => setShowMerchants(true)}
+      />
       {showMerchants && (
         <MerchantsModal
           onClose={() => {
