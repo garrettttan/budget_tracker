@@ -83,7 +83,16 @@ export default function MerchantList() {
   const sortBy = (by: Sort['by']) =>
     setSort((s) => (s.by === by ? { by, desc: !s.desc } : { by, desc: by === 'count' }));
   const ariaSort = (by: Sort['by']) => (sort.by === by ? (sort.desc ? 'descending' : 'ascending') : undefined);
-  const arrow = (by: Sort['by']) => (sort.by === by ? (sort.desc ? ' ↓' : ' ↑') : '');
+  // a header you can sort by: always shows the up/down icon; the sorted one is teal with its direction lit
+  const sortHeader = (by: Sort['by'], label: string) => (
+    <Button variant="link" className={`th-sort${sort.by === by ? ' active' : ''}`} onClick={() => sortBy(by)}>
+      {label}
+      <svg className="th-sort-icon" viewBox="0 0 8 12" aria-hidden="true">
+        <path d="M4 0.5 7.5 4.5H0.5z" className={sort.by === by && sort.desc ? 'dim' : undefined} />
+        <path d="M4 11.5 0.5 7.5h7z" className={sort.by === by && !sort.desc ? 'dim' : undefined} />
+      </svg>
+    </Button>
+  );
 
   return (
     <>
@@ -101,15 +110,11 @@ export default function MerchantList() {
         <thead>
           <tr>
             <th scope="col" aria-sort={ariaSort('name')}>
-              <Button variant="link" className="th-sort" onClick={() => sortBy('name')}>
-                Merchant{arrow('name')}
-              </Button>
+              {sortHeader('name', 'Merchant')}
             </th>
             <th scope="col">Remembered category</th>
             <th scope="col" className="num" aria-sort={ariaSort('count')}>
-              <Button variant="link" className="th-sort" onClick={() => sortBy('count')}>
-                Transactions{arrow('count')}
-              </Button>
+              {sortHeader('count', 'Transactions')}
             </th>
             <th scope="col">
               <span className="visually-hidden">Actions</span>

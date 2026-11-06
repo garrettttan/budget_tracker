@@ -512,9 +512,17 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .register.tag-totals, .register.category-totals { max-width: 44rem; }
 
 /* Settings → Merchants */
-/* sortable column headers: look like the header text, not a link */
-.btn-link.th-sort { color: inherit; font: inherit; }
-.btn-link.th-sort:hover:not(:disabled) { color: var(--accent); text-decoration: none; }
+/* sortable column headers: like the filter headers (tinted on hover), with an up/down icon */
+.btn-link.th-sort {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.1rem 0.25rem; margin: -0.1rem -0.25rem;
+  font: inherit; font-weight: 600; color: inherit; text-decoration: none; border-radius: 4px;
+}
+.btn-link.th-sort:hover:not(:disabled) { color: var(--ink); background: var(--accent-wash); text-decoration: none; }
+.btn-link.th-sort.active { color: var(--accent); }
+.th-sort-icon { width: 8px; height: 12px; flex: none; fill: currentColor; opacity: 0.55; }
+.th-sort.active .th-sort-icon { opacity: 1; }
+.th-sort-icon .dim { opacity: 0.25; }
 .merchant-filter { width: 16rem; max-width: 100%; margin: 0.75rem 0 0.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
 .register tr.merge-row td { background: var(--accent-wash); }
