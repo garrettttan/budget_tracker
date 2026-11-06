@@ -168,7 +168,6 @@ export default function Accounts() {
           onCancel={() => setAdding(false)}
           onAdded={async (name) => {
             setAdding(false);
-            setShowZero(true); // a new $0 account shouldn't seem to vanish
             setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
             await load();
           }}
