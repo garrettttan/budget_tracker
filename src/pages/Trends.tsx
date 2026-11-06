@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
-import Modal from '../components/Modal';
 import { Legend, MonthColumns, TimeLine } from '../components/charts';
 import { iso, monthEnd, sum } from '../lib/months';
 
@@ -119,9 +118,6 @@ export default function Trends() {
   };
 
   const byCategory = useMemo(() => totalsBy((m) => m >= start), [spend, start]);
-  // tapping a category opens its months (over the page's range) in a modal
-  const [opened, setOpened] = useState<{ key: string; name: string } | null>(null);
-
   // the category-over-time chart's picker: every spending category in picker
   // order, then any others with spending in the range (archived, Uncategorized)
   const categoryOptions = useMemo(() => {
@@ -190,8 +186,6 @@ export default function Trends() {
   const openMonth = (key: string, category?: string) =>
     navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7), ...(category ? { category } : {}) })}`);
 
-  const rangeLabel = RANGES.find((r) => r.key === range)!.label.toLowerCase();
-
   return (
     <section>
       <header className="page-head">
@@ -246,34 +240,6 @@ export default function Trends() {
           />
         )}
 
-        {byCategory.length > 0 && (
-          <>
-            <h2>Categories</h2>
-            <table className="register category-totals">
-              <thead>
-                <tr>
-                  <th scope="col">Category</th>
-                  <th scope="col" className="num">Avg / month</th>
-                  <th scope="col" className="num">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byCategory.map((c) => (
-                  <tr key={c.key}>
-                    <td>
-                      <Button variant="link" onClick={() => setOpened(c)}>
-                        {c.name}
-                      </Button>
-                    </td>
-                    <td className="num">{money(c.value / activeMonths)}</td>
-                    <td className="num">{money(c.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-
         <h2>Net worth</h2>
         {nwLast ? (
           <>
@@ -312,19 +278,6 @@ export default function Trends() {
         )}
       </div>
 
-      {opened && (
-        <CategoryMonths
-          category={opened}
-          months={months}
-          activeMonths={activeMonths}
-          spend={spend ?? []}
-          rangeLabel={rangeLabel}
-          start={start}
-          end={end}
-          onClose={() => setOpened(null)}
-          onOpenMonth={(key) => openMonth(key, opened.key)}
-        />
-      )}
     </section>
   );
 }
@@ -375,61 +328,5 @@ function CategoryOverTime({
         onSelect={onOpenMonth}
       />
     </>
-  );
-}
-
-/** A category's spending month by month over the page's range, in a modal. */
-function CategoryMonths({
-  category,
-  months,
-  activeMonths,
-  spend,
-  rangeLabel,
-  start,
-  end,
-  onClose,
-  onOpenMonth,
-}: {
-  category: { key: string; name: string };
-  months: MonthKey[];
-  activeMonths: number;
-  spend: SpendRow[];
-  rangeLabel: string;
-  start: string;
-  end: string;
-  onClose: () => void;
-  onOpenMonth: (monthKey: string) => void;
-}) {
-  const values = monthValues(spend, months, category.key);
-  const total = sum(values);
-  return (
-    <Modal labelledBy="category-months-title" onClose={onClose} className="modal-wide">
-      {(close) => (
-        <>
-          <div className="modal-head">
-            <h2 id="category-months-title">{category.name} by month</h2>
-            <Button variant="icon" aria-label="Close" onClick={close}>
-              ×
-            </Button>
-          </div>
-          <p className="muted small">
-            {money(total)} {rangeLabel}, {money(total / activeMonths)} a month on average. Pick a month to see its
-            transactions, or{' '}
-            <Link to={`/spending?${new URLSearchParams({ status: 'all', category: category.key, from: start, to: end })}`}>
-              see all of them
-            </Link>
-            .
-          </p>
-          <MonthColumns
-            months={months}
-            series={[{ name: category.name, color: SPENDING, values }]}
-            format={money}
-            label={`${category.name} spending by month`}
-            selectHint="Opens its transactions"
-            onSelect={onOpenMonth}
-          />
-        </>
-      )}
-    </Modal>
   );
 }
