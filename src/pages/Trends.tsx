@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
+import Switch from '../components/Switch';
 import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
 import { iso, monthEnd, sum, thisMonth } from '../lib/months';
 
@@ -307,9 +308,9 @@ export default function Trends() {
             <div className="pace-controls">
               {pace.series.length > 1 && <Legend shape="line" items={pace.series} />}
               {housing && (
-                <Button size="small" aria-pressed={withHousing} onClick={() => set({ housing: withHousing ? null : '1' })}>
+                <Switch checked={withHousing} onChange={(on) => set({ housing: on ? '1' : null })}>
                   Include Housing
-                </Button>
+                </Switch>
               )}
             </div>
             <PaceLines days={pace.days} series={pace.series} format={money} label="Spending so far this month, day by day" dayLabel={dayLabel} />
