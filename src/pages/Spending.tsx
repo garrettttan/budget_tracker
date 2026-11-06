@@ -62,11 +62,8 @@ const COLUMNS =
   'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
   'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
 
-/**
- * Narrower views: one category (or 'none' = Uncategorized, i.e. no category), a date range,
- * and categories / tags to hide (an explicit category overrides hidden ones).
- */
-type Scope = { category: string | null; start: string | null; end: string | null; hideCategories: string[]; hideTags: string[] };
+/** Narrower views: a date range, and categories / tags to hide. */
+type Scope = { start: string | null; end: string | null; hideCategories: string[]; hideTags: string[] };
 
 /** PostgREST `or` filter keeping rows outside the hidden categories ('none' and 'transfer' included); null if none hidden. */
 function keepCategories(hidden: string[]): string | null {
@@ -110,10 +107,8 @@ function fetchRows(status: Status, tag: string | null, scope: Scope, from: numbe
     .eq('pending', false);
   if (tag) q = q.eq('tag_filter.tag_id', tag);
   if (hiddenTagIds.length) q = q.in('hidden_tags.tag_id', hiddenTagIds).is('hidden_tags', null);
-  const keep = scope.category ? null : keepCategories(scope.hideCategories);
+  const keep = keepCategories(scope.hideCategories);
   if (keep) q = q.or(keep);
-  if (scope.category === 'none') q = q.is('category_id', null).eq('is_transfer', false);
-  else if (scope.category) q = q.eq('category_id', scope.category);
   if (scope.start) q = q.gte('posted_date', scope.start);
   if (scope.end) q = q.lte('posted_date', scope.end);
   if (status !== 'all') q = q.eq('approved', status === 'approved');
@@ -168,18 +163,13 @@ function fetchPending() {
     .order('id', { ascending: false });
 }
 
-/** "October 2026" for a whole month, else "Jan 1 – Mar 31, 2026"-style dates. */
-function rangeLabel(start: string | null, end: string | null): string {
-  if (start && end && start.endsWith('-01') && end === monthEnd(start)) return monthLong(start);
-  return `${start ? shortDate(start) : 'the start'} – ${end ? shortDate(end) : 'today'}`;
-}
-
 /**
  * A month's spending by category on top, then every transaction, filtered by
- * review status (and optionally by tag or category). Each posted row can get
+ * review status, category and tags (the column headers). Each posted row can get
  * or change its category and tags, and is approved or unapproved from here.
- * Approved and All show the picked month (`?month=`); To review, a tag, or an
- * explicit `?from=`/`?to=` aren't limited to it.
+ * Approved and All show the picked month (`?month=`); To review and a tag
+ * (`?tag=`) aren't limited to it. A link's `?category=` (Settings, Trends)
+ * becomes Only that category, as if tapped in the pie.
  */
 export default function Spending({ count, onChange }: { count: number | null; onChange: () => Promise<void> }) {
   const [params, setParams] = useSearchParams();
@@ -189,11 +179,9 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const current = thisMonth();
   const asked = parseMonth(params.get('month'));
   const month = asked && asked <= current ? asked : current;
-  const monthScoped = !params.get('from') && !params.get('to') && status !== 'review' && !tagFilter;
-  const start = params.get('from') ?? (monthScoped ? month : null);
-  const end = params.get('to') ?? (monthScoped ? monthEnd(month) : null);
-  // category or explicit dates: pending rows and suggestions don't apply
-  const scoped = Boolean(category || params.get('from') || params.get('to'));
+  const monthScoped = status !== 'review' && !tagFilter;
+  const start = monthScoped ? month : null;
+  const end = monthScoped ? monthEnd(month) : null;
   const hidecat = params.get('hidecat') ?? '';
   const hidetag = params.get('hidetag') ?? '';
   const hideCategories = useMemo(() => hidecat.split(',').filter(Boolean), [hidecat]);
@@ -255,12 +243,12 @@ export default function Spending({ count, onChange }: { count: number | null; on
       const mine = ++latestReload.current;
       setReloading(true);
       const none = Promise.resolve({ data: [], error: null });
-      const reviewing = status !== 'approved' && !tagFilter && !scoped;
+      const reviewing = status !== 'approved' && !tagFilter;
       const [t, p, s, o, w, m, h] = await Promise.all([
-        fetchRows(status, tagFilter, { category, start, end, hideCategories, hideTags }, 0, size - 1),
+        fetchRows(status, tagFilter, { start, end, hideCategories, hideTags }, 0, size - 1),
         // pending rows can't carry tags, so a tag filter leaves them out
         status === 'approved' || tagFilter ? none : fetchPending(),
-        status === 'approved' || tagFilter || scoped
+        status === 'approved' || tagFilter
           ? none
           : db()
               .from('transfer_suggestions')
@@ -311,32 +299,41 @@ export default function Spending({ count, onChange }: { count: number | null; on
       setSelected((sel) => (sel.size && [...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
       // pending rows carry no tags: only hidden categories apply, and unticking "No tags" hides them all
       // the same date range and category filters as the list
-      const inCategory = (r: Row) =>
-        category === NO_CATEGORY ? !r.category_id && !r.is_transfer : category ? r.category_id === category : shownCategory(r, hideCategories);
       setPending(
         hideTags.includes(UNTAGGED)
           ? []
           : ((p.data ?? []) as unknown as Row[]).filter(
-              (r) => inCategory(r) && (!start || r.posted_date >= start) && (!end || r.posted_date <= end),
+              (r) => shownCategory(r, hideCategories) && (!start || r.posted_date >= start) && (!end || r.posted_date <= end),
             ),
       );
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
-    [status, tagFilter, category, start, end, scoped, hideCategories, hideTags],
+    [status, tagFilter, start, end, hideCategories, hideTags],
   );
 
-  // categories first, so rows never flash an empty picker
+  // a link's ?category= (Settings → Categories, Trends) means Only that category, like a pie tap
   useEffect(() => {
-    if (!categories) return;
+    if (!category || !categories) return;
+    const others = [...categories.map((c) => c.id), NO_CATEGORY, TRANSFER_KEY].filter((k) => k !== category);
+    const next = new URLSearchParams(params);
+    next.delete('category');
+    if (next.get('status') === 'all') next.delete('status'); // the default
+    next.set('hidecat', others.join(','));
+    setParams(next, { replace: true });
+  }, [category, categories]);
+
+  // categories first, so rows never flash an empty picker (and a ?category= link is converted first)
+  useEffect(() => {
+    if (!categories || category) return;
     // the rows on screen (pending ones too) stay until the new ones arrive: no blink, and an open header filter stays open
     setSelected(new Set());
     reload(PAGE);
-  }, [categories, reload]);
+  }, [categories, category, reload]);
 
   async function loadMore() {
     const from = rows?.length ?? 0;
     setBusy(true);
-    const { data, error } = await fetchRows(status, tagFilter, { category, start, end, hideCategories, hideTags }, from, from + PAGE - 1);
+    const { data, error } = await fetchRows(status, tagFilter, { start, end, hideCategories, hideTags }, from, from + PAGE - 1);
     if (error) setError(error.message);
     else {
       setRows((rs) => [...(rs ?? []), ...((data ?? []) as unknown as Row[])]);
@@ -391,15 +388,12 @@ export default function Spending({ count, onChange }: { count: number | null; on
     act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
 
   /** Changes the filters in the URL; a filter left out keeps its value, null clears it. */
-  function setFilters(next: Partial<Record<'status' | 'tag' | 'category' | 'from' | 'to' | 'month' | 'hidecat' | 'hidetag', string | null>>) {
+  function setFilters(next: Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag', string | null>>) {
     setNotice(null);
     setError(null);
     const merged = {
       status: status === 'all' ? null : status,
       tag: tagFilter,
-      category,
-      from: params.get('from'),
-      to: params.get('to'),
       month: params.get('month'),
       hidecat: hidecat || null,
       hidetag: hidetag || null,
@@ -410,7 +404,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   }
 
   // the column header filters; while they hide something the table (and its headers) stays even if empty
-  const hiding = hideCategories.length > 0 || hideTags.length > 0 || status !== 'all';
+  const hiding = hideCategories.length > 0 || hideTags.length > 0 || Boolean(tagFilter) || status !== 'all';
   // Approved column: both ticked = All (`?status=` absent); one unticked = To review or Approved only
   const approvalItems = [
     { id: 'review', name: `To review${count ? ` (${count})` : ''}` },
@@ -431,29 +425,23 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const listed = (items: { id: string; name: string }[], counts: Map<string, number> | undefined, hidden: string[]) =>
     counts ? items.filter((i) => counts.has(i.id) || hidden.includes(i.id)).map((i) => ({ ...i, count: counts.get(i.id) ?? 0 })) : items;
   const categoryItems = listed(allCategoryItems, present?.categories, hideCategories);
-  const tagItems = listed(allTagItems, present?.tags, hideTags);
+  // showing one tag (?tag=) reads as every other one unticked, so the header turns teal
+  const tagHidden = tagFilter ? allTagItems.map((i) => i.id).filter((k) => k !== tagFilter) : hideTags;
+  const tagItems = listed(allTagItems, present?.tags, tagHidden);
   /** Only one category: hide every other key (the pie's own pick is cleared). */
   const onlyCategory = (key: string) =>
     // every key, not just this range's, so switching months still shows only this one
-    setFilters({ category: null, hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
+    setFilters({ hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
   // the one category left showing, if just one is (the pie highlights it)
   const visibleCategories = allCategoryItems.filter((i) => !hideCategories.includes(i.id));
   const onlyKey = hideCategories.length > 0 && visibleCategories.length === 1 ? visibleCategories[0].id : null;
   /** A pie category: the same as its Only in the Category header; tapping it again shows every category. */
-  const pickCategory = (key: string) => (onlyKey === key ? setFilters({ category: null, hidecat: null }) : onlyCategory(key));
+  const pickCategory = (key: string) => (onlyKey === key ? setFilters({ hidecat: null }) : onlyCategory(key));
   /** Only one tag: the show-one-tag filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
     id === UNTAGGED
       ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null })
       : setFilters({ tag: id, hidetag: null });
-
-  /** "Dining · October 2026" for the banner. */
-  function scopeLabel() {
-    const parts: string[] = [];
-    if (category) parts.push(category === 'none' ? 'Uncategorized' : (categories?.find((c) => c.id === category)?.name ?? 'A category'));
-    if (start || end) parts.push(rangeLabel(start, end));
-    return parts.join(' · ');
-  }
 
   const tagCell = (r: Row) => (
     <TagCell
@@ -731,32 +719,15 @@ export default function Spending({ count, onChange }: { count: number | null; on
       <MonthSpending
         month={month}
         current={current}
-        selected={category ?? onlyKey}
-        hidden={category ? [] : hideCategories}
+        selected={onlyKey}
+        hidden={hideCategories}
         version={version}
-        onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7), from: null, to: null })}
+        onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7) })}
         onSelect={pickCategory}
         onError={setError}
       />
 
 
-      {scoped && (
-        <p className="tag-filter">
-          Showing <strong>{scopeLabel()}</strong>
-          <Button variant="link" onClick={() => setFilters({ category: null, from: null, to: null })}>
-            Show every transaction
-          </Button>
-        </p>
-      )}
-
-      {tagFilter && (
-        <p className="tag-filter">
-          Tagged <strong>{tagName(tagFilter)}</strong>
-          <Button variant="link" onClick={() => setFilters({ tag: null })}>
-            Show every tag
-          </Button>
-        </p>
-      )}
 
       {adding && (
         <AddTransaction
@@ -811,7 +782,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
             {hiding && (
               <p className="filters-on">
                 Filters are on.
-                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
+                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null, tag: null })}>
                   Show all
                 </Button>
               </p>
@@ -864,8 +835,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
                     label="Tags"
                     align="end"
                     items={tagItems}
-                    hidden={hideTags}
-                    onChange={(next) => setFilters({ hidetag: next.join(',') || null })}
+                    hidden={tagHidden}
+                    onChange={(next) => setFilters({ tag: null, hidetag: next.join(',') || null })}
                     onOnly={onlyTag}
                   />
                 </th>
@@ -1007,7 +978,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
           </table>
           {shownRows.length === 0 && (
             <p className="empty">
-              {scoped || hideCategories.length > 0 || hideTags.length > 0
+              {hideCategories.length > 0 || hideTags.length > 0
                 ? 'No transactions match.'
                 : tagFilter
                 ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`

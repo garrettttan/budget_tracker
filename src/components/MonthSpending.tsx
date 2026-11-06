@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { db } from '../lib/supabase';
 import { money } from '../lib/format';
 import { iso, monthLong, sum } from '../lib/months';
+import Button from './Button';
 import { CategoryPie } from './charts';
 
 type SpendRow = { month: string; category_id: string | null; category_name: string | null; spent: string };
@@ -79,6 +80,11 @@ export default function MonthSpending({
   const byCategory = allCategories.filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
   const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
 
+  // options run newest first, so "previous" is the next one down the list
+  const at = options.indexOf(month);
+  const prev = at >= 0 ? options[at + 1] : undefined;
+  const next = at > 0 ? options[at - 1] : undefined;
+
   const flowRow = flow.find((f) => f.month === month);
   const income = Number(flowRow?.income ?? 0);
   // Spent / Income / Saved are the whole month, whatever the filters hide
@@ -94,6 +100,15 @@ export default function MonthSpending({
       <dl className="stat-row">
         {/* the month sits in line with its numbers; the page title already says "Spending" */}
         <div className="stat-month">
+          <Button
+            variant="icon"
+            aria-label="Previous month"
+            disabled={!prev}
+            title={prev ? undefined : 'No earlier spending'}
+            onClick={() => prev && onMonth(prev)}
+          >
+            ‹
+          </Button>
           <select className="heading-select" aria-label="Month" value={month} onChange={(e) => onMonth(e.target.value)}>
             {options.map((key) => (
               <option key={key} value={key}>
@@ -101,6 +116,15 @@ export default function MonthSpending({
               </option>
             ))}
           </select>
+          <Button
+            variant="icon"
+            aria-label="Next month"
+            disabled={!next}
+            title={next ? undefined : 'This is the current month'}
+            onClick={() => next && onMonth(next)}
+          >
+            ›
+          </Button>
         </div>
         <div>
           <dt>Spent</dt>
