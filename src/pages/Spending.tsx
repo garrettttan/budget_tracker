@@ -717,17 +717,15 @@ export default function Spending({ count, onChange }: { count: number | null; on
     <section>
       <header className="page-head">
         <h1>Spending</h1>
-        {!adding && (
-          <Button
-            onClick={() => {
-              setAdding(true);
-              setNotice(null);
-              setError(null);
-            }}
-          >
-            Add transaction
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            setAdding(true);
+            setNotice(null);
+            setError(null);
+          }}
+        >
+          Add transaction
+        </Button>
       </header>
 
       <MonthSpending
@@ -766,9 +764,9 @@ export default function Spending({ count, onChange }: { count: number | null; on
           categories={categories ?? []}
           open={open}
           onClose={() => setAdding(false)}
-          onAdded={async (summary) => {
+          onAdded={async () => {
+            // the modal says what was added; the list and totals behind it catch up
             setError(null);
-            setNotice(`Added ${summary}, approved.`);
             await reload(Math.max(rows?.length ?? 0, PAGE));
             bump();
           }}
@@ -779,14 +777,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
       {notice && (
         <p className="notice" role="status">
           {notice}
-          {adding && status === 'review' && notice.startsWith('Added ') && (
-            <>
-              {' '}
-              <Button variant="link" onClick={() => setFilters({ status: 'approved' })}>
-                See approved
-              </Button>
-            </>
-          )}
         </p>
       )}
 

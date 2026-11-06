@@ -107,7 +107,7 @@ export default function EditAccount({
           <div className="fields single">
             <label>
               Name
-              <input type="text" value={name} autoFocus disabled={busy} onChange={(e) => setName(e.target.value)} />
+              <input type="text" value={name} autoFocus data-autofocus disabled={busy} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
               Class
