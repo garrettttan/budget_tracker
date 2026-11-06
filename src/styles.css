@@ -284,16 +284,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .page-foot { margin-top: 2rem; }
 .page-sub { margin: 0.2rem 0 0; font-size: var(--step--1); }
-.panel-form {
-  margin: 0 0 1.5rem;
-  padding: 1rem 1.25rem 1.25rem;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  max-width: 44rem;
-}
-.panel-form h2 { margin: 0 0 0.25rem; }
-.panel-form > p { margin: 0 0 0.75rem; }
 .fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem 1rem; }
 .fields label, .fields .field { display: grid; gap: 0.3rem; font-weight: 500; font-size: var(--step--1); align-content: start; }
 .fields .wide { grid-column: 1 / -1; }
@@ -628,7 +618,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .bulk-bar { top: 0; }
   .fields { grid-template-columns: 1fr; }
   .fields .span-2 { grid-column: auto; }
-  .panel-form { padding: 0.75rem 0.875rem 1rem; }
   /* merchants: hide the remembered category */
   .register.merchants th:nth-child(2), .register.merchants td:nth-child(2) { display: none; }
   /* transfers: hide the dates column */

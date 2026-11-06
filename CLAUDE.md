@@ -26,7 +26,7 @@ whose bar approves, adds a tag to (or creates one), or removes a tag from every 
 manual accounts (Accounts → Add manual account: name, class, balance; Edit sets name and
 balance, Delete removes it and its transactions); Add transaction on Transactions (account,
 date, amount out/in, description, category or Transfer, note), saved with `source = 'manual'`
-and already approved, the form staying open for the next one (Delete transaction in its details
+and already approved, in a modal that stays open for the next one (saying what was added) (Delete transaction in its details
 removes it). All of these are direct table
 writes under RLS, no new database functions.
 

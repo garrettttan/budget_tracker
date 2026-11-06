@@ -24,6 +24,8 @@ export default function Modal({
 
   useEffect(() => {
     dialog.current?.showModal();
+    // showModal focuses the first control (often ×); a field marked data-autofocus gets it instead
+    dialog.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }, []);
 
   const close = () => dialog.current?.close();
