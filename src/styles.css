@@ -124,6 +124,30 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .rail a:hover { color: var(--ink); background: var(--surface); }
 .rail a.active { color: var(--ink); background: var(--accent-wash); }
 
+/* phones: top bar with ☰, and the pages in a drawer from the left (App.tsx PhoneMenu) */
+.topbar { display: none; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem 0; background: var(--paper); }
+.topbar .wordmark { padding: 0 0 0 0.25rem; }
+.menu-button .icon { stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; fill: none; }
+.btn-icon.menu-button { color: var(--ink); padding: 0.4rem; margin-left: -0.4rem; }
+.modal.drawer {
+  margin: 0; inset: 0 auto 0 0;
+  width: min(18rem, 82vw); height: 100dvh; max-height: none; max-width: none;
+  border: none; border-right: 1px solid var(--rule); border-radius: 0;
+  padding: calc(1rem + env(safe-area-inset-top)) 0.75rem 1rem;
+}
+.modal.drawer[open] { animation: drawer-in 200ms ease-out; }
+@keyframes drawer-in { from { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) { .modal.drawer[open] { animation-name: backdrop-in; } }
+.drawer .modal-head { align-items: center; padding: 0 0 0 0.75rem; margin-bottom: 1rem; }
+.drawer .wordmark { padding: 0; font-size: var(--step-1); }
+.drawer .nav-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.drawer .nav-list a {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.75rem; border-radius: 6px;
+  color: var(--ink-soft); text-decoration: none; font-weight: 500; font-size: var(--step-1);
+}
+.drawer .nav-list a.active { color: var(--ink); background: var(--accent-wash); }
+
 .badge {
   font-variant-numeric: tabular-nums;
   font-size: var(--step--1);
@@ -427,7 +451,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register.settled th:nth-child(5), .register.settled td:nth-child(5) { padding-left: 1.25rem; }
 h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 
-.nav-short { display: none; }
 .label-short { display: none; }
 
 /* Trends */
@@ -645,30 +668,15 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
 
 .boot { min-height: 100vh; }
 
-/* ---- phone: rail becomes bottom tabs ------------------------------- */
+/* ---- phone: the rail becomes a top bar with a menu drawer ----------- */
 
 @media (max-width: 720px) {
   /* a wide modal (a Settings list) gets a little more room on phones */
   .modal.modal-wide { width: calc(100vw - 1rem); max-width: none; padding: 1rem 0.75rem; }
   .shell { grid-template-columns: 1fr; }
-  .rail {
-    position: fixed;
-    inset: auto 0 0 0;
-    height: auto;
-    border-right: none;
-    border-top: 1px solid var(--rule);
-    background: var(--paper);
-    padding: 0.25rem 0.5rem calc(0.25rem + env(safe-area-inset-bottom));
-    z-index: 10;
-  }
-  .rail .wordmark { display: none; }
-  .rail ul { grid-template-columns: repeat(5, 1fr); }
-  .rail a { font-size: 0.75rem; }
-  /* still read by screen readers; "Owed" is shown instead */
-  .nav-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .nav-short { display: inline; }
-  .rail a { flex-direction: column; gap: 0.15rem; font-size: var(--step--1); padding: 0.5rem 0.25rem; }
-  .page { padding-bottom: 6rem; }
+  /* the rail becomes a top bar with ☰ (nothing near iOS's bottom gestures and toolbar) */
+  .rail { display: none; }
+  .topbar { display: flex; }
 
   /* transactions: hide date and account columns (they're in the row's details) */
   .register.txns .date-col, .register.txns .account-col { display: none; }

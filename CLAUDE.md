@@ -269,7 +269,7 @@ from any Pages subpath. Pages: Spending (`src/pages/Spending.tsx`; the month sum
 `components/MonthSpending.tsx`, then the list: filter All (default) / To review / Approved from the Approved header via
 `?status=`, plus `?month=`, `?tag=`, `?hidecat=`, `?hidetag=`, and `?category=` (links only; becomes `?hidecat=`);
 every row has a category picker and an Approved checkbox; `/transactions` and `/review` redirect
-here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
+here keeping their query), Trends, Owed to me, Accounts, Settings, SignIn.
 Email + password auth (single user).
 
 Design: Public Sans (tabular figures); text levels: page title h1 28px bold > section h2 20px
@@ -280,7 +280,9 @@ Chart series: `--viz-income` teal `#00919C` (dark `#1C9AA3`) and `--viz-spending
 contrast) on both surfaces. Pie slices use `--viz-cat-1..6` (blue, orange, aqua, yellow,
 magenta, green, in that order) + `--viz-cat-other` gray, also validated. Don't chart the
 outflow/inflow red and green as two series: they fail the color-blind check.
-Left rail on desktop → bottom tabs under 720px. Lists are plain register tables with
+Left rail on desktop → under 720px a top bar with ☰ (the to-review badge beside it) that opens the
+same pages in a left drawer (`PhoneMenu` in `App.tsx`); no bottom tabs (iOS's home indicator and
+Safari toolbar crowd them). Lists are plain register tables with
 rules, no cards. The to-review count shows only on the To review button and the nav badge. Avoid all-caps labels.
 
 Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
