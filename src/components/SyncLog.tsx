@@ -1,4 +1,6 @@
 import { relativeTime } from '../lib/format';
+import Button from './Button';
+import Modal from './Modal';
 
 export type SyncRun = {
   id: string;
@@ -11,7 +13,26 @@ export type SyncRun = {
   messages: string[];
 };
 
-export default function SyncLog({ runs }: { runs: SyncRun[] }) {
+/** The last runs of the daily sync, in a modal opened from Settings → Bank connection. */
+export default function SyncLog({ runs, onClose }: { runs: SyncRun[]; onClose: () => void }) {
+  return (
+    <Modal labelledBy="sync-log-title" onClose={onClose} className="modal-wide">
+      {(close) => (
+        <>
+          <div className="modal-head">
+            <h2 id="sync-log-title">Sync log</h2>
+            <Button variant="icon" aria-label="Close" onClick={close}>
+              ×
+            </Button>
+          </div>
+          <SyncTable runs={runs} />
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function SyncTable({ runs }: { runs: SyncRun[] }) {
   return (
     <table className="register">
       <thead>

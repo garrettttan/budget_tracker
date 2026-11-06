@@ -21,6 +21,7 @@ export default function Settings({ email }: { email: string }) {
   const [connection, setConnection] = useState<Connection | null | undefined>(undefined); // undefined = loading
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
 
   const loadSync = useCallback(async () => {
     const [c, r] = await Promise.all([
@@ -55,6 +56,14 @@ export default function Settings({ email }: { email: string }) {
           <p className={connection.status === 'active' ? undefined : 'error'}>
             {connection.label}: {STATUS_LABEL[connection.status] ?? connection.status}. Last synced{' '}
             {relativeTime(connection.last_synced_at)}.
+            {runs.length > 0 && (
+              <>
+                {' '}
+                <Button variant="link" onClick={() => setShowLog(true)}>
+                  Sync log
+                </Button>
+              </>
+            )}
           </p>
           {connection.status_message && <p className="muted">{connection.status_message}</p>}
           <p className="muted">
@@ -67,12 +76,7 @@ export default function Settings({ email }: { email: string }) {
         </>
       )}
 
-      {runs.length > 0 && (
-        <>
-          <h2>Sync log</h2>
-          <SyncLog runs={runs} />
-        </>
-      )}
+      {showLog && <SyncLog runs={runs} onClose={() => setShowLog(false)} />}
 
       <h2>Categories</h2>
       <CategoryList />
