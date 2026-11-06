@@ -171,6 +171,9 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
 .register select { padding: 0.2rem 0.4rem; }
 /* row buttons: compact, and set apart from the amount column */
+/* sync log (Settings → Sync log modal): a gap between the number columns, dates on one line */
+.register.sync-log .num { padding-left: 0.75rem; }
+.register.sync-log td:first-child { white-space: nowrap; }
 .register td.action { text-align: right; white-space: nowrap; padding-left: 1.25rem; padding-right: 0; }
 .register td.action .btn + .btn { margin-left: 0.5rem; }
 /* Accounts: one table per class; fixed widths line their columns up */
@@ -637,6 +640,9 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .inline-form { display: grid; padding: 0.5rem; }
   .inline-form input[type='text'], .inline-form select { width: 100%; min-width: 0; }
   .inline-form .amount-quick input { width: 100%; }
+  .register.sync-log td, .register.sync-log th { padding-right: 0.5rem; }
+  .register.sync-log .num { padding-left: 0.4rem; padding-right: 0; }
+  .register.sync-log .sync-trigger { display: block; }
   .register.paybacks td, .register.paybacks th, .register.owed td, .register.owed th { padding-right: 0.5rem; }
   .register.owed td.action .btn + .btn { margin-left: 0.25rem; }
   .pie-layout { grid-template-columns: 1fr; }

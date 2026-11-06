@@ -34,7 +34,7 @@ export default function SyncLog({ runs, onClose }: { runs: SyncRun[]; onClose: (
 
 function SyncTable({ runs }: { runs: SyncRun[] }) {
   return (
-    <table className="register">
+    <table className="register sync-log">
       <thead>
         <tr>
           <th scope="col">When</th>
@@ -49,7 +49,7 @@ function SyncTable({ runs }: { runs: SyncRun[] }) {
           <tr key={run.id}>
             <td>
               {relativeTime(run.started_at)}
-              {run.trigger !== 'schedule' && <span className="muted"> ({run.trigger})</span>}
+              {run.trigger !== 'schedule' && <span className="muted sync-trigger"> ({run.trigger})</span>}
             </td>
             <td className={run.status === 'error' ? 'error' : undefined}>
               {run.status}
