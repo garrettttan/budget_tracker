@@ -109,16 +109,14 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
             <Button size="small" disabled={syncing} title={syncing ? 'Already syncing' : undefined} onClick={syncNow}>
               Sync now
             </Button>
-            <span className="push">
-              {runs.length > 0 && (
-                <Button variant="link" onClick={() => setShowLog(true)}>
-                  Sync log
-                </Button>
-              )}
-              <Button variant="link" onClick={() => setShowReconnect(true)}>
-                Reconnect
+            {runs.length > 0 && (
+              <Button variant="link" onClick={() => setShowLog(true)}>
+                Sync log
               </Button>
-            </span>
+            )}
+            <Button variant="link" onClick={() => setShowReconnect(true)}>
+              Reconnect
+            </Button>
           </div>
         </>
       )}
