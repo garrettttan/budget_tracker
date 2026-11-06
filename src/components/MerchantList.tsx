@@ -12,6 +12,7 @@ type Merchant = {
 };
 
 type Editing = { id: string; mode: 'rename' | 'merge' };
+type Sort = { by: 'name' | 'count'; desc: boolean };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -24,6 +25,7 @@ export default function MerchantList() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sort, setSort] = useState<Sort>({ by: 'name', desc: false });
 
   const load = useCallback(async () => {
     const { data, error } = await db()
@@ -69,8 +71,19 @@ export default function MerchantList() {
   if (!merchants) return null;
   if (merchants.length === 0) return <p className="muted">Merchants appear here after your first sync.</p>;
 
-  const shown = filter ? merchants.filter((m) => m.name.toLowerCase().includes(filter.toLowerCase())) : merchants;
   const count = (m: Merchant) => m.transactions[0]?.count ?? 0;
+  const byName = (a: Merchant, b: Merchant) => a.name.localeCompare(b.name);
+  const shown = (filter ? merchants.filter((m) => m.name.toLowerCase().includes(filter.toLowerCase())) : merchants)
+    .slice()
+    .sort((a, b) => {
+      const order = sort.by === 'count' ? count(a) - count(b) : byName(a, b);
+      return (sort.desc ? -order : order) || byName(a, b); // ties stay A–Z
+    });
+  // a header click sorts by that column (transactions start most first); clicking again flips it
+  const sortBy = (by: Sort['by']) =>
+    setSort((s) => (s.by === by ? { by, desc: !s.desc } : { by, desc: by === 'count' }));
+  const ariaSort = (by: Sort['by']) => (sort.by === by ? (sort.desc ? 'descending' : 'ascending') : undefined);
+  const arrow = (by: Sort['by']) => (sort.by === by ? (sort.desc ? ' ↓' : ' ↑') : '');
 
   return (
     <>
@@ -87,9 +100,17 @@ export default function MerchantList() {
       <table className="register merchants">
         <thead>
           <tr>
-            <th scope="col">Merchant</th>
+            <th scope="col" aria-sort={ariaSort('name')}>
+              <Button variant="link" className="th-sort" onClick={() => sortBy('name')}>
+                Merchant{arrow('name')}
+              </Button>
+            </th>
             <th scope="col">Remembered category</th>
-            <th scope="col" className="num">Transactions</th>
+            <th scope="col" className="num" aria-sort={ariaSort('count')}>
+              <Button variant="link" className="th-sort" onClick={() => sortBy('count')}>
+                Transactions{arrow('count')}
+              </Button>
+            </th>
             <th scope="col">
               <span className="visually-hidden">Actions</span>
             </th>
