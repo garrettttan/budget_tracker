@@ -556,7 +556,7 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .pie-total-label { fill: var(--ink-soft); font-size: 18px; }
 .pie-share { color: var(--ink-soft); font-size: var(--step--1); font-variant-numeric: tabular-nums; text-align: right; padding-left: 1rem; }
 .pie-value { font-variant-numeric: tabular-nums; text-align: right; padding-left: 0.6rem; }
-.register.tag-totals, .register.category-totals { max-width: 44rem; }
+.register.tag-totals { max-width: 44rem; }
 
 /* Settings → Merchants */
 /* sortable column headers: like the filter headers (tinted on hover), with an up/down icon */

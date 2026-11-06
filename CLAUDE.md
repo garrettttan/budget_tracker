@@ -79,10 +79,10 @@ the list keeps its rows (pending too) until new ones arrive and fades only if th
 "Filters are on · Show all" note sits beside the Transactions heading so it doesn't push the list. All
 motion is off under prefers-reduced-motion. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
 `?range=`) and "Include tagged" toggles (`?tags=`), scoping cash flow (income vs spending columns),
-Categories (avg / month and total; a row opens a modal with that category by month), net worth (one
+one category over time (a dropdown picks it, `?cat=`), net worth (one
 point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts
 at their current balance); then tag totals (`tag_spend`, all time). Clicking a month opens Spending
-with `?status=all&month=` (+ `category=` from the modal). Charts
+with `?status=all&month=` (+ `category=` from the category chart). Charts
 are hand-rolled SVG in `src/components/charts.tsx` (no chart library): hover and keyboard focus show a
 tooltip. Garrett removed the explanatory text and "Show as table" views on purpose; don't add them back.
 
