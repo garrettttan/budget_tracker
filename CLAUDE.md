@@ -46,7 +46,7 @@ record money in as "Pays back Sam" (a Venmo payment), which links it. A linked p
 the last 30 settled ones (Reopen).
 
 **Phase 5 (Trends): done** (Nov 4; reorganized Nov 5). The month view lives on **Spending**
-(the old Transactions page, `/spending`): at the top, a **month dropdown** in line
+(the old Transactions page, `/spending`): at the top, a **month dropdown** with ‹ › arrows, in line
 with the summary numbers (no "Spending in" prefix; its own line on phones), `?month=YYYY-MM`, default this month; normal spending only, no tag toggles):
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
 into gray "Other"). Tapping a category sets `?category=&status=all` and narrows the list (tap again
