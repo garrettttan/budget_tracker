@@ -135,6 +135,16 @@ export default function Trends() {
     categoryOptions.find((o) => o.key === byCategory[0]?.key) ??
     categoryOptions[0];
 
+  // averages divide by months that have any data, not every month in the range: before tracking
+  // started (or a month with nothing yet), there's nothing to average over
+  const activeMonths = useMemo(() => {
+    const has = new Set([
+      ...(spend ?? []).filter((r) => Number(r.spent) !== 0).map((r) => r.month),
+      ...flow.filter((f) => Number(f.income) !== 0 || Number(f.spending) !== 0).map((f) => f.month),
+    ]);
+    return Math.max(1, months.filter((m) => has.has(m.key)).length);
+  }, [spend, flow, months]);
+
   const flowFor = (key: string) => flow.find((f) => f.month === key);
   const income = months.map((m) => Number(flowFor(m.key)?.income ?? 0));
   const spending = months.map((m) => Number(flowFor(m.key)?.spending ?? 0));
@@ -229,6 +239,7 @@ export default function Trends() {
             category={chartCategory}
             options={categoryOptions}
             months={months}
+            activeMonths={activeMonths}
             spend={spend ?? []}
             onPick={(key) => set({ cat: key })}
             onOpenMonth={(key) => openMonth(key, chartCategory.key)}
@@ -254,7 +265,7 @@ export default function Trends() {
                         {c.name}
                       </Button>
                     </td>
-                    <td className="num">{money(c.value / months.length)}</td>
+                    <td className="num">{money(c.value / activeMonths)}</td>
                     <td className="num">{money(c.value)}</td>
                   </tr>
                 ))}
@@ -305,6 +316,7 @@ export default function Trends() {
         <CategoryMonths
           category={opened}
           months={months}
+          activeMonths={activeMonths}
           spend={spend ?? []}
           rangeLabel={rangeLabel}
           start={start}
@@ -322,6 +334,7 @@ function CategoryOverTime({
   category,
   options,
   months,
+  activeMonths,
   spend,
   onPick,
   onOpenMonth,
@@ -329,6 +342,8 @@ function CategoryOverTime({
   category: { key: string; name: string };
   options: { key: string; name: string }[];
   months: MonthKey[];
+  /** months in the range with any data: the divisor for averages */
+  activeMonths: number;
   spend: SpendRow[];
   onPick: (key: string) => void;
   onOpenMonth: (monthKey: string) => void;
@@ -348,7 +363,7 @@ function CategoryOverTime({
         by month
       </h2>
       <p className="muted small">
-        {money(total)} total · {money(total / months.length)} avg / month
+        {money(total)} total · {money(total / activeMonths)} avg / month
       </p>
       <TimeLine
         points={months.map((m, i) => ({ date: m.key, long: m.long, value: values[i] }))}
@@ -367,6 +382,7 @@ function CategoryOverTime({
 function CategoryMonths({
   category,
   months,
+  activeMonths,
   spend,
   rangeLabel,
   start,
@@ -376,6 +392,7 @@ function CategoryMonths({
 }: {
   category: { key: string; name: string };
   months: MonthKey[];
+  activeMonths: number;
   spend: SpendRow[];
   rangeLabel: string;
   start: string;
@@ -396,7 +413,7 @@ function CategoryMonths({
             </Button>
           </div>
           <p className="muted small">
-            {money(total)} {rangeLabel}, {money(total / months.length)} a month on average. Pick a month to see its
+            {money(total)} {rangeLabel}, {money(total / activeMonths)} a month on average. Pick a month to see its
             transactions, or{' '}
             <Link to={`/spending?${new URLSearchParams({ status: 'all', category: category.key, from: start, to: end })}`}>
               see all of them
