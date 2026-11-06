@@ -57,7 +57,7 @@ unticks what the search matches; Only per row). Category and Tags list only what
 and approval filter hold, with a count each (`fetchPresent`, three columns paged 1,000 at a time;
 the header filters themselves don't narrow it, and unticked items stay listed so they can come back). Category keys: category ids, `none` (Uncategorized),
 `transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only). Hidden
-categories leave the list, pie and Spent; hidden tags leave the list (an anti-join:
+categories leave the list and fade in the pie (its middle shows what's visible); Spent / Income / Saved always cover the whole month, whatever the filters; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
 several tags). The Approved header sets `?status=` (both ticked = All, the default; untick one for
