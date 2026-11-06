@@ -439,6 +439,7 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .chart-baseline { stroke: var(--ink-soft); stroke-width: 1; }
 .chart-axis { fill: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
 .chart-end-label { fill: var(--ink); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart svg.clickable { cursor: pointer; }
 .chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart-dot { stroke: var(--paper); stroke-width: 2; }
 .chart-crosshair { stroke: var(--ink-soft); stroke-width: 1; }

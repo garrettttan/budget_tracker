@@ -203,19 +203,28 @@ export function MonthColumns({
 }
 
 /**
- * One series over time (net worth): a 2px line with a crosshair that snaps to
- * the nearest point, and the latest value labeled at the end.
+ * One series over time (net worth, a category by month): a 2px line with a
+ * crosshair that snaps to the nearest point, and the latest value labeled at
+ * the end. With `onSelect`, clicking (or Enter on) a point picks it.
  */
 export function TimeLine({
   points,
   color,
   format,
   label,
+  name = 'Net worth',
+  onSelect,
+  selectHint,
 }: {
   points: { date: string; long: string; value: number }[];
   color: string;
   format: (n: number) => string;
   label: string;
+  /** the series name in the tooltip */
+  name?: string;
+  onSelect?: (date: string) => void;
+  /** what clicking a point does, for the accessible name */
+  selectHint?: string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [idx, setIdx] = useState<number | null>(null);
@@ -247,7 +256,7 @@ export function TimeLine({
           x: Math.min(Math.max(x(points[idx].date), 80), Math.max(width - 80, 80)),
           y: 0,
           title: points[idx].long,
-          rows: [{ color, name: 'Net worth', value: format(points[idx].value) }],
+          rows: [{ color, name, value: format(points[idx].value) }],
         };
 
   return (
@@ -256,9 +265,11 @@ export function TimeLine({
         <svg
           width={width}
           height={PLOT_H + X_BAND + 8}
-          role="img"
-          aria-label={label}
+          role={onSelect ? 'button' : 'img'}
+          aria-label={onSelect && selectHint ? `${label}. Arrow keys move between months; ${selectHint.toLowerCase()}` : label}
           tabIndex={0}
+          className={onSelect ? 'clickable' : undefined}
+          onClick={(e) => onSelect?.(points[nearest(e.clientX - e.currentTarget.getBoundingClientRect().left)].date)}
           onPointerMove={(e) => setIdx(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
           onPointerLeave={() => setIdx(null)}
           onFocus={() => setIdx(points.length - 1)}
@@ -266,6 +277,10 @@ export function TimeLine({
           onKeyDown={(e) => {
             if (e.key === 'ArrowLeft') setIdx((i) => Math.max(0, (i ?? points.length - 1) - 1));
             if (e.key === 'ArrowRight') setIdx((i) => Math.min(points.length - 1, (i ?? 0) + 1));
+            if (onSelect && idx !== null && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              onSelect(points[idx].date);
+            }
           }}
         >
           <g transform="translate(0,8)">

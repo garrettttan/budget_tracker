@@ -350,12 +350,13 @@ function CategoryOverTime({
       <p className="muted small">
         {money(total)} total · {money(total / months.length)} avg / month
       </p>
-      <MonthColumns
-        months={months}
-        series={[{ name: category.name, color: SPENDING, values }]}
+      <TimeLine
+        points={months.map((m, i) => ({ date: m.key, long: m.long, value: values[i] }))}
+        color={SPENDING}
+        name={category.name}
         format={money}
         label={`${category.name} spending by month`}
-        selectHint="Opens its transactions"
+        selectHint="Enter opens that month's transactions"
         onSelect={onOpenMonth}
       />
     </>
