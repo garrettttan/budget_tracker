@@ -28,10 +28,6 @@ export default function TransferSuggestions({
   return (
     <>
       <h2>Possible transfers</h2>
-      <p className="muted small">
-        Money moving between your own accounts isn't spending. Confirm a pair to mark both sides as a transfer and approve
-        them. If it isn't, dismiss it with × and categorize both transactions below as usual.
-      </p>
       <table className="register transfers">
         <thead>
           <tr>
