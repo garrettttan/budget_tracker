@@ -55,7 +55,11 @@ function columnPath(x: number, y: number, w: number, h: number): string {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
 
-type Tip = { x: number; y: number; title: string; rows: { color: string; name: string; value: string }[] };
+type Tip = { x: number; y: number; title: string; rows: { color: string; name: string; value: string; dashed?: boolean }[] };
+
+/** A line swatch's fill: solid, or dashed to match a dashed line. */
+const lineSwatch = (color: string, dashed?: boolean) =>
+  dashed ? { background: `repeating-linear-gradient(90deg, ${color} 0 4px, transparent 4px 7px)` } : { background: color };
 
 function Tooltip({ tip }: { tip: Tip | null }) {
   if (!tip) return null;
@@ -64,7 +68,7 @@ function Tooltip({ tip }: { tip: Tip | null }) {
       <div className="chart-tip-title">{tip.title}</div>
       {tip.rows.map((r) => (
         <div key={r.name} className="chart-tip-row">
-          <span className="chart-key-line" style={{ background: r.color }} />
+          <span className="chart-key-line" style={lineSwatch(r.color, r.dashed)} />
           <strong>{r.value}</strong> <span className="muted">{r.name}</span>
         </div>
       ))}
@@ -73,12 +77,12 @@ function Tooltip({ tip }: { tip: Tip | null }) {
 }
 
 /** Legend for two or more series: a swatch shaped like the mark, then the name. */
-export function Legend({ items, shape }: { items: { name: string; color: string }[]; shape: 'rect' | 'line' }) {
+export function Legend({ items, shape }: { items: { name: string; color: string; dashed?: boolean }[]; shape: 'rect' | 'line' }) {
   return (
     <div className="chart-legend">
       {items.map((i) => (
         <span key={i.name}>
-          <span className={shape === 'rect' ? 'chart-key-rect' : 'chart-key-line'} style={{ background: i.color }} />
+          <span className={shape === 'rect' ? 'chart-key-rect' : 'chart-key-line'} style={shape === 'rect' ? { background: i.color } : lineSwatch(i.color, i.dashed)} />
           {i.name}
         </span>
       ))}
@@ -309,6 +313,120 @@ export function TimeLine({
             <text x={x(last.date) + 10} y={y(last.value)} dy="0.32em" className="chart-end-label">
               {format(last.value)}
             </text>
+          </g>
+        </svg>
+      )}
+      <Tooltip tip={tip} />
+    </div>
+  );
+}
+
+export type PaceSeries = { name: string; color: string; dashed?: boolean; values: (number | null)[] };
+
+/**
+ * Running totals through a month, day by day: one line per series (day 1 is
+ * values[0]; null = no value that day, e.g. days still to come). The first
+ * series is the main one: it gets the end dot and label. Hover and arrow keys
+ * snap a crosshair to a day; the tooltip lists every series' total that day.
+ */
+export function PaceLines({
+  days,
+  series,
+  format,
+  label,
+  dayLabel,
+}: {
+  days: number;
+  series: PaceSeries[];
+  format: (n: number) => string;
+  label: string;
+  /** "Nov 12" for a day number */
+  dayLabel: (day: number) => string;
+}) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const [idx, setIdx] = useState<number | null>(null);
+  const all = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
+  const ticks = niceTicks(Math.min(0, ...all), Math.max(0, ...all));
+  const lo = ticks[0];
+  const hi = ticks[ticks.length - 1];
+  const endLabelW = 84;
+  const plotW = Math.max(0, width - AXIS_W - endLabelW);
+  const x = (i: number) => AXIS_W + (days > 1 ? (i / (days - 1)) * plotW : plotW);
+  const y = (v: number) => PLOT_H - ((v - lo) / (hi - lo || 1)) * PLOT_H;
+  const path = (values: (number | null)[]) =>
+    values
+      .map((v, i) => (v === null ? null : `${i && values[i - 1] !== null ? 'L' : 'M'}${x(i)},${y(v)}`))
+      .filter(Boolean)
+      .join('');
+  const main = series[0];
+  const lastIdx = main ? main.values.reduce<number>((last, v, i) => (v === null ? last : i), -1) : -1;
+  const focusIdx = lastIdx >= 0 ? lastIdx : days - 1;
+  const nearest = (px: number) => Math.min(days - 1, Math.max(0, Math.round(((px - AXIS_W) / (plotW || 1)) * (days - 1))));
+
+  const tip: Tip | null =
+    idx === null
+      ? null
+      : {
+          x: Math.min(Math.max(x(idx), 80), Math.max(width - 80, 80)),
+          y: 0,
+          title: dayLabel(idx + 1),
+          rows: series
+            .filter((s) => s.values[idx] != null)
+            .map((s) => ({ color: s.color, dashed: s.dashed, name: s.name, value: format(s.values[idx]!) })),
+        };
+
+  return (
+    <div className="chart" ref={ref}>
+      {width > 0 && days > 0 && (
+        <svg
+          width={width}
+          height={PLOT_H + X_BAND + 8}
+          role="img"
+          aria-label={`${label}. Arrow keys move between days`}
+          tabIndex={0}
+          onPointerMove={(e) => setIdx(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
+          onPointerLeave={() => setIdx(null)}
+          onFocus={() => setIdx(focusIdx)}
+          onBlur={() => setIdx(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') setIdx((i) => Math.max(0, (i ?? focusIdx) - 1));
+            if (e.key === 'ArrowRight') setIdx((i) => Math.min(days - 1, (i ?? focusIdx) + 1));
+          }}
+        >
+          <g transform="translate(0,8)">
+            {ticks.map((t) => (
+              <g key={t}>
+                <line x1={AXIS_W} x2={AXIS_W + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? 'chart-baseline' : 'chart-grid'} />
+                <text x={AXIS_W - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
+                  {axisMoney(t)}
+                </text>
+              </g>
+            ))}
+            <text x={AXIS_W} y={PLOT_H + 18} className="chart-axis">
+              {dayLabel(1)}
+            </text>
+            <text x={AXIS_W + plotW} y={PLOT_H + 18} textAnchor="end" className="chart-axis">
+              {dayLabel(days)}
+            </text>
+            {/* the main series last, so it draws on top */}
+            {[...series].reverse().map((s) => (
+              <path key={s.name} d={path(s.values)} className={s.dashed ? 'chart-line dashed' : 'chart-line'} style={{ stroke: s.color }} />
+            ))}
+            {idx !== null && <line x1={x(idx)} x2={x(idx)} y1={0} y2={PLOT_H} className="chart-crosshair" />}
+            {idx !== null &&
+              series.map((s) =>
+                s.values[idx] == null || (s === main && idx === lastIdx) ? null : (
+                  <circle key={s.name} cx={x(idx)} cy={y(s.values[idx]!)} r={4} className="chart-dot" style={{ fill: s.color }} />
+                ),
+              )}
+            {main && lastIdx >= 0 && (
+              <>
+                <circle cx={x(lastIdx)} cy={y(main.values[lastIdx]!)} r={4} className="chart-dot" style={{ fill: main.color }} />
+                <text x={x(lastIdx) + 10} y={y(main.values[lastIdx]!)} dy="0.32em" className="chart-end-label">
+                  {format(main.values[lastIdx]!)}
+                </text>
+              </>
+            )}
           </g>
         </svg>
       )}

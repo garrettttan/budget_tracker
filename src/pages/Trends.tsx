@@ -3,11 +3,15 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
-import { Legend, MonthColumns, TimeLine } from '../components/charts';
-import { iso, monthEnd, sum } from '../lib/months';
+import Combobox from '../components/Combobox';
+import HeaderFilter from '../components/HeaderFilter';
+import Switch from '../components/Switch';
+import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
+import { iso, monthEnd, sum, thisMonth } from '../lib/months';
 
 const INCOME = 'var(--viz-income)';
 const SPENDING = 'var(--viz-spending)';
+const EARLIER = 'var(--viz-cat-other)';
 
 const RANGES = [
   { key: '12m', label: 'Last 12 months', months: 12 },
@@ -24,6 +28,49 @@ type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
 type Category = { id: string; name: string };
 type MonthKey = { key: string; short: string; long: string };
+type Line = { posted_date: string; category_id: string | null; spent: string; tag_ids: string[] };
+
+/** The YYYY-MM-01 key `n` months before (negative) or after `key`. */
+const addMonths = (key: string, n: number) => {
+  const d = new Date(key + 'T12:00:00');
+  return iso(new Date(d.getFullYear(), d.getMonth() + n, 1, 12));
+};
+
+/** Every approved spending line from `start` on (paged; the API caps a response at 1,000 rows). */
+async function fetchLines(start: string) {
+  const lines: Line[] = [];
+  for (let from = 0; from < 50_000; from += 1000) {
+    const { data, error } = await db()
+      .from('spending_lines')
+      .select('posted_date, category_id, spent, tag_ids')
+      .gte('posted_date', start)
+      .order('transaction_id')
+      .range(from, from + 999);
+    if (error) return { lines, error };
+    lines.push(...((data ?? []) as Line[]));
+    if ((data ?? []).length < 1000) break;
+  }
+  return { lines, error: null };
+}
+
+/**
+ * A month's running total for days 1..`days`: day d is everything spent on or
+ * before it. A shorter month carries its total to the end; days after `upTo`
+ * (today, for this month) are null.
+ */
+function runningTotals(lines: Line[], month: string, days: number, upTo = days) {
+  const byDay = new Array<number>(days).fill(0);
+  for (const l of lines) {
+    if (l.posted_date.slice(0, 7) !== month.slice(0, 7)) continue;
+    const day = Number(l.posted_date.slice(8, 10));
+    if (day <= days) byDay[day - 1] += Number(l.spent);
+  }
+  let total = 0;
+  return byDay.map((v, i) => {
+    total += v;
+    return i < upTo ? Math.round(total * 100) / 100 : null;
+  });
+}
 
 /** A category's spending (`none` = Uncategorized) for each of `months`. */
 function monthValues(spend: SpendRow[], months: MonthKey[], category: string) {
@@ -66,6 +113,7 @@ export default function Trends() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [lines, setLines] = useState<Line[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +133,15 @@ export default function Trends() {
       setCategories((c.data ?? []) as Category[]);
     });
   }, []);
+
+  // this month and the three before it, for the pace chart; the tag toggles filter it below
+  const current = thisMonth();
+  useEffect(() => {
+    fetchLines(addMonths(current, -3)).then(({ lines, error }) => {
+      if (error) setError(error.message);
+      setLines(lines);
+    });
+  }, [current]);
 
   useEffect(() => {
     setLoading(true); // the charts keep their last render, faded, until this returns
@@ -174,13 +231,46 @@ export default function Trends() {
       range: range === '12m' ? null : range,
       tags: included.join(',') || null,
       cat: params.get('cat'),
+      housing: params.get('housing'),
       ...next,
     };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  const toggleTag = (id: string) =>
-    set({ tags: (included.includes(id) ? included.filter((t) => t !== id) : [...included, id]).join(',') || null });
+  // the included tags that still exist, in the list's order, for the dropdown's label
+  const includedNames = tags.filter((t) => included.includes(t.tag_id)).map((t) => t.name);
+
+  // this month's spending so far, day by day, against last month and an average month (the
+  // earlier three that have any spending; shown when two or more do, else it's just last month)
+  // rent is the biggest bill and lands on a different day each month, so it swamps the pace
+  // lines; Housing is left out unless its toggle (?housing=1) is on
+  const housing = categories.find((c) => c.name === 'Housing')?.id ?? null;
+  const withHousing = params.get('housing') === '1';
+  const pace = useMemo(() => {
+    if (!lines) return null;
+    const days = Number(monthEnd(current).slice(8, 10));
+    const today = Number(end.slice(8, 10));
+    const shown = lines.filter(
+      (l) => (withHousing || l.category_id !== housing) && (l.tag_ids.length === 0 || l.tag_ids.some((t) => included.includes(t))),
+    );
+    const has = new Set(lines.map((l) => l.posted_date.slice(0, 7)));
+    const earlier = [1, 2, 3].map((n) => addMonths(current, -n)).filter((m) => has.has(m.slice(0, 7)));
+    const series: PaceSeries[] = [{ name: 'This month', color: SPENDING, values: runningTotals(shown, current, days, today) }];
+    const last = addMonths(current, -1);
+    if (earlier.includes(last)) series.push({ name: 'Last month', color: EARLIER, values: runningTotals(shown, last, days) });
+    if (earlier.length >= 2) {
+      const curves = earlier.map((m) => runningTotals(shown, m, days) as number[]);
+      series.push({
+        name: 'Average month',
+        color: EARLIER,
+        dashed: true,
+        values: curves[0].map((_, i) => Math.round((sum(curves.map((c) => c[i])) / curves.length) * 100) / 100),
+      });
+    }
+    return { days, series };
+  }, [lines, included, current, end, housing, withHousing]);
+  const dayLabel = (day: number) =>
+    new Date(`${current.slice(0, 8)}${String(day).padStart(2, '0')}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   /** Opens Spending on a month's rows (`YYYY-MM-01`), optionally one category. */
   const openMonth = (key: string, category?: string) =>
@@ -202,18 +292,44 @@ export default function Trends() {
           ))}
         </div>
         {tags.length > 0 && (
-          <div className="filter tag-toggles" role="group" aria-label="Include tagged spending">
-            <span className="muted small">Include tagged:</span>
-            {tags.map((t) => (
-              <Button key={t.tag_id} size="small" aria-pressed={included.includes(t.tag_id)} onClick={() => toggleTag(t.tag_id)}>
-                {t.name}
-              </Button>
-            ))}
+          <div className="tag-include">
+            <HeaderFilter
+              label="Tags"
+              items={tags.map((t) => ({ id: t.tag_id, name: t.name, count: t.transaction_count }))}
+              hidden={tags.map((t) => t.tag_id).filter((id) => !included.includes(id))}
+              onChange={(hidden) => set({ tags: tags.map((t) => t.tag_id).filter((id) => !hidden.includes(id)).join(',') || null })}
+              onOnly={(id) => set({ tags: id })}
+              active={includedNames.length > 0}
+              reset={{
+                label: 'Clear',
+                onClick: () => set({ tags: null }),
+                disabled: includedNames.length === 0,
+                title: includedNames.length ? undefined : 'No tags are included',
+              }}
+            >
+              Include tagged:{' '}
+              {includedNames.length === 0 ? 'None' : includedNames[0] + (includedNames.length > 1 ? ` +${includedNames.length - 1}` : '')}
+            </HeaderFilter>
           </div>
         )}
       </div>
 
       <div className={loading && spend ? 'trends refetching' : 'trends'}>
+        {pace && (
+          <>
+            <h2>This month</h2>
+            <div className="pace-controls">
+              {pace.series.length > 1 && <Legend shape="line" items={pace.series} />}
+              {housing && (
+                <Switch checked={withHousing} onChange={(on) => set({ housing: on ? '1' : null })}>
+                  Include Housing
+                </Switch>
+              )}
+            </div>
+            <PaceLines days={pace.days} series={pace.series} format={money} label="Spending so far this month, day by day" dayLabel={dayLabel} />
+          </>
+        )}
+
         <h2>Cash flow</h2>
         <Legend shape="rect" items={[{ name: 'Income', color: INCOME }, { name: 'Spending', color: SPENDING }]} />
         <MonthColumns
@@ -305,19 +421,18 @@ function CategoryOverTime({
   const total = sum(values);
   return (
     <>
-      <h2 className="category-over-time">
-        <select className="heading-select" aria-label="Category" value={category.key} onChange={(e) => onPick(e.target.value)}>
-          {options.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.name}
-            </option>
-          ))}
-        </select>{' '}
-        by month
-      </h2>
-      <p className="muted small">
-        {money(total)} total · {money(total / activeMonths)} avg / month
-      </p>
+      <h2>Categories over time</h2>
+      <div className="category-picker">
+        <Combobox
+          label="Category"
+          options={options.map((o) => ({ value: o.key, text: o.name }))}
+          value={category.key}
+          onChange={onPick}
+        />
+        <span className="muted small">
+          {money(total)} total · {money(total / activeMonths)} avg / month
+        </span>
+      </div>
       <TimeLine
         points={months.map((m, i) => ({ date: m.key, long: m.long, value: values[i] }))}
         color={SPENDING}
