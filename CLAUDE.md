@@ -64,7 +64,15 @@ several tags). The Approved header sets `?status=` (both ticked = All, the defau
 To review or Approved; the last ticked can't be unticked) and replaced the To review / Approved / All
 buttons; the table and its headers always render, even for an empty month. An explicit `?category=` (pie tap) overrides hidden categories. On phones the Tags
 column shows just a count (tags are edited in the row's details) and Approved's header is ✓, so the
-table fits at 390px. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
+table fits at 390px. **Pending transactions** sit in the list by date (All and To review, not Approved),
+following the date range and category filters, **read-only**: when a charge posts, the bank usually
+sends it under a new id and the sync deletes the pending row, so a category, tags or a note set on it
+would be lost. No select box, picker or Approved box; the pre-filled category shows as text. Tapping a
+pie category is the same as Only in the Category header. Filtering is meant to feel calm: the pie keeps every category
+(filtered-out ones faded, in place, so it never reshapes) and its slices tween ~250ms when values change;
+the list keeps its rows (pending too) until new ones arrive and fades only if that takes over 100ms; the
+"Filters are on · Show all" note sits beside the Transactions heading so it doesn't push the list. All
+motion is off under prefers-reduced-motion. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
 `?range=`) and "Include tagged" toggles (`?tags=`), scoping cash flow (income vs spending columns),
 Categories (avg / month and total; a row opens a modal with that category by month), net worth (one
 point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts

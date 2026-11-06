@@ -320,12 +320,55 @@ function arcPath(a0: number, a1: number, r: number, hole: number): string {
   return `M${pt(a0, r)}A${r},${r} 0 ${large} 1 ${pt(a1, r)}L${pt(a1, hole)}A${hole},${hole} 0 ${large} 0 ${pt(a0, hole)}Z`;
 }
 
+type Arc = Slice & { a0: number; a1: number };
+
+/**
+ * Slices that move to new angles (another month, an edit) slide there over
+ * `ms` instead of snapping; new ones grow from nothing, gone ones shrink away.
+ * Off when the device asks for reduced motion.
+ */
+function useTweenedArcs(target: Arc[], ms = 250): Arc[] {
+  const [shown, setShown] = useState(target);
+  const current = useRef(target);
+  const signature = target.map((a) => `${a.key}:${a.a0.toFixed(4)}:${a.a1.toFixed(4)}:${a.color}:${a.value}`).join('|');
+  useEffect(() => {
+    const from = current.current;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || from.length === 0) {
+      current.current = target;
+      setShown(target);
+      return;
+    }
+    const before = new Map(from.map((a) => [a.key, a]));
+    const after = new Set(target.map((a) => a.key));
+    const tracks = [
+      ...target.map((t) => ({ arc: t, f: before.get(t.key) ?? { ...t, a1: t.a0 }, t })),
+      ...from.filter((f) => !after.has(f.key)).map((f) => ({ arc: f, f, t: { ...f, a1: f.a0 } })),
+    ];
+    const start = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / ms);
+      const e = 1 - (1 - p) ** 3; // ease out
+      const frame = p < 1 ? tracks.map(({ arc, f, t }) => ({ ...arc, a0: f.a0 + (t.a0 - f.a0) * e, a1: f.a1 + (t.a1 - f.a1) * e })) : target;
+      current.current = frame;
+      setShown(frame);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [signature]);
+  return shown;
+}
+
 /**
  * Part-to-whole donut with a ranked list beside it. The list carries every
  * name, amount and share (so color is never the only key and no hover is
  * needed); the donut shows the split at a glance. Slices beyond the colored
  * ones share the gray "Other" slice, but each still has its own list row.
  * Hovering a slice or a row highlights both; rows are the buttons.
+ * Filtered-out categories (`hidden`) keep their place and size, faded, so
+ * filtering never reshapes the chart or shifts the page.
  */
 export function CategoryPie({
   rows,
@@ -333,6 +376,7 @@ export function CategoryPie({
   total,
   totalLabel,
   selected,
+  hidden = [],
   onSelect,
   selectHint,
   label,
@@ -342,6 +386,8 @@ export function CategoryPie({
   total: number;
   totalLabel: string;
   selected?: string | null;
+  /** keys filtered out: drawn faded, in place */
+  hidden?: string[];
   onSelect: (key: string) => void;
   selectHint: string;
   label: string;
@@ -353,15 +399,18 @@ export function CategoryPie({
   const slices: Slice[] = colored.map((r, i) => ({ ...r, color: SLICE_COLORS[i] }));
   if (rest.length) slices.push({ key: 'other', name: `Other (${rest.length})`, value: rest.reduce((a, r) => a + r.value, 0), color: OTHER_COLOR });
   const sliceOf = (key: string) => (rest.some((r) => r.key === key) ? 'other' : key);
+  // Other is faded only when everything folded into it is
+  const faded = (key: string) => (key === 'other' ? rest.every((r) => hidden.includes(r.key)) : hidden.includes(key));
   const whole = slices.reduce((a, s) => a + s.value, 0) || 1;
   const share = (v: number) => `${Math.round((v / whole) * 100)}%`;
 
   let angle = 0;
-  const arcs = slices.map((s) => {
+  const arcs: Arc[] = slices.map((s) => {
     const a0 = angle;
     angle += (s.value / whole) * Math.PI * 2;
     return { ...s, a0, a1: angle };
   });
+  const drawn = useTweenedArcs(arcs);
   const hot = hover ? sliceOf(hover) : null;
   const picked = selected ? sliceOf(selected) : null;
   const tipArc = arcs.find((a) => a.key === hot);
@@ -372,11 +421,11 @@ export function CategoryPie({
     <div className="pie-layout">
       <div className="chart pie">
         <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${label}: ${slices.map((s) => `${s.name} ${share(s.value)}`).join(', ')}`}>
-          {arcs.map((a) => (
+          {drawn.map((a) => (
             <path
               key={a.key}
               d={arcPath(a.a0, a.a1, a.key === picked ? PIE_R + 4 : PIE_R, PIE_HOLE)}
-              className={`pie-slice${hot && hot !== a.key ? ' dim' : ''}${a.key === 'other' ? '' : ' clickable'}`}
+              className={`pie-slice${faded(a.key) ? ' faded' : ''}${hot && hot !== a.key ? ' dim' : ''}${a.key === 'other' ? '' : ' clickable'}`}
               style={{ fill: a.color }}
               onPointerEnter={() => setHover(a.key)}
               onPointerLeave={() => setHover(null)}
@@ -397,6 +446,8 @@ export function CategoryPie({
             style={{
               left: `${(0.5 + ((PIE_R - 20) * Math.sin(mid)) / size) * 100}%`,
               top: `${(0.5 - ((PIE_R - 20) * Math.cos(mid)) / size) * 100}%`,
+              // open toward the middle, so a slice near the edge never pushes the tip off a phone screen
+              transform: `translate(${Math.sin(mid) > 0.25 ? '-100%' : Math.sin(mid) < -0.25 ? '0' : '-50%'}, -100%)`,
             }}
           >
             <div className="chart-tip-row">
@@ -413,7 +464,7 @@ export function CategoryPie({
             <li key={r.key}>
               <Button
                 variant="link"
-                className={`pie-row${selected === r.key ? ' selected' : ''}${hot && hot !== sliceOf(r.key) ? ' dim' : ''}`}
+                className={`pie-row${selected === r.key ? ' selected' : ''}${hidden.includes(r.key) ? ' faded' : ''}${hot && hot !== sliceOf(r.key) ? ' dim' : ''}`}
                 aria-pressed={selected === r.key}
                 aria-label={`${r.name}: ${format(r.value)}, ${share(r.value)}. ${selectHint}`}
                 onPointerEnter={() => setHover(r.key)}

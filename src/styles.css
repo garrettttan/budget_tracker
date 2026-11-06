@@ -222,13 +222,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .load-more { margin: 1rem 0; }
 
 /* Transactions → Pending: collapsible, above the main list */
-.pending-section { margin-top: 2rem; }
-.pending-section summary { cursor: pointer; padding: 0.25rem 0; }
-.pending-section .pending-title { font-size: var(--step-1); font-weight: 600; }
-.pending-section summary .badge { margin: 0 0.5rem; vertical-align: 0.15em; }
-.pending-section summary .out { color: var(--out); }
-.pending-section summary .in { color: var(--in); }
-.pending-section[open] summary { margin-bottom: 0.5rem; }
+/* pending rows in the list: read-only and a little quieter */
+.register tr.pending td { color: var(--ink-soft); }
+.register tr.pending td.num { opacity: 0.75; }
+.register td.pending-category { font-size: var(--step--1); padding-top: 0.8rem; }
+.pending-line { font-size: var(--step--1); color: var(--ink-soft); margin-top: 0.15rem; }
 
 /* Transactions → Tags column */
 .register .tags-col { min-width: 8rem; }
@@ -249,10 +247,19 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .btn-link.tag-add:hover:not(:disabled) { color: var(--accent); }
 .tag-cell .combobox input { width: 10rem; font-size: var(--step--1); }
 .tag-filter { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem; margin: 0 0 1rem; }
+.list-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1rem; margin: 2.5rem 0 0.75rem; }
+.list-head h2 { margin: 0; }
+.filters-on { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-size: var(--step--1); color: var(--ink-soft); }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
 
 /* Transactions → select column and the bar for selected rows */
 .register .select-col { width: 2rem; padding-right: 0.25rem; }
+/* the list fades while new rows load, only when that takes over 100ms (no flicker on fast loads) */
+.register.txns { transition: opacity 150ms; }
+.register.txns.refetching { opacity: 0.5; transition: opacity 150ms 100ms; }
+@media (prefers-reduced-motion: reduce) {
+  .pie-slice, .register.txns, .register.txns.refetching { transition: none; }
+}
 .register .select-col input { width: 1.05rem; height: 1.05rem; margin: 0.2rem 0 0; cursor: pointer; accent-color: var(--accent); }
 .register .select-col input:disabled { cursor: not-allowed; opacity: 0.45; }
 .register tr.selected td { background: var(--accent-wash); }
@@ -343,7 +350,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .btn-link.th-filter:hover:not(:disabled) { color: var(--ink); background: var(--accent-wash); text-decoration: none; }
 .btn-link.th-filter.active { color: var(--accent); }
-.th-filter .badge { font-size: 0.7rem; padding: 0 0.4em; min-width: 1.4em; }
 .th-caret { width: 10px; height: 6px; flex: none; fill: currentColor; }
 .header-filter-pop {
   position: fixed; z-index: 30;
@@ -460,9 +466,15 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .pie-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem 2rem; margin: 1.5rem 0 0.5rem; }
 .chart.pie { margin: 0 auto; width: 100%; max-width: 440px; }
 .chart.pie svg { width: 100%; height: auto; }
-.pie-slice { stroke: var(--paper); stroke-width: 2; stroke-linejoin: round; transition: opacity 120ms; }
+.pie-slice { stroke: var(--paper); stroke-width: 2; stroke-linejoin: round; transition: opacity 200ms; }
+/* filtered out: same place and size, faded */
+.pie-slice.faded { opacity: 0.15; }
+.btn-link.pie-row.faded { color: var(--ink-soft); }
+.btn-link.pie-row.faded .chart-key-rect { opacity: 0.25; }
+.btn-link.pie-row .chart-key-rect { transition: opacity 200ms; }
 .pie-slice.clickable { cursor: pointer; }
 .pie-slice.dim, .pie-row.dim .chart-key-rect { opacity: 0.35; }
+.pie-slice.faded.dim { opacity: 0.15; } /* hovering another slice doesn't brighten a filtered-out one */
 .pie-total { fill: var(--ink); font-size: 36px; font-weight: 600; font-variant-numeric: tabular-nums; }
 /* one grid for all rows (subgrid), so the name column is only as wide as the longest name */
 .pie-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: auto minmax(0, max-content) auto auto; gap: 2px 0; min-width: 0; }
@@ -650,6 +662,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.txns .approved-col { width: 2rem; padding-right: 0; }
   .register.txns .label-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .register.txns .label-short { display: inline; }
+  .register.txns .btn-link.th-filter { gap: 0.15rem; padding: 0.1rem 0; margin: -0.1rem 0; }
+  .register.txns .th-caret { width: 8px; height: 5px; }
   .register.txns .tags-full { display: none; }
   .register.txns .tags-count { display: inline; color: var(--ink-soft); font-size: var(--step--1); }
   .register.txns td, .register.txns th,

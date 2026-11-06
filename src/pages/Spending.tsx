@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { money, shortDate } from '../lib/format';
@@ -153,7 +153,12 @@ async function fetchPresent(status: Status, tag: string | null, start: string | 
   return { present, error: null };
 }
 
-/** Pending rows are never approved, and there are only ever a few, so all of them at once. */
+/**
+ * Pending rows are never approved, and there are only ever a few, so all of
+ * them at once. They show in the list read-only: when a charge posts, the
+ * bank usually sends it under a new id and the sync deletes the pending row,
+ * so anything set on it would be lost.
+ */
 function fetchPending() {
   return db()
     .from('transactions')
@@ -167,24 +172,6 @@ function fetchPending() {
 function rangeLabel(start: string | null, end: string | null): string {
   if (start && end && start.endsWith('-01') && end === monthEnd(start)) return monthLong(start);
   return `${start ? shortDate(start) : 'the start'} – ${end ? shortDate(end) : 'today'}`;
-}
-
-const PENDING_OPEN_KEY = 'transactions.pendingOpen';
-
-function readPendingOpen() {
-  try {
-    return localStorage.getItem(PENDING_OPEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function savePendingOpen(open: boolean) {
-  try {
-    localStorage.setItem(PENDING_OPEN_KEY, open ? '1' : '0');
-  } catch {
-    // storage unavailable: the section just starts closed next time
-  }
 }
 
 /**
@@ -216,10 +203,12 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const bump = () => setVersion((v) => v + 1);
 
   const [rows, setRows] = useState<Row[] | null>(null);
+  const latestReload = useRef(0);
+  // the list fades while new rows load (only if it takes a moment: see .refetching)
+  const [reloading, setReloading] = useState(false);
   // what the range holds, for the header filters (null until loaded: everything is listed)
   const [present, setPresent] = useState<Present | null>(null);
   const [pending, setPending] = useState<Row[]>([]);
-  const [pendingOpen, setPendingOpen] = useState(readPendingOpen);
   const [hasMore, setHasMore] = useState(false);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [accounts, setAccounts] = useState<Map<string, string>>(new Map());
@@ -262,12 +251,15 @@ export default function Spending({ count, onChange }: { count: number | null; on
   /** Loads the first `size` rows of the current filter, plus transfer suggestions. */
   const reload = useCallback(
     async (size: number) => {
+      // a later reload (e.g. the next filter tap) wins, even if this one answers last
+      const mine = ++latestReload.current;
+      setReloading(true);
       const none = Promise.resolve({ data: [], error: null });
       const reviewing = status !== 'approved' && !tagFilter && !scoped;
       const [t, p, s, o, w, m, h] = await Promise.all([
         fetchRows(status, tagFilter, { category, start, end, hideCategories, hideTags }, 0, size - 1),
         // pending rows can't carry tags, so a tag filter leaves them out
-        status === 'approved' || tagFilter || scoped ? none : fetchPending(),
+        status === 'approved' || tagFilter ? none : fetchPending(),
         status === 'approved' || tagFilter || scoped
           ? none
           : db()
@@ -292,6 +284,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
       ]);
       if (h.error) setError(h.error.message);
       setPresent(h.present);
+      if (mine !== latestReload.current) return;
+      setReloading(false);
       const failed = t.error ?? p.error ?? s.error ?? w.error ?? m.error;
       if (failed) setError(failed.message);
       if (o.error) setError(o.error);
@@ -316,8 +310,15 @@ export default function Spending({ count, onChange }: { count: number | null; on
       const visible = new Set(loaded.map((r) => r.id));
       setSelected((sel) => (sel.size && [...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
       // pending rows carry no tags: only hidden categories apply, and unticking "No tags" hides them all
+      // the same date range and category filters as the list
+      const inCategory = (r: Row) =>
+        category === NO_CATEGORY ? !r.category_id && !r.is_transfer : category ? r.category_id === category : shownCategory(r, hideCategories);
       setPending(
-        hideTags.includes(UNTAGGED) ? [] : ((p.data ?? []) as unknown as Row[]).filter((r) => category || shownCategory(r, hideCategories)),
+        hideTags.includes(UNTAGGED)
+          ? []
+          : ((p.data ?? []) as unknown as Row[]).filter(
+              (r) => inCategory(r) && (!start || r.posted_date >= start) && (!end || r.posted_date <= end),
+            ),
       );
       setSuggestions((s.data ?? []) as Suggestion[]);
     },
@@ -327,8 +328,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // categories first, so rows never flash an empty picker
   useEffect(() => {
     if (!categories) return;
-    // the rows on screen stay until the new ones arrive, so the header filters stay open
-    setPending([]);
+    // the rows on screen (pending ones too) stay until the new ones arrive: no blink, and an open header filter stays open
     setSelected(new Set());
     reload(PAGE);
   }, [categories, reload]);
@@ -409,12 +409,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  /** A pie category narrows the list to it for the month; picking it again clears it. */
-  const pickCategory = (key: string) =>
-    setFilters(category === key ? { category: null } : { category: key, status: 'all', from: null, to: null });
-
-  // names for the "Hiding …" banner, categories first
-
   // the column header filters; while they hide something the table (and its headers) stays even if empty
   const hiding = hideCategories.length > 0 || hideTags.length > 0 || status !== 'all';
   // Approved column: both ticked = All (`?status=` absent); one unticked = To review or Approved only
@@ -442,6 +436,11 @@ export default function Spending({ count, onChange }: { count: number | null; on
   const onlyCategory = (key: string) =>
     // every key, not just this range's, so switching months still shows only this one
     setFilters({ category: null, hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
+  // the one category left showing, if just one is (the pie highlights it)
+  const visibleCategories = allCategoryItems.filter((i) => !hideCategories.includes(i.id));
+  const onlyKey = hideCategories.length > 0 && visibleCategories.length === 1 ? visibleCategories[0].id : null;
+  /** A pie category: the same as its Only in the Category header; tapping it again shows every category. */
+  const pickCategory = (key: string) => (onlyKey === key ? setFilters({ category: null, hidecat: null }) : onlyCategory(key));
   /** Only one tag: the show-one-tag filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
     id === UNTAGGED
@@ -709,12 +708,10 @@ export default function Spending({ count, onChange }: { count: number | null; on
         ? 'Untick to move it back to To review'
         : 'Tick to approve';
 
-  function togglePending(open: boolean) {
-    setPendingOpen(open);
-    savePendingOpen(open);
-  }
-
-  const pendingTotal = pending.reduce((sum, r) => sum + Number(r.amount), 0);
+  // pending rows join the list by date (newest first; pending first on the same day)
+  const shownRows = [...pending, ...(rows ?? [])].sort(
+    (a, b) => b.posted_date.localeCompare(a.posted_date) || Number(b.pending) - Number(a.pending),
+  );
 
   return (
     <section>
@@ -736,7 +733,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       <MonthSpending
         month={month}
         current={current}
-        selected={category}
+        selected={category ?? onlyKey}
         hidden={category ? [] : hideCategories}
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7), from: null, to: null })}
@@ -744,15 +741,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
         onError={setError}
       />
 
-
-      {hiding && (
-        <p className="tag-filter">
-          Filters are on.
-          <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
-            Show all
-          </Button>
-        </p>
-      )}
 
       {scoped && (
         <p className="tag-filter">
@@ -823,53 +811,22 @@ export default function Spending({ count, onChange }: { count: number | null; on
         <ReimbursementSuggestions matches={paybacks} open={open} busy={busy} onLink={link} />
       )}
 
-      {pending.length > 0 && (
-        <details
-          className="pending-section"
-          open={pendingOpen}
-          onToggle={(e) => togglePending((e.currentTarget as HTMLDetailsElement).open)}
-        >
-          <summary>
-            <span className="pending-title">Pending</span>
-            <span className="badge" aria-label={`${pending.length} ${pending.length === 1 ? 'transaction' : 'transactions'}`}>
-              {pending.length}
-            </span>
-            <span className={pendingTotal < 0 ? 'out' : 'in'}>{money(pendingTotal)}</span>
-          </summary>
-          <table className="register txns pending-txns">
-            <thead>
-              <tr>
-                <th scope="col" className="date-col">Date</th>
-                <th scope="col">Merchant</th>
-                <th scope="col" className="account-col">Account</th>
-                <th scope="col" className="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((r) => (
-                <tr key={r.id}>
-                  <td className="date-col">{shortDate(r.posted_date)}</td>
-                  <td>
-                    <MerchantCell
-                      name={r.merchants?.name}
-                      description={r.description}
-                      postedDate={r.posted_date}
-                      account={r.accounts?.name}
-                    />
-                  </td>
-                  <td className="account-col">{r.accounts?.name}</td>
-                  <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </details>
-      )}
 
       {/* always the table, so its header filters (Approved, Category, Tags) are reachable even when empty */}
       {rows && (
         <>
-          <h2>Transactions</h2>
+          {/* the filter note sits beside the heading, so turning a filter on doesn't push the list down */}
+          <div className="list-head">
+            <h2>Transactions</h2>
+            {hiding && (
+              <p className="filters-on">
+                Filters are on.
+                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null })}>
+                  Show all
+                </Button>
+              </p>
+            )}
+          </div>
           {selected.size > 0 && (
             <BulkBar
               count={selected.size}
@@ -884,7 +841,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
               onClear={() => setSelected(new Set())}
             />
           )}
-          <table className="register txns">
+          <table className={`register txns${reloading ? ' refetching' : ''}`}>
             <thead>
               <tr>
                 <th scope="col" className="select-col">
@@ -928,7 +885,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
                     label="Approved"
                     align="end"
                     searchable={false}
-                    showCount={false}
                     keepOne
                     items={approvalItems}
                     hidden={approvalHidden}
@@ -945,7 +901,30 @@ export default function Spending({ count, onChange }: { count: number | null; on
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {shownRows.map((r) =>
+                r.pending ? (
+                  // read-only: the posted version usually replaces this row, taking anything set here with it
+                  <tr key={r.id} className="pending">
+                    <td className="select-col" />
+                    <td className="date-col">{shortDate(r.posted_date)}</td>
+                    <td>
+                      <MerchantCell
+                        name={r.merchants?.name}
+                        description={r.description}
+                        postedDate={r.posted_date}
+                        account={r.accounts?.name}
+                        summary={<div className="pending-line">Pending</div>}
+                      />
+                    </td>
+                    <td className="account-col">{r.accounts?.name}</td>
+                    <td className="pending-category">
+                      {r.is_transfer ? 'Transfer' : (categories?.find((c) => c.id === r.category_id)?.name ?? 'Uncategorized')}
+                    </td>
+                    <td className="tags-col" />
+                    <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
+                    <td className="approved-col" />
+                  </tr>
+                ) : (
                 <tr
                   key={r.id}
                   className={[r.approved ? '' : 'unreviewed', selected.has(r.id) ? 'selected' : ''].join(' ').trim() || undefined}
@@ -1036,7 +1015,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
               ))}
             </tbody>
           </table>
-          {rows.length === 0 && (
+          {shownRows.length === 0 && (
             <p className="empty">
               {scoped || hideCategories.length > 0 || hideTags.length > 0
                 ? 'No transactions match.'

@@ -75,7 +75,9 @@ export default function MonthSpending({
     }
     return [...totals.values()];
   }, [spend, month]);
-  const byCategory = allCategories.filter((t) => t.value > 0 && !hidden.includes(t.key)).sort((a, b) => b.value - a.value);
+  // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it
+  const byCategory = allCategories.filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
+  const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
   const hiddenSpent = sum(allCategories.filter((t) => hidden.includes(t.key)).map((t) => t.value));
 
   const flowRow = flow.find((f) => f.month === month);
@@ -118,10 +120,11 @@ export default function MonthSpending({
         <CategoryPie
           rows={byCategory}
           format={money}
-          total={sum(byCategory.map((c) => c.value))}
+          total={visibleTotal}
           totalLabel={`spent in ${shortName}`}
           label={`Spending by category, ${monthLong(month)}`}
           selected={selected}
+          hidden={hidden}
           selectHint="Shows its transactions"
           onSelect={(key) => onSelect(key, byCategory.find((c) => c.key === key)?.name ?? '')}
         />
