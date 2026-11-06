@@ -8,8 +8,8 @@ type SpendRow = { month: string; category_id: string | null; category_name: stri
 type FlowRow = { month: string; income: string; spending: string };
 
 /**
- * One month's normal spending (untagged, your share, no transfers): a heading
- * that picks the month, Spent / Income / Saved, and a category donut whose
+ * One month's normal spending (untagged, your share, no transfers): a month
+ * dropdown in line with Spent / Income / Saved, and a category donut whose
  * categories filter the list below it. `version` changes after edits so the
  * numbers follow them.
  */
@@ -91,17 +91,17 @@ export default function MonthSpending({
 
   return (
     <div className={loading && spend ? 'trends refetching' : 'trends'}>
-      <h2>
-        Spending in{' '}
-        <select className="heading-select" aria-label="Month" value={month} onChange={(e) => onMonth(e.target.value)}>
-          {options.map((key) => (
-            <option key={key} value={key}>
-              {monthLong(key)}
-            </option>
-          ))}
-        </select>
-      </h2>
       <dl className="stat-row">
+        {/* the month sits in line with its numbers; the page title already says "Spending" */}
+        <div className="stat-month">
+          <select className="heading-select" aria-label="Month" value={month} onChange={(e) => onMonth(e.target.value)}>
+            {options.map((key) => (
+              <option key={key} value={key}>
+                {monthLong(key)}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <dt>Spent</dt>
           <dd>{money(spending)}</dd>

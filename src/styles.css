@@ -407,7 +407,9 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .trends > h2:first-child { margin-top: 0; }
 .trends { transition: opacity 120ms; }
 .trends.refetching { opacity: 0.55; }
-.stat-row { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; margin: 0 0 0.5rem; }
+.stat-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 2.5rem; margin: 0 0 0.5rem; }
+/* the month dropdown, first in the row, at the numbers' size */
+.stat-month .heading-select { font-size: var(--step-2); font-weight: 600; line-height: 1.2; }
 .stat-row dt { color: var(--ink-soft); font-size: var(--step--1); }
 .stat-row dd { margin: 0; font-size: var(--step-2); font-weight: 600; }
 .chart { position: relative; margin: 0.5rem 0; }
@@ -639,6 +641,10 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .pie-layout { grid-template-columns: 1fr; }
   .pie-list { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .stat-row dd { font-size: var(--step-1); }
+  .stat-month .heading-select { font-size: var(--step-1); }
+  /* phones: the month on its own line, the three numbers together under it */
+  .stat-row { gap: 0.75rem 1.5rem; }
+  .stat-month { flex-basis: 100%; }
   .register.tag-totals th:nth-child(2), .register.tag-totals td:nth-child(2) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
