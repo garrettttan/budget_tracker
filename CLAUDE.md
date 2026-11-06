@@ -18,7 +18,7 @@ review inbox (filter To review / Approved / All, searchable category picker on e
 an Approved checkbox to approve or unapprove, transfer suggestions with
 Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
 editing approved rows (recategorize, mark transfer, send back to Review); Settings →
-Merchants (rename, merge; Settings shows one full-width row, `components/SettingsRow.tsx` ("Merchants … 265 ›"), that opens the table in a modal; meant for Tags and Categories too); tags (a Tags column; on phones, in the row's tap-to-expand details: "+ Tag" picks or
+Merchants (rename, merge; Settings shows Categories, Merchants and Tags as one full-width row each, `components/SettingsRow.tsx` ("Merchants … 265 ›"), opening that list in `components/SettingsModal.tsx`); tags (a Tags column; on phones, in the row's tap-to-expand details: "+ Tag" picks or
 creates one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
 renames, deletes); renaming accounts on the Accounts page (the sync sets an account's
 name only when it first creates it, so your name sticks); a select column on Transactions

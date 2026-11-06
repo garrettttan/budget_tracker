@@ -629,6 +629,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
 /* ---- phone: rail becomes bottom tabs ------------------------------- */
 
 @media (max-width: 720px) {
+  /* a wide modal (a Settings list) gets a little more room on phones */
+  .modal.modal-wide { width: calc(100vw - 1rem); max-width: none; padding: 1rem 0.75rem; }
   .shell { grid-template-columns: 1fr; }
   .rail {
     position: fixed;
