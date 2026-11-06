@@ -106,7 +106,7 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
             {connection.status_message && <p className="muted">{connection.status_message}</p>}
           </div>
           <div className="sync-actions">
-            <Button disabled={syncing} title={syncing ? 'Already syncing' : undefined} onClick={syncNow}>
+            <Button size="small" disabled={syncing} title={syncing ? 'Already syncing' : undefined} onClick={syncNow}>
               Sync now
             </Button>
             <span className="push">

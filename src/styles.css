@@ -177,6 +177,8 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .sync-status .sync-state { font-weight: 600; }
 .sync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 1.5rem; }
 .sync-actions .push { margin-left: 1rem; display: flex; gap: 1rem; }
+/* Sync now: a compact box, but the same text size as the links beside it */
+.sync-actions .btn-small { font-size: inherit; }
 
 /* sync log (Settings → Sync log modal): a gap between the number columns, dates on one line */
 .register.sync-log .num { padding-left: 0.75rem; }
