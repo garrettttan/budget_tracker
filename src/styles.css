@@ -340,6 +340,8 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .modal h2 { margin: 0 0 0.15rem; }
 .modal.modal-wide { width: min(48rem, calc(100vw - 2rem)); }
+/* a Settings section reduced to one line (count + a link that opens a modal) */
+.settings-line { display: flex; gap: 1rem; align-items: baseline; margin: 0; }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .modal form > p { margin: 0 0 0.75rem; }
 .fields.single { grid-template-columns: 1fr; }
