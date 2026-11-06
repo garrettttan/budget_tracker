@@ -68,10 +68,6 @@ export default function TagList() {
 
   return (
     <>
-      <p className="muted small">
-        Tags group transactions across categories, like everything from one trip. A transaction can carry several.
-        Tagged spending is kept apart from your normal spending; Trends will let you add a tag back in.
-      </p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       <form
