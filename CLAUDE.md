@@ -18,7 +18,7 @@ review inbox (filter To review / Approved / All, searchable category picker on e
 an Approved checkbox to approve or unapprove, transfer suggestions with
 Confirm / × dismiss, merchant name with the bank's text on hover or tap, "load more");
 editing approved rows (recategorize, mark transfer, send back to Review); Settings →
-Merchants (rename, merge; Settings shows just the count, and Manage opens the table in a modal); tags (a Tags column; on phones, in the row's tap-to-expand details: "+ Tag" picks or
+Merchants (rename, merge; Settings shows Categories, Merchants and Tags as one full-width row each, `components/SettingsRow.tsx` ("Merchants … 265 ›"), opening that list in `components/SettingsModal.tsx`); tags (a Tags column; on phones, in the row's tap-to-expand details: "+ Tag" picks or
 creates one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
 renames, deletes); renaming accounts on the Accounts page (the sync sets an account's
 name only when it first creates it, so your name sticks); a select column on Transactions
@@ -239,10 +239,12 @@ money in only with a non-income category), `tag_spend`
   row's details. Only `source = 'manual'`; refuses a charge whose reimbursements have payments
   linked (unlink them first); unlinks a payback first (what it paid is owed again); sends the
   other side of a transfer back to Review; unpaid reimbursements and tags cascade.
-- Settings → Categories: add, reorder (`sort_order`, the order every picker uses), and an Edit
+- Settings → Categories: add, and an Edit
   modal (name, group, Income) are direct table writes. `delete_category(id, into)` (security
   invoker, `rpc`) moves its transactions and merchant memory to `into` first; null `into` leaves
   them Uncategorized (no category).
+- **Category order is automatic everywhere** (Settings list and every picker): most transactions first,
+  then A–Z (`src/lib/categoryOrder.ts`). There's no manual reordering; `categories.sort_order` is unused.
 - `connections.vault_secret_id` is not readable by client roles (column grants), so the
   app must `select` explicit columns from `connections`, never `*`.
 - `merchants` holds one row per real merchant (name + `last_category_id`);

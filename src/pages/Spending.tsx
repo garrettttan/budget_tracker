@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
+import { byUse } from '../lib/categoryOrder';
 import { money, shortDate } from '../lib/format';
 import Button from '../components/Button';
 import CategorySelect, { type Category, TRANSFER, UNCATEGORIZED } from '../components/CategorySelect';
@@ -216,13 +217,14 @@ export default function Spending({ count, onChange }: { count: number | null; on
 
   useEffect(() => {
     Promise.all([
-      db().from('categories').select('id, name, is_income').eq('archived', false).order('sort_order'),
+      // most-used first in every picker (lib/categoryOrder)
+      db().from('categories').select('id, name, is_income, transactions(count)').eq('archived', false),
       db().from('accounts').select('id, name, class, connection_id, hidden').order('sort_order').order('name'),
       db().from('tags').select('id, name').order('name'),
     ]).then(([c, a, t]) => {
       const failed = c.error ?? a.error ?? t.error;
       if (failed) setError(failed.message);
-      setCategories((c.data ?? []) as Category[]);
+      setCategories(byUse((c.data ?? []) as unknown as (Category & { transactions: { count: number }[] })[]).map(({ id, name, is_income }) => ({ id, name, is_income })));
       const all = (a.data ?? []) as { id: string; name: string; class: string; connection_id: string | null; hidden: boolean }[];
       setAccounts(new Map(all.map((x) => [x.id, x.name])));
       // investments are balance-only, so no transactions; manual accounts first

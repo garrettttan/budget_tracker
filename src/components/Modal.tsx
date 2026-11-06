@@ -35,8 +35,9 @@ export default function Modal({
       ref={dialog}
       className={className ? `modal ${className}` : 'modal'}
       aria-labelledby={labelledBy}
-      onClose={onClose}
-      onCancel={(e) => busy && e.preventDefault()}
+      // React passes a nested modal's close and cancel up to this one, so act only on our own
+      onClose={(e) => e.target === dialog.current && onClose()}
+      onCancel={(e) => e.target === dialog.current && busy && e.preventDefault()}
       // a click on the backdrop lands on the dialog element itself
       onClick={(e) => {
         if (e.target === dialog.current && !busy) close();

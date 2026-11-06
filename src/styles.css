@@ -265,6 +265,10 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .list-head h2 { margin: 0; }
 .filters-on { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-size: var(--step--1); color: var(--ink-soft); }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+/* a list's search box and add form on one line (Settings → Categories) */
+.list-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+.list-tools .merchant-filter, .list-tools .tag-new { margin: 0; }
+.list-tools input { padding: 0.3rem 0.55rem; font-size: var(--step-0); }
 
 /* Transactions → select column and the bar for selected rows */
 .register .select-col { width: 2rem; padding-right: 0.25rem; }
@@ -340,8 +344,18 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .modal h2 { margin: 0 0 0.15rem; }
 .modal.modal-wide { width: min(48rem, calc(100vw - 2rem)); }
-/* a Settings section reduced to one line (count + a link that opens a modal) */
-.settings-line { display: flex; gap: 1rem; align-items: baseline; margin: 0; }
+/* Settings: a section reduced to one full-width row that opens a modal (components/SettingsRow.tsx) */
+.btn-link.settings-row {
+  display: flex; align-items: center; gap: 0.75rem; width: 100%;
+  margin: 2.5rem 0 0; padding: 0.9rem 0; /* text lines up with the section headings */
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); border-radius: 0;
+  color: var(--ink); font: inherit; text-align: left; text-decoration: none;
+}
+.btn-link.settings-row + .btn-link.settings-row { margin-top: 0; border-top: none; }
+.btn-link.settings-row:hover:not(:disabled) { background: var(--accent-wash); text-decoration: none; }
+.settings-row-label { flex: 1; font-size: 1.25rem; font-weight: 600; } /* reads as the section's heading */
+.settings-row-detail { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.settings-row-chevron { width: 8px; height: 14px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .modal form > p { margin: 0 0 0.75rem; }
 .fields.single { grid-template-columns: 1fr; }
@@ -523,7 +537,18 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .th-sort-icon { width: 8px; height: 12px; flex: none; fill: currentColor; opacity: 0.55; }
 .th-sort.active .th-sort-icon { opacity: 1; }
 .th-sort-icon .dim { opacity: 0.25; }
-.merchant-filter { width: 16rem; max-width: 100%; margin: 0.75rem 0 0.5rem; }
+.merchant-filter { width: 16rem; max-width: 100%; margin: 0 0 0.5rem; }
+/* the same gap under the heading in every Settings list modal */
+.settings-modal-head { margin-bottom: 1rem; }
+/* Settings list modals open near the top, not centered, so the search box stays put; height changes animate */
+.modal.settings-modal { margin-top: max(1rem, 8vh); margin-bottom: auto; transition: height 200ms ease; }
+.modal.settings-modal.resizing { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .modal.settings-modal { transition: none; } }
+/* fixed column widths, so filtering rows doesn't re-space the columns either */
+.settings-modal .register.categories, .settings-modal .register.merchants { table-layout: fixed; width: 100%; }
+.settings-modal .register.categories th:nth-child(3), .settings-modal .register.merchants th:nth-child(3) { width: 7.5rem; }
+.settings-modal .register.categories th:nth-child(4) { width: 3rem; }
+.settings-modal .register.merchants th:nth-child(4) { width: 9.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
 .register tr.merge-row td { background: var(--accent-wash); }
 .merge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
@@ -619,6 +644,8 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
 /* ---- phone: rail becomes bottom tabs ------------------------------- */
 
 @media (max-width: 720px) {
+  /* a wide modal (a Settings list) gets a little more room on phones */
+  .modal.modal-wide { width: calc(100vw - 1rem); max-width: none; padding: 1rem 0.75rem; }
   .shell { grid-template-columns: 1fr; }
   .rail {
     position: fixed;

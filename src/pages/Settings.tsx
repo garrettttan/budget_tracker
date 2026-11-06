@@ -6,7 +6,9 @@ import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
 import ReconnectSimplefin from '../components/ReconnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
-import MerchantsModal from '../components/MerchantsModal';
+import SettingsModal from '../components/SettingsModal';
+import MerchantList from '../components/MerchantList';
+import SettingsRow from '../components/SettingsRow';
 import TagList from '../components/TagList';
 import CategoryList from '../components/CategoryList';
 
@@ -25,6 +27,9 @@ const STATUS_LABEL: Record<string, string> = {
   disabled: 'Disabled',
 };
 
+const SECTIONS = ['Categories', 'Merchants', 'Tags'] as const;
+type Section = (typeof SECTIONS)[number];
+
 /** onSynced refreshes the nav's to-review count after Sync now. */
 export default function Settings({ email, onSynced }: { email: string; onSynced: () => void }) {
   const [connection, setConnection] = useState<Connection | null | undefined>(undefined); // undefined = loading
@@ -34,14 +39,17 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
   const [showReconnect, setShowReconnect] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<{ text: string; error: boolean } | null>(null);
-  const [merchantCount, setMerchantCount] = useState<number | null>(null);
-  const [showMerchants, setShowMerchants] = useState(false);
+  // Categories, Merchants and Tags are one row each; their lists open in a modal
+  const [counts, setCounts] = useState<Record<Section, number> | null>(null);
+  const [showing, setShowing] = useState<Section | null>(null);
 
-  // just the count: the list itself opens in a modal
-  const loadMerchantCount = useCallback(async () => {
-    const { count, error } = await db().from('merchants').select('id', { count: 'exact', head: true });
-    if (error) setError(error.message);
-    else setMerchantCount(count ?? 0);
+  const loadCounts = useCallback(async () => {
+    const results = await Promise.all(
+      SECTIONS.map((t) => db().from(t.toLowerCase()).select('id', { count: 'exact', head: true })),
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) return setError(failed.error.message);
+    setCounts(Object.fromEntries(SECTIONS.map((t, i) => [t, results[i].count ?? 0])) as Record<Section, number>);
   }, []);
 
   const loadSync = useCallback(async () => {
@@ -61,8 +69,8 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
 
   useEffect(() => {
     loadSync();
-    loadMerchantCount();
-  }, [loadSync, loadMerchantCount]);
+    loadCounts();
+  }, [loadSync, loadCounts]);
 
   async function syncNow() {
     setSyncing(true);
@@ -143,34 +151,38 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
         />
       )}
 
-      <h2>Categories</h2>
-      <CategoryList />
-
-      <h2>Merchants</h2>
-      {merchantCount === 0 && <p className="muted">Merchants appear after your first sync.</p>}
-      {!!merchantCount && (
-        <p className="settings-line">
-          {merchantCount} {merchantCount === 1 ? 'merchant' : 'merchants'}
-          <Button variant="link" onClick={() => setShowMerchants(true)}>
-            Manage
-          </Button>
-        </p>
-      )}
-      {showMerchants && (
-        <MerchantsModal
-          onClose={() => {
-            setShowMerchants(false);
-            loadMerchantCount(); // merges change it
-          }}
+      {SECTIONS.map((section) => (
+        <SettingsRow
+          key={section}
+          label={section}
+          detail={counts ? (counts[section] ? String(counts[section]) : 'None yet') : undefined}
+          onOpen={() => setShowing(section)}
         />
+      ))}
+      {showing && (
+        <SettingsModal
+          title={showing}
+          onClose={() => {
+            setShowing(null);
+            loadCounts(); // adds, deletes and merges change them
+          }}
+        >
+          {showing === 'Categories' && <CategoryList />}
+          {showing === 'Merchants' && <MerchantList />}
+          {showing === 'Tags' && <TagList />}
+        </SettingsModal>
       )}
 
-      <h2>Tags</h2>
-      <TagList />
-
+      {/* laid out like Bank connection: a status line, then a compact action */}
       <h2>Account</h2>
-      <p className="muted">Signed in as {email}</p>
-      <Button onClick={() => db().auth.signOut()}>Sign out</Button>
+      <div className="sync-status">
+        <p>Signed in as {email}</p>
+      </div>
+      <div className="sync-actions">
+        <Button size="small" onClick={() => db().auth.signOut()}>
+          Sign out
+        </Button>
+      </div>
     </section>
   );
 }
