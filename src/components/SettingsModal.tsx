@@ -9,7 +9,7 @@ export default function SettingsModal({ title, onClose, children }: { title: str
     <Modal labelledBy={id} onClose={onClose} className="modal-wide">
       {(close) => (
         <>
-          <div className="modal-head">
+          <div className="modal-head settings-modal-head">
             <h2 id={id}>{title}</h2>
             <Button variant="icon" aria-label="Close" onClick={close}>
               ×

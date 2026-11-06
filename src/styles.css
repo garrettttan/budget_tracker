@@ -533,7 +533,9 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .th-sort-icon { width: 8px; height: 12px; flex: none; fill: currentColor; opacity: 0.55; }
 .th-sort.active .th-sort-icon { opacity: 1; }
 .th-sort-icon .dim { opacity: 0.25; }
-.merchant-filter { width: 16rem; max-width: 100%; margin: 0.75rem 0 0.5rem; }
+.merchant-filter { width: 16rem; max-width: 100%; margin: 0 0 0.5rem; }
+/* the same gap under the heading in every Settings list modal */
+.settings-modal-head { margin-bottom: 1rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
 .register tr.merge-row td { background: var(--accent-wash); }
 .merge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
