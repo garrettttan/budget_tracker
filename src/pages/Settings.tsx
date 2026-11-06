@@ -88,30 +88,38 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
       {connection === null && <ConnectSimplefin onConnected={() => loadSync()} />}
       {connection && (
         <>
-          {connection.status !== 'active' && (
-            <p className="error">{STATUS_LABEL[connection.status] ?? connection.status}.</p>
-          )}
-          <div className="sync-line">
-            <p>Last synced {relativeTime(connection.last_synced_at)}.</p>
-            <Button size="small" disabled={syncing} onClick={syncNow}>
-              {syncing ? 'Syncing…' : 'Sync now'}
-            </Button>
-            {runs.length > 0 && (
-              <Button variant="link" onClick={() => setShowLog(true)}>
-                Sync log
-              </Button>
-            )}
-            <Button variant="link" onClick={() => setShowReconnect(true)}>
-              Reconnect
-            </Button>
-          </div>
-          {syncing && <p className="muted small">A sync can take up to a minute.</p>}
-          {syncNote && (
-            <p className={syncNote.error ? 'error' : 'notice'} role={syncNote.error ? 'alert' : 'status'}>
-              {syncNote.text}
+          {/* status first (what state it's in, then the latest news), actions under it */}
+          <div className="sync-status">
+            <p className={!syncing && connection.status !== 'active' ? 'sync-state error' : 'sync-state'}>
+              {connection.label} ·{' '}
+              {syncing ? 'Syncing…' : connection.status === 'active' ? 'Connected' : (STATUS_LABEL[connection.status] ?? connection.status)}
             </p>
-          )}
-          {connection.status_message && <p className="muted">{connection.status_message}</p>}
+            {syncing ? (
+              <p className="muted">Can take up to a minute</p>
+            ) : syncNote ? (
+              <p className={syncNote.error ? 'error' : 'muted'} role={syncNote.error ? 'alert' : 'status'}>
+                {syncNote.text}
+              </p>
+            ) : (
+              <p className="muted">Last synced {relativeTime(connection.last_synced_at)}</p>
+            )}
+            {connection.status_message && <p className="muted">{connection.status_message}</p>}
+          </div>
+          <div className="sync-actions">
+            <Button disabled={syncing} title={syncing ? 'Already syncing' : undefined} onClick={syncNow}>
+              Sync now
+            </Button>
+            <span className="push">
+              {runs.length > 0 && (
+                <Button variant="link" onClick={() => setShowLog(true)}>
+                  Sync log
+                </Button>
+              )}
+              <Button variant="link" onClick={() => setShowReconnect(true)}>
+                Reconnect
+              </Button>
+            </span>
+          </div>
         </>
       )}
 

@@ -172,8 +172,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register select { padding: 0.2rem 0.4rem; }
 /* row buttons: compact, and set apart from the amount column */
 /* Settings → Bank connection: Last synced, Sync now, Sync log on one line (wraps on phones) */
-.sync-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1rem; margin: 0 0 1rem; }
-.sync-line p { margin: 0; }
+.sync-status { margin: 0 0 0.75rem; }
+.sync-status p { margin: 0; }
+.sync-status .sync-state { font-weight: 600; }
+.sync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 1.5rem; }
+.sync-actions .push { margin-left: 1rem; display: flex; gap: 1rem; }
 
 /* sync log (Settings → Sync log modal): a gap between the number columns, dates on one line */
 .register.sync-log .num { padding-left: 0.75rem; }
