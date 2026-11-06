@@ -23,6 +23,15 @@ type FlowRow = { month: string; income: string; spending: string; net: string };
 type TagTotal = { tag_id: string; name: string; spent: string; transaction_count: number; first_date: string | null; last_date: string | null };
 type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
+type Category = { id: string; name: string };
+type MonthKey = { key: string; short: string; long: string };
+
+/** A category's spending (`none` = Uncategorized) for each of `months`. */
+function monthValues(spend: SpendRow[], months: MonthKey[], category: string) {
+  return months.map((m) =>
+    sum(spend.filter((r) => r.month === m.key && (r.category_id ?? 'none') === category).map((r) => Number(r.spent))),
+  );
+}
 
 /** The months a range covers, oldest first, as YYYY-MM-01 keys (the current month included). */
 function monthsFor(range: RangeKey) {
@@ -57,6 +66,7 @@ export default function Trends() {
   const [tags, setTags] = useState<TagTotal[]>([]);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,12 +76,14 @@ export default function Trends() {
       db().from('tag_spend').select('tag_id, name, spent, transaction_count, first_date, last_date').order('name'),
       db().from('balance_snapshots').select('account_id, date, balance').order('date'),
       db().from('accounts').select('id, connection_id, balance, hidden'),
-    ]).then(([t, b, a]) => {
-      const failed = t.error ?? b.error ?? a.error;
+      db().from('categories').select('id, name').eq('archived', false).eq('is_income', false).order('sort_order'),
+    ]).then(([t, b, a, c]) => {
+      const failed = t.error ?? b.error ?? a.error ?? c.error;
       if (failed) setError(failed.message);
       setTags((t.data ?? []) as TagTotal[]);
       setSnapshots((b.data ?? []) as Snapshot[]);
       setAccounts((a.data ?? []) as Account[]);
+      setCategories((c.data ?? []) as Category[]);
     });
   }, []);
 
@@ -110,6 +122,19 @@ export default function Trends() {
   // tapping a category opens its months (over the page's range) in a modal
   const [opened, setOpened] = useState<{ key: string; name: string } | null>(null);
 
+  // the category-over-time chart's picker: every spending category in picker
+  // order, then any others with spending in the range (archived, Uncategorized)
+  const categoryOptions = useMemo(() => {
+    const options = categories.map((c) => ({ key: c.id, name: c.name }));
+    const listed = new Set(options.map((o) => o.key));
+    return [...options, ...byCategory.filter((c) => !listed.has(c.key)).map(({ key, name }) => ({ key, name }))];
+  }, [categories, byCategory]);
+  // ?cat= picks it; otherwise the range's biggest category
+  const chartCategory =
+    categoryOptions.find((o) => o.key === params.get('cat')) ??
+    categoryOptions.find((o) => o.key === byCategory[0]?.key) ??
+    categoryOptions[0];
+
   const flowFor = (key: string) => flow.find((f) => f.month === key);
   const income = months.map((m) => Number(flowFor(m.key)?.income ?? 0));
   const spending = months.map((m) => Number(flowFor(m.key)?.spending ?? 0));
@@ -142,6 +167,7 @@ export default function Trends() {
     const merged = {
       range: range === '12m' ? null : range,
       tags: included.join(',') || null,
+      cat: params.get('cat'),
       ...next,
     };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
@@ -197,6 +223,17 @@ export default function Trends() {
           selectHint="Opens its transactions"
           onSelect={(key) => openMonth(key)}
         />
+
+        {chartCategory && (
+          <CategoryOverTime
+            category={chartCategory}
+            options={categoryOptions}
+            months={months}
+            spend={spend ?? []}
+            onPick={(key) => set({ cat: key })}
+            onOpenMonth={(key) => openMonth(key, chartCategory.key)}
+          />
+        )}
 
         {byCategory.length > 0 && (
           <>
@@ -280,6 +317,51 @@ export default function Trends() {
   );
 }
 
+/** One category's spending month by month, with a dropdown that picks the category. */
+function CategoryOverTime({
+  category,
+  options,
+  months,
+  spend,
+  onPick,
+  onOpenMonth,
+}: {
+  category: { key: string; name: string };
+  options: { key: string; name: string }[];
+  months: MonthKey[];
+  spend: SpendRow[];
+  onPick: (key: string) => void;
+  onOpenMonth: (monthKey: string) => void;
+}) {
+  const values = monthValues(spend, months, category.key);
+  const total = sum(values);
+  return (
+    <>
+      <h2 className="category-over-time">
+        <select className="heading-select" aria-label="Category" value={category.key} onChange={(e) => onPick(e.target.value)}>
+          {options.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.name}
+            </option>
+          ))}
+        </select>{' '}
+        by month
+      </h2>
+      <p className="muted small">
+        {money(total)} total · {money(total / months.length)} avg / month
+      </p>
+      <MonthColumns
+        months={months}
+        series={[{ name: category.name, color: SPENDING, values }]}
+        format={money}
+        label={`${category.name} spending by month`}
+        selectHint="Opens its transactions"
+        onSelect={onOpenMonth}
+      />
+    </>
+  );
+}
+
 /** A category's spending month by month over the page's range, in a modal. */
 function CategoryMonths({
   category,
@@ -292,7 +374,7 @@ function CategoryMonths({
   onOpenMonth,
 }: {
   category: { key: string; name: string };
-  months: { key: string; short: string; long: string }[];
+  months: MonthKey[];
   spend: SpendRow[];
   rangeLabel: string;
   start: string;
@@ -300,9 +382,7 @@ function CategoryMonths({
   onClose: () => void;
   onOpenMonth: (monthKey: string) => void;
 }) {
-  const values = months.map((m) =>
-    sum(spend.filter((r) => r.month === m.key && (r.category_id ?? 'none') === category.key).map((r) => Number(r.spent))),
-  );
+  const values = monthValues(spend, months, category.key);
   const total = sum(values);
   return (
     <Modal labelledBy="category-months-title" onClose={onClose} className="modal-wide">
