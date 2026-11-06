@@ -20,6 +20,9 @@ function isStale(lastSyncedAt: string | null): boolean {
 
 const total = (accounts: Account[]) => accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
 
+// closed or emptied accounts: hidden until asked for (no balance counts as zero)
+const isZero = (a: Account) => Number(a.balance ?? 0) === 0;
+
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
@@ -27,6 +30,10 @@ export default function Accounts() {
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showZero, setShowZero] = useState(false);
+
+  const zeroCount = accounts?.filter(isZero).length ?? 0;
+  const shown = accounts && (showZero ? accounts : accounts.filter((a) => !isZero(a)));
 
   const load = useCallback(async () => {
     const [a, c] = await Promise.all([
@@ -84,7 +91,7 @@ export default function Accounts() {
       {accounts && accounts.length > 0 && (
         <>
           {CLASSES.map(({ value, label }) => {
-            const group = accounts.filter((a) => a.class === value);
+            const group = shown!.filter((a) => a.class === value);
             if (group.length === 0) return null;
             return (
               <div key={value} className="account-group">
@@ -137,6 +144,15 @@ export default function Accounts() {
 
       {/* rarely used, so it sits below the accounts */}
       <div className="page-foot">
+        {zeroCount > 0 && (
+          <p>
+            <Button variant="link" onClick={() => setShowZero((v) => !v)}>
+              {showZero
+                ? `Hide accounts with a $0 balance`
+                : `Show ${zeroCount} ${zeroCount === 1 ? 'account' : 'accounts'} with a $0 balance`}
+            </Button>
+          </p>
+        )}
           <Button
             onClick={() => {
               setAdding(true);
