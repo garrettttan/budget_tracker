@@ -82,6 +82,8 @@ export default function Combobox({
       e.preventDefault();
       if (matches[active]) pick(matches[active].value);
     } else if (e.key === 'Escape') {
+      // inside a modal, Esc closes just the open list; the next Esc closes the modal
+      if (open) e.preventDefault();
       cancel();
     }
   }

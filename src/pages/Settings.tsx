@@ -6,7 +6,7 @@ import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
 import ReconnectSimplefin from '../components/ReconnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
-import MerchantList from '../components/MerchantList';
+import MerchantsModal from '../components/MerchantsModal';
 import TagList from '../components/TagList';
 import CategoryList from '../components/CategoryList';
 
@@ -34,6 +34,15 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
   const [showReconnect, setShowReconnect] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<{ text: string; error: boolean } | null>(null);
+  const [merchantCount, setMerchantCount] = useState<number | null>(null);
+  const [showMerchants, setShowMerchants] = useState(false);
+
+  // just the count: the list itself opens in a modal
+  const loadMerchantCount = useCallback(async () => {
+    const { count, error } = await db().from('merchants').select('id', { count: 'exact', head: true });
+    if (error) setError(error.message);
+    else setMerchantCount(count ?? 0);
+  }, []);
 
   const loadSync = useCallback(async () => {
     const [c, r] = await Promise.all([
@@ -52,7 +61,8 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
 
   useEffect(() => {
     loadSync();
-  }, [loadSync]);
+    loadMerchantCount();
+  }, [loadSync, loadMerchantCount]);
 
   async function syncNow() {
     setSyncing(true);
@@ -137,7 +147,23 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
       <CategoryList />
 
       <h2>Merchants</h2>
-      <MerchantList />
+      {merchantCount === 0 && <p className="muted">Merchants appear after your first sync.</p>}
+      {!!merchantCount && (
+        <p className="settings-line">
+          {merchantCount} {merchantCount === 1 ? 'merchant' : 'merchants'}
+          <Button variant="link" onClick={() => setShowMerchants(true)}>
+            Manage
+          </Button>
+        </p>
+      )}
+      {showMerchants && (
+        <MerchantsModal
+          onClose={() => {
+            setShowMerchants(false);
+            loadMerchantCount(); // merges change it
+          }}
+        />
+      )}
 
       <h2>Tags</h2>
       <TagList />

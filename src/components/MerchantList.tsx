@@ -12,6 +12,7 @@ type Merchant = {
 };
 
 type Editing = { id: string; mode: 'rename' | 'merge' };
+type Sort = { by: 'name' | 'count'; desc: boolean };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -24,6 +25,7 @@ export default function MerchantList() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sort, setSort] = useState<Sort>({ by: 'name', desc: false });
 
   const load = useCallback(async () => {
     const { data, error } = await db()
@@ -69,15 +71,31 @@ export default function MerchantList() {
   if (!merchants) return null;
   if (merchants.length === 0) return <p className="muted">Merchants appear here after your first sync.</p>;
 
-  const shown = filter ? merchants.filter((m) => m.name.toLowerCase().includes(filter.toLowerCase())) : merchants;
   const count = (m: Merchant) => m.transactions[0]?.count ?? 0;
+  const byName = (a: Merchant, b: Merchant) => a.name.localeCompare(b.name);
+  const shown = (filter ? merchants.filter((m) => m.name.toLowerCase().includes(filter.toLowerCase())) : merchants)
+    .slice()
+    .sort((a, b) => {
+      const order = sort.by === 'count' ? count(a) - count(b) : byName(a, b);
+      return (sort.desc ? -order : order) || byName(a, b); // ties stay A–Z
+    });
+  // a header click sorts by that column (transactions start most first); clicking again flips it
+  const sortBy = (by: Sort['by']) =>
+    setSort((s) => (s.by === by ? { by, desc: !s.desc } : { by, desc: by === 'count' }));
+  const ariaSort = (by: Sort['by']) => (sort.by === by ? (sort.desc ? 'descending' : 'ascending') : undefined);
+  // a header you can sort by: always shows the up/down icon; the sorted one is teal with its direction lit
+  const sortHeader = (by: Sort['by'], label: string) => (
+    <Button variant="link" className={`th-sort${sort.by === by ? ' active' : ''}`} onClick={() => sortBy(by)}>
+      {label}
+      <svg className="th-sort-icon" viewBox="0 0 8 12" aria-hidden="true">
+        <path d="M4 0.5 7.5 4.5H0.5z" className={sort.by === by && sort.desc ? 'dim' : undefined} />
+        <path d="M4 11.5 0.5 7.5h7z" className={sort.by === by && !sort.desc ? 'dim' : undefined} />
+      </svg>
+    </Button>
+  );
 
   return (
     <>
-      <p className="muted small">
-        Each merchant groups the bank descriptions that belong to it. Merge duplicates (like two spellings of one store)
-        so they share one name and one remembered category.
-      </p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       <input
@@ -91,9 +109,13 @@ export default function MerchantList() {
       <table className="register merchants">
         <thead>
           <tr>
-            <th scope="col">Merchant</th>
+            <th scope="col" aria-sort={ariaSort('name')}>
+              {sortHeader('name', 'Merchant')}
+            </th>
             <th scope="col">Remembered category</th>
-            <th scope="col" className="num">Transactions</th>
+            <th scope="col" className="num" aria-sort={ariaSort('count')}>
+              {sortHeader('count', 'Transactions')}
+            </th>
             <th scope="col">
               <span className="visually-hidden">Actions</span>
             </th>
@@ -151,9 +173,10 @@ export default function MerchantList() {
                         size="small"
                         disabled={busy || merging || merchants.length < 2}
                         title={merchants.length < 2 ? 'There is no other merchant to merge into' : undefined}
+                        aria-label={`Merge ${m.name} into another merchant`}
                         onClick={() => start(m, 'merge')}
                       >
-                        Merge…
+                        Merge
                       </Button>
                     </>
                   )}
