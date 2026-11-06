@@ -74,10 +74,6 @@ export default function MerchantList() {
 
   return (
     <>
-      <p className="muted small">
-        Each merchant groups the bank descriptions that belong to it. Merge duplicates (like two spellings of one store)
-        so they share one name and one remembered category.
-      </p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       <input
