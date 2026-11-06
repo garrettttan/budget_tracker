@@ -125,7 +125,13 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .rail a.active { color: var(--ink); background: var(--accent-wash); }
 
 /* phones: top bar with ☰, and the pages in a drawer from the left (App.tsx PhoneMenu) */
-.topbar { display: none; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem 0; background: var(--paper); }
+.topbar {
+  display: none; align-items: center; gap: 0.5rem;
+  /* pinned to the top; above the bulk bar (15), under pickers and filter popovers (20, 30) */
+  position: sticky; top: 0; z-index: 18;
+  height: var(--topbar-h); padding: 0 1rem;
+  background: var(--paper); border-bottom: 1px solid var(--rule);
+}
 .topbar .wordmark { padding: 0 0 0 0.25rem; }
 .menu-button .icon { stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; fill: none; }
 .btn-icon.menu-button { color: var(--ink); padding: 0.4rem; margin-left: -0.4rem; }
@@ -677,12 +683,15 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* the rail becomes a top bar with ☰ (nothing near iOS's bottom gestures and toolbar) */
   .rail { display: none; }
   .topbar { display: flex; }
+  :root { --topbar-h: 3rem; }
+  /* things scrolled into view (focus, find) aren't hidden under the pinned bar */
+  html { scroll-padding-top: calc(var(--topbar-h) + 0.5rem); }
 
   /* transactions: hide date and account columns (they're in the row's details) */
   .register.txns .date-col, .register.txns .account-col { display: none; }
   .register .approved-col { width: auto; font-size: var(--step--1); }
   .page-head .btn:not(.btn-link) { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
-  .bulk-bar { top: 0; }
+  .bulk-bar { top: var(--topbar-h); } /* sticks just under the pinned top bar */
   .fields { grid-template-columns: 1fr; }
   .fields .span-2 { grid-column: auto; }
   /* merchants: hide the remembered category */

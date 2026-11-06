@@ -280,7 +280,7 @@ Chart series: `--viz-income` teal `#00919C` (dark `#1C9AA3`) and `--viz-spending
 contrast) on both surfaces. Pie slices use `--viz-cat-1..6` (blue, orange, aqua, yellow,
 magenta, green, in that order) + `--viz-cat-other` gray, also validated. Don't chart the
 outflow/inflow red and green as two series: they fail the color-blind check.
-Left rail on desktop → under 720px a top bar with ☰ (the to-review badge beside it) that opens the
+Left rail on desktop → under 720px a pinned top bar with ☰ (the to-review badge beside it) that opens the
 same pages in a left drawer (`PhoneMenu` in `App.tsx`); no bottom tabs (iOS's home indicator and
 Safari toolbar crowd them). Lists are plain register tables with
 rules, no cards. The to-review count shows only on the To review button and the nav badge. Avoid all-caps labels.
