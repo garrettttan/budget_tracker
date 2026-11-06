@@ -408,19 +408,19 @@ function CategoryOverTime({
   const total = sum(values);
   return (
     <>
-      <h2 className="category-over-time">
+      <h2>Categories over time</h2>
+      <div className="category-picker">
         <select className="heading-select" aria-label="Category" value={category.key} onChange={(e) => onPick(e.target.value)}>
           {options.map((o) => (
             <option key={o.key} value={o.key}>
               {o.name}
             </option>
           ))}
-        </select>{' '}
-        by month
-      </h2>
-      <p className="muted small">
-        {money(total)} total · {money(total / activeMonths)} avg / month
-      </p>
+        </select>
+        <span className="muted small">
+          {money(total)} total · {money(total / activeMonths)} avg / month
+        </span>
+      </div>
       <TimeLine
         points={months.map((m, i) => ({ date: m.key, long: m.long, value: values[i] }))}
         color={SPENDING}
