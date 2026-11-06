@@ -20,9 +20,6 @@ function isStale(lastSyncedAt: string | null): boolean {
 
 const total = (accounts: Account[]) => accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
 
-// closed or emptied accounts: hidden until asked for (no balance counts as zero)
-const isZero = (a: Account) => Number(a.balance ?? 0) === 0;
-
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
@@ -30,17 +27,18 @@ export default function Accounts() {
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
-  const [showZero, setShowZero] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
-  const zeroCount = accounts?.filter(isZero).length ?? 0;
-  const shown = accounts && (showZero ? accounts : accounts.filter((a) => !isZero(a)));
+  // hidden = dead accounts you chose to hide (Edit): left out of every total, like Trends' net worth
+  const counted = accounts?.filter((a) => !a.hidden) ?? [];
+  const hiddenCount = (accounts?.length ?? 0) - counted.length;
+  const shown = showHidden ? accounts ?? [] : counted;
 
   const load = useCallback(async () => {
     const [a, c] = await Promise.all([
       db()
         .from('accounts')
-        .select('id, name, institution, class, balance, balance_date, connection_id')
-        .eq('hidden', false)
+        .select('id, name, institution, class, balance, balance_date, connection_id, hidden')
         .order('sort_order')
         .order('name'),
       // explicit columns: the Vault pointer isn't readable from the browser
@@ -67,9 +65,9 @@ export default function Accounts() {
             </p>
           ))}
         </div>
-        {accounts && accounts.length > 0 && (
+        {counted.length > 0 && (
           <p className="net-worth">
-            <span className="muted">Net worth</span> <strong className="num">{money(total(accounts))}</strong>
+            <span className="muted">Net worth</span> <strong className="num">{money(total(counted))}</strong>
           </p>
         )}
       </header>
@@ -91,7 +89,7 @@ export default function Accounts() {
       {accounts && accounts.length > 0 && (
         <>
           {CLASSES.map(({ value, label }) => {
-            const group = shown!.filter((a) => a.class === value);
+            const group = shown.filter((a) => a.class === value);
             if (group.length === 0) return null;
             return (
               <div key={value} className="account-group">
@@ -105,10 +103,13 @@ export default function Accounts() {
                   </colgroup>
                   <tbody>
                     {group.map((a) => (
-                      <tr key={a.id}>
+                      <tr key={a.id} className={a.hidden ? 'hidden-account' : undefined}>
                         <td>
                           {a.name}
-                          <span className="account-sub">{a.institution ?? 'Manual'}</span>
+                          <span className="account-sub">
+                            {a.institution ?? 'Manual'}
+                            {a.hidden && ' · Hidden'}
+                          </span>
                         </td>
                         <td className="num">{money(a.balance)}</td>
                         <td className="action">
@@ -131,7 +132,7 @@ export default function Accounts() {
                   <tfoot>
                     <tr>
                       <th scope="row">Total {label.toLowerCase()}</th>
-                      <td className="num">{money(total(group))}</td>
+                      <td className="num">{money(total(group.filter((a) => !a.hidden)))}</td>
                       <td />
                     </tr>
                   </tfoot>
@@ -144,12 +145,12 @@ export default function Accounts() {
 
       {/* rarely used, so it sits below the accounts */}
       <div className="page-foot">
-        {zeroCount > 0 && (
+        {hiddenCount > 0 && (
           <p>
-            <Button variant="link" onClick={() => setShowZero((v) => !v)}>
-              {showZero
-                ? `Hide accounts with a $0 balance`
-                : `Show ${zeroCount} ${zeroCount === 1 ? 'account' : 'accounts'} with a $0 balance`}
+            <Button variant="link" onClick={() => setShowHidden((v) => !v)}>
+              {showHidden
+                ? 'Hide hidden accounts'
+                : `Show ${hiddenCount} hidden ${hiddenCount === 1 ? 'account' : 'accounts'}`}
             </Button>
           </p>
         )}

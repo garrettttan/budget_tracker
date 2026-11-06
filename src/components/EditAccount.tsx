@@ -12,6 +12,7 @@ export type EditableAccount = {
   class: AccountClass;
   balance: string | null;
   connection_id: string | null; // null = a manual account (Venmo, cash)
+  hidden: boolean; // a dead account: off Accounts (until shown), net worth and the account picker
 };
 
 async function countTransactions(accountId: string) {
@@ -38,6 +39,7 @@ export default function EditAccount({
   const manual = account.connection_id === null;
   const [name, setName] = useState(account.name);
   const [cls, setCls] = useState<AccountClass>(account.class);
+  const [hidden, setHidden] = useState(account.hidden);
   const [balance, setBalance] = useState(account.balance === null ? '' : Number(account.balance).toFixed(2));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export default function EditAccount({
     const changes: Record<string, unknown> = {};
     if (name.trim() !== account.name) changes.name = name.trim();
     if (cls !== account.class) changes.class = cls;
+    if (hidden !== account.hidden) changes.hidden = hidden;
     if (manual && parsed !== Number(account.balance ?? 0)) {
       changes.balance = parsed;
       changes.balance_date = new Date().toISOString();
@@ -137,6 +140,10 @@ export default function EditAccount({
                 <span className="num static-value">{money(account.balance)}</span>
               </div>
             )}
+            <label className="checkbox-field">
+              <input type="checkbox" checked={hidden} disabled={busy} onChange={(e) => setHidden(e.target.checked)} />
+              Hide this account
+            </label>
           </div>
           <div className="form-actions">
             <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>

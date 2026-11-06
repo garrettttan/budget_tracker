@@ -177,6 +177,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register.accounts { table-layout: fixed; border-top: 1px solid var(--ink); }
 .register.accounts td { overflow-wrap: anywhere; }
 .account-sub { display: block; margin-top: 0.1rem; font-size: var(--step--1); color: var(--ink-soft); }
+.hidden-account td:not(.action) { opacity: 0.6; }
 .register.accounts .balance-col { width: 9rem; }
 .register.accounts .action-col { width: 3.25rem; }
 .account-group h2 { margin: 1.75rem 0 0.5rem; }
