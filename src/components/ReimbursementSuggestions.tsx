@@ -38,10 +38,6 @@ export default function ReimbursementSuggestions({
   return (
     <>
       <h2>Paid back?</h2>
-      <p className="muted small">
-        Money in that looks like someone paying you back. Linking approves it; it isn’t counted as income. Not a payback? Give
-        it a category below instead.
-      </p>
       <table className="register paybacks">
         <thead>
           <tr>

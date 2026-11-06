@@ -26,6 +26,7 @@
   --step-0: 0.9375rem;
   --step-1: 1.125rem;
   --step-2: 1.5rem;
+  --step-3: 1.75rem;
   --step-5: 4.5rem;
 
   color-scheme: light;
@@ -70,8 +71,10 @@ html, body {
 }
 
 h1, h2 { line-height: 1.2; margin: 0; }
-h1 { font-size: var(--step-2); font-weight: 700; letter-spacing: -0.01em; }
-h2 { font-size: var(--step-1); font-weight: 600; margin: 2.5rem 0 0.75rem; }
+/* text levels: page title (h1, 28px bold) > section (h2, 20px semibold) > body (15px regular)
+   > secondary (muted, or 13px). Body text isn't bold, so it never reads as a heading. */
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.015em; }
+h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 0.75rem; }
 
 a { color: var(--accent); }
 code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; border-radius: 3px; }
@@ -171,6 +174,17 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
 .register select { padding: 0.2rem 0.4rem; }
 /* row buttons: compact, and set apart from the amount column */
+/* Settings → Bank connection: Last synced, Sync now, Sync log on one line (wraps on phones) */
+.sync-status { margin: 0 0 0.75rem; }
+.sync-status p { margin: 0; }
+/* one even gap between Sync now, Sync log and Reconnect */
+.sync-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin: 0 0 1.5rem; }
+/* Sync now: a compact box, but the same text size as the links beside it */
+.sync-actions .btn-small { font-size: inherit; }
+
+/* sync log (Settings → Sync log modal): a gap between the number columns, dates on one line */
+.register.sync-log .num { padding-left: 0.75rem; }
+.register.sync-log td:first-child { white-space: nowrap; }
 .register td.action { text-align: right; white-space: nowrap; padding-left: 1.25rem; padding-right: 0; }
 .register td.action .btn + .btn { margin-left: 0.5rem; }
 /* Accounts: one table per class; fixed widths line their columns up */
@@ -586,9 +600,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
 
 .small { font-size: var(--step--1); }
 
-.reconnect { margin-top: 1rem; }
-.reconnect summary { cursor: pointer; color: var(--accent); font-weight: 500; }
-.reconnect form { margin-top: 1rem; }
 
 .boot { min-height: 100vh; }
 
@@ -618,7 +629,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* transactions: hide date and account columns (they're in the row's details) */
   .register.txns .date-col, .register.txns .account-col { display: none; }
   .register .approved-col { width: auto; font-size: var(--step--1); }
-  .page-head .btn { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
+  .page-head .btn:not(.btn-link) { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
   .bulk-bar { top: 0; }
   .fields { grid-template-columns: 1fr; }
   .fields .span-2 { grid-column: auto; }
@@ -638,6 +649,9 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .inline-form { display: grid; padding: 0.5rem; }
   .inline-form input[type='text'], .inline-form select { width: 100%; min-width: 0; }
   .inline-form .amount-quick input { width: 100%; }
+  .register.sync-log td, .register.sync-log th { padding-right: 0.5rem; }
+  .register.sync-log .num { padding-left: 0.4rem; padding-right: 0; }
+  .register.sync-log .sync-trigger { display: block; }
   .register.paybacks td, .register.paybacks th, .register.owed td, .register.owed th { padding-right: 0.5rem; }
   .register.owed td.action .btn + .btn { margin-left: 0.25rem; }
   .pie-layout { grid-template-columns: 1fr; }

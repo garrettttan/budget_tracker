@@ -155,6 +155,7 @@ export default function Accounts() {
           </p>
         )}
           <Button
+            variant="link"
             onClick={() => {
               setAdding(true);
               setNotice(null);

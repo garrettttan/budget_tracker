@@ -706,6 +706,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
       <header className="page-head">
         <h1>Spending</h1>
         <Button
+          variant="link"
           onClick={() => {
             setAdding(true);
             setNotice(null);

@@ -1,4 +1,6 @@
 import { relativeTime } from '../lib/format';
+import Button from './Button';
+import Modal from './Modal';
 
 export type SyncRun = {
   id: string;
@@ -11,9 +13,28 @@ export type SyncRun = {
   messages: string[];
 };
 
-export default function SyncLog({ runs }: { runs: SyncRun[] }) {
+/** The last runs of the daily sync, in a modal opened from Settings → Bank connection. */
+export default function SyncLog({ runs, onClose }: { runs: SyncRun[]; onClose: () => void }) {
   return (
-    <table className="register">
+    <Modal labelledBy="sync-log-title" onClose={onClose} className="modal-wide">
+      {(close) => (
+        <>
+          <div className="modal-head">
+            <h2 id="sync-log-title">Sync log</h2>
+            <Button variant="icon" aria-label="Close" onClick={close}>
+              ×
+            </Button>
+          </div>
+          <SyncTable runs={runs} />
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function SyncTable({ runs }: { runs: SyncRun[] }) {
+  return (
+    <table className="register sync-log">
       <thead>
         <tr>
           <th scope="col">When</th>
@@ -28,7 +49,7 @@ export default function SyncLog({ runs }: { runs: SyncRun[] }) {
           <tr key={run.id}>
             <td>
               {relativeTime(run.started_at)}
-              {run.trigger !== 'schedule' && <span className="muted"> ({run.trigger})</span>}
+              {run.trigger !== 'schedule' && <span className="muted sync-trigger"> ({run.trigger})</span>}
             </td>
             <td className={run.status === 'error' ? 'error' : undefined}>
               {run.status}

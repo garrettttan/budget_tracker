@@ -422,3 +422,7 @@ verify_jwt = false
 # Called from Settings by the signed-in user.
 [functions.simplefin-claim]
 verify_jwt = true
+
+# Settings → Sync now, by the signed-in user.
+[functions.sync-now]
+verify_jwt = true

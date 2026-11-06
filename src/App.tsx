@@ -85,7 +85,7 @@ export default function App() {
           <Route path="/trends" element={<Trends />} />
           <Route path="/owed" element={<Owed />} />
           <Route path="/accounts" element={<Accounts />} />
-          <Route path="/settings" element={<Settings email={session.user.email ?? ''} />} />
+          <Route path="/settings" element={<Settings email={session.user.email ?? ''} onSynced={refreshUnreviewed} />} />
           <Route path="*" element={<Navigate to="/spending" replace />} />
         </Routes>
       </main>

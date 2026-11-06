@@ -188,7 +188,10 @@ Access URL stored in **Supabase Vault** via `save_simplefin_access_url` /
 
 Code: `supabase/functions/_shared/simplefin.ts` (pure protocol helpers, unit-tested with
 Node), `_shared/run-sync.ts` (DB writes, read top-down: plan → fetch → accounts →
-transactions), `sync/` (Bearer `SYNC_SECRET`), `simplefin-claim/` (user JWT). Run guard:
+transactions), `sync/` (Bearer `SYNC_SECRET`), `simplefin-claim/` (user JWT), `sync-now/` (user JWT;
+Settings → Sync now, logged as a `manual` run; Settings → Bank connection shows a status block,
+"label · Connected" over one line that is the last sync time, "Can take up to a minute" while syncing, or the result,
+then Sync now with Sync log · Reconnect beside it). Run guard:
 ≤ 12 SimpleFIN requests per 24 h however often it's called, and skip a day after a
 rate-limit warning.
 
@@ -267,7 +270,8 @@ every row has a category picker and an Approved checkbox; `/transactions` and `/
 here keeping their query), Trends, Owed to me (phone tab says "Owed"), Accounts, Settings, SignIn.
 Email + password auth (single user).
 
-Design: Public Sans (tabular figures), paper `#F4F6F7`, ink `#16232F`, one accent teal
+Design: Public Sans (tabular figures); text levels: page title h1 28px bold > section h2 20px
+semibold > body 15px regular (never bold, so it can't pass for a heading) > secondary (muted or 13px); paper `#F4F6F7`, ink `#16232F`, one accent teal
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.
 Chart series: `--viz-income` teal `#00919C` (dark `#1C9AA3`) and `--viz-spending` orange
 `#C25A22` (dark `#D2702F`), checked with the dataviz palette validator (color-blind separation,
@@ -279,7 +283,9 @@ rules, no cards. The to-review count shows only on the To review button and the 
 
 Buttons: always `components/Button.tsx` (never a bare `<button>`), with a `variant`:
 `primary` (filled accent), `secondary` (outlined, fills accent on hover), `link`, `icon`
-(needs `aria-label`); `size="small"` inside table rows. Disabled buttons fade with a
+(needs `aria-label`); `size="small"` inside table rows. **Acts right away → `secondary`** (outlined:
+Sync now, Sign out, Load more); **opens a modal → `link`** (teal text, no "…": Add transaction, Add manual
+account, Sync log, Reconnect), except the edit pencil (`icon`). Disabled buttons fade with a
 not-allowed cursor; give a disabled action a `title` that says why.
 
 ## Build phases
@@ -302,5 +308,5 @@ npm run build
 npm run test:db    # applies every migration to in-memory Postgres (PGlite) with stubbed
                    # auth + Vault schemas; checks RLS, grants, seeding, reports, Vault
 npm run test:sync  # unit tests for the SimpleFIN helpers (Node's built-in test runner)
-deno check supabase/functions/sync/index.ts supabase/functions/simplefin-claim/index.ts
+deno check supabase/functions/sync/index.ts supabase/functions/simplefin-claim/index.ts supabase/functions/sync-now/index.ts
 ```
