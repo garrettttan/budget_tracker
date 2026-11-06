@@ -34,6 +34,7 @@ writes under RLS, no new database functions.
   a later CSV backfill can't skew it), and it gets no `balance_snapshots` rows (the browser
   can't write them). Trends' net worth over time has to handle that.
 - Manual transactions get no `merchant_id`, so they don't teach or use merchant memory.
+- Accounts hides accounts with a $0 (or no) balance by default; a link at the bottom shows them.
 
 **Phase 4 (Reimbursements): done** (Nov 3). In a charge's tap-to-expand details,
 Expect reimbursement (who, how much with Half / The rest, note); the row then shows "Sam owes
