@@ -107,7 +107,6 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
             </p>
           )}
           {connection.status_message && <p className="muted">{connection.status_message}</p>}
-          <p className="muted">Syncs daily around 6 a.m.</p>
           <details className="reconnect">
             <summary>Reconnect with a new Setup Token</summary>
             <ConnectSimplefin onConnected={loadSync} />
