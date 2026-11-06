@@ -340,8 +340,18 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .modal h2 { margin: 0 0 0.15rem; }
 .modal.modal-wide { width: min(48rem, calc(100vw - 2rem)); }
-/* a Settings section reduced to one line (count + a link that opens a modal) */
-.settings-line { display: flex; gap: 1rem; align-items: baseline; margin: 0; }
+/* Settings: a section reduced to one full-width row that opens a modal (components/SettingsRow.tsx) */
+.btn-link.settings-row {
+  display: flex; align-items: center; gap: 0.75rem; width: 100%;
+  margin: 2.5rem 0 0; padding: 0.9rem 0; /* text lines up with the section headings */
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); border-radius: 0;
+  color: var(--ink); font: inherit; text-align: left; text-decoration: none;
+}
+.btn-link.settings-row + .btn-link.settings-row { margin-top: 0; border-top: none; }
+.btn-link.settings-row:hover:not(:disabled) { background: var(--accent-wash); text-decoration: none; }
+.settings-row-label { flex: 1; font-size: 1.25rem; font-weight: 600; } /* reads as the section's heading */
+.settings-row-detail { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.settings-row-chevron { width: 8px; height: 14px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .modal form > p { margin: 0 0 0.75rem; }
 .fields.single { grid-template-columns: 1fr; }
