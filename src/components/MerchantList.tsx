@@ -147,9 +147,10 @@ export default function MerchantList() {
                         size="small"
                         disabled={busy || merging || merchants.length < 2}
                         title={merchants.length < 2 ? 'There is no other merchant to merge into' : undefined}
+                        aria-label={`Merge ${m.name} into another merchant`}
                         onClick={() => start(m, 'merge')}
                       >
-                        Merge…
+                        Merge
                       </Button>
                     </>
                   )}
