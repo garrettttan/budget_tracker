@@ -540,6 +540,15 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .merchant-filter { width: 16rem; max-width: 100%; margin: 0 0 0.5rem; }
 /* the same gap under the heading in every Settings list modal */
 .settings-modal-head { margin-bottom: 1rem; }
+/* Settings list modals open near the top, not centered, so the search box stays put; height changes animate */
+.modal.settings-modal { margin-top: max(1rem, 8vh); margin-bottom: auto; transition: height 200ms ease; }
+.modal.settings-modal.resizing { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .modal.settings-modal { transition: none; } }
+/* fixed column widths, so filtering rows doesn't re-space the columns either */
+.settings-modal .register.categories, .settings-modal .register.merchants { table-layout: fixed; width: 100%; }
+.settings-modal .register.categories th:nth-child(3), .settings-modal .register.merchants th:nth-child(3) { width: 7.5rem; }
+.settings-modal .register.categories th:nth-child(4) { width: 3rem; }
+.settings-modal .register.merchants th:nth-child(4) { width: 9.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
 .register tr.merge-row td { background: var(--accent-wash); }
 .merge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
