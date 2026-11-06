@@ -9,6 +9,8 @@ import Owed from './pages/Owed';
 import Trends from './pages/Trends';
 import Settings from './pages/Settings';
 import NotConfigured from './pages/NotConfigured';
+import Button from './components/Button';
+import Modal from './components/Modal';
 
 function useUnreviewedCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
@@ -32,13 +34,83 @@ function ToSpending() {
   return <Navigate to={`/spending${useLocation().search}`} replace />;
 }
 
-const NAV: { to: string; label: string; short?: string }[] = [
+const NAV: { to: string; label: string }[] = [
   { to: '/spending', label: 'Spending' },
   { to: '/trends', label: 'Trends' },
-  { to: '/owed', label: 'Owed to me', short: 'Owed' },
+  { to: '/owed', label: 'Owed to me' },
   { to: '/accounts', label: 'Accounts' },
   { to: '/settings', label: 'Settings' },
 ];
+
+/** The pages, with the to-review badge on Spending: the desktop rail and the phone drawer. */
+function NavList({ unreviewed, onNavigate }: { unreviewed: number | null; onNavigate?: () => void }) {
+  return (
+    <ul className="nav-list">
+      {NAV.map((item) => (
+        <li key={item.to}>
+          <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active' : undefined)} onClick={onNavigate}>
+            <span>{item.label}</span>
+            {item.to === '/spending' && unreviewed !== null && unreviewed > 0 && (
+              <span className="badge" aria-label={`${unreviewed} to review`}>
+                {unreviewed}
+              </span>
+            )}
+          </NavLink>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Phones: a top bar with ☰ (the to-review count beside it) that opens the pages in a left drawer. */
+function PhoneMenu({ unreviewed }: { unreviewed: number | null }) {
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  // any navigation closes it (links close it too; this covers back/forward)
+  useEffect(() => setOpen(false), [pathname]);
+  const waiting = unreviewed !== null && unreviewed > 0;
+  return (
+    <header className="topbar">
+      <Button
+        variant="icon"
+        className="menu-button"
+        aria-label={waiting ? `Menu, ${unreviewed} to review` : 'Menu'}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <svg className="icon" viewBox="0 0 20 16" width="20" height="16" aria-hidden="true">
+          <path d="M1 2h18M1 8h18M1 14h18" />
+        </svg>
+      </Button>
+      {waiting && (
+        <span className="badge" aria-hidden="true">
+          {unreviewed}
+        </span>
+      )}
+      <span className="wordmark">Ledger</span>
+      {open && (
+        <Modal labelledBy="drawer-title" className="drawer" onClose={() => setOpen(false)}>
+          {(close) => (
+            <>
+              <div className="modal-head">
+                <h2 id="drawer-title" className="wordmark">
+                  Ledger
+                </h2>
+                <Button variant="icon" aria-label="Close menu" onClick={close}>
+                  ×
+                </Button>
+              </div>
+              <nav aria-label="Main">
+                <NavList unreviewed={unreviewed} onNavigate={close} />
+              </nav>
+            </>
+          )}
+        </Modal>
+      )}
+    </header>
+  );
+}
 
 export default function App() {
   const { session, loading } = useAuth();
@@ -52,30 +124,9 @@ export default function App() {
     <div className="shell">
       <nav className="rail" aria-label="Main">
         <div className="wordmark">Ledger</div>
-        <ul>
-          {NAV.map((item) => (
-            <li key={item.to}>
-              <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active' : undefined)}>
-                {item.short ? (
-                  <span>
-                    <span className="nav-long">{item.label}</span>
-                    <span className="nav-short" aria-hidden="true">
-                      {item.short}
-                    </span>
-                  </span>
-                ) : (
-                  <span>{item.label}</span>
-                )}
-                {item.to === '/spending' && unreviewed !== null && unreviewed > 0 && (
-                  <span className="badge" aria-label={`${unreviewed} to review`}>
-                    {unreviewed}
-                  </span>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+        <NavList unreviewed={unreviewed} />
       </nav>
+      <PhoneMenu unreviewed={unreviewed} />
       <main className="page">
         <Routes>
           <Route path="/spending" element={<Spending count={unreviewed} onChange={refreshUnreviewed} />} />
