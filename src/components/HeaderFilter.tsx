@@ -22,6 +22,8 @@ export default function HeaderFilter({
   align = 'start',
   searchable = true,
   keepOne = false,
+  active,
+  reset,
   children,
 }: {
   label: string;
@@ -36,6 +38,10 @@ export default function HeaderFilter({
   searchable?: boolean;
   /** true where hiding everything makes no sense: the last ticked item can't be unticked */
   keepOne?: boolean;
+  /** the "filter on" look; defaults to "anything unticked" (for an opt-in list, say when something's ticked) */
+  active?: boolean;
+  /** replaces the footer's Show all */
+  reset?: { label: string; onClick: () => void; disabled: boolean; title?: string };
   /** what the header shows, if not `label` */
   children?: ReactNode;
 }) {
@@ -47,6 +53,7 @@ export default function HeaderFilter({
   const titleId = useId();
 
   const count = items.filter((i) => hidden.includes(i.id)).length;
+  const on = active ?? count > 0;
   const typed = query.trim().toLowerCase();
   const matches = typed ? items.filter((i) => i.name.toLowerCase().includes(typed)) : items;
   const shownMatches = matches.filter((i) => !hidden.includes(i.id)).length;
@@ -111,10 +118,10 @@ export default function HeaderFilter({
       <Button
         ref={trigger}
         variant="link"
-        className={`th-filter${count ? ' active' : ''}`}
+        className={`th-filter${on ? ' active' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Filter ${label}${count ? ', filter on' : ''}`}
+        aria-label={`Filter ${label}${on ? ', filter on' : ''}`}
         onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="th-filter-label">{children ?? label}</span>
@@ -190,15 +197,21 @@ export default function HeaderFilter({
             {matches.length === 0 && <li className="muted small">No matches.</li>}
           </ul>
           <div className="header-filter-foot">
-            <Button
-              variant="link"
-              size="small"
-              disabled={count === 0}
-              title={count ? undefined : 'Nothing is hidden'}
-              onClick={() => onChange([])}
-            >
-              Show all
-            </Button>
+            {reset ? (
+              <Button variant="link" size="small" disabled={reset.disabled} title={reset.title} onClick={reset.onClick}>
+                {reset.label}
+              </Button>
+            ) : (
+              <Button
+                variant="link"
+                size="small"
+                disabled={count === 0}
+                title={count ? undefined : 'Nothing is hidden'}
+                onClick={() => onChange([])}
+              >
+                Show all
+              </Button>
+            )}
           </div>
         </div>
       )}

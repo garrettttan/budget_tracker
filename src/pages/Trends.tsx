@@ -4,6 +4,7 @@ import { db } from '../lib/supabase';
 import { money, shortDate, todayIso } from '../lib/format';
 import Button from '../components/Button';
 import Combobox from '../components/Combobox';
+import HeaderFilter from '../components/HeaderFilter';
 import Switch from '../components/Switch';
 import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
 import { iso, monthEnd, sum, thisMonth } from '../lib/months';
@@ -236,8 +237,8 @@ export default function Trends() {
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  const toggleTag = (id: string) =>
-    set({ tags: (included.includes(id) ? included.filter((t) => t !== id) : [...included, id]).join(',') || null });
+  // the included tags that still exist, in the list's order, for the dropdown's label
+  const includedNames = tags.filter((t) => included.includes(t.tag_id)).map((t) => t.name);
 
   // this month's spending so far, day by day, against last month and an average month (the
   // earlier three that have any spending; shown when two or more do, else it's just last month)
@@ -291,13 +292,24 @@ export default function Trends() {
           ))}
         </div>
         {tags.length > 0 && (
-          <div className="filter tag-toggles" role="group" aria-label="Include tagged spending">
-            <span className="muted small">Include tagged:</span>
-            {tags.map((t) => (
-              <Button key={t.tag_id} size="small" aria-pressed={included.includes(t.tag_id)} onClick={() => toggleTag(t.tag_id)}>
-                {t.name}
-              </Button>
-            ))}
+          <div className="tag-include">
+            <HeaderFilter
+              label="Tags"
+              items={tags.map((t) => ({ id: t.tag_id, name: t.name, count: t.transaction_count }))}
+              hidden={tags.map((t) => t.tag_id).filter((id) => !included.includes(id))}
+              onChange={(hidden) => set({ tags: tags.map((t) => t.tag_id).filter((id) => !hidden.includes(id)).join(',') || null })}
+              onOnly={(id) => set({ tags: id })}
+              active={includedNames.length > 0}
+              reset={{
+                label: 'Clear',
+                onClick: () => set({ tags: null }),
+                disabled: includedNames.length === 0,
+                title: includedNames.length ? undefined : 'No tags are included',
+              }}
+            >
+              Include tagged:{' '}
+              {includedNames.length === 0 ? 'None' : includedNames[0] + (includedNames.length > 1 ? ` +${includedNames.length - 1}` : '')}
+            </HeaderFilter>
           </div>
         )}
       </div>
