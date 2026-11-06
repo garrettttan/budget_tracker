@@ -265,6 +265,10 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .list-head h2 { margin: 0; }
 .filters-on { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-size: var(--step--1); color: var(--ink-soft); }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+/* a list's search box and add form on one line (Settings → Categories) */
+.list-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+.list-tools .merchant-filter, .list-tools .tag-new { margin: 0; }
+.list-tools input { padding: 0.3rem 0.55rem; font-size: var(--step-0); }
 
 /* Transactions → select column and the bar for selected rows */
 .register .select-col { width: 2rem; padding-right: 0.25rem; }
