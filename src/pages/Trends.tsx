@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
-import { money, shortDate, todayIso } from '../lib/format';
+import { byUse } from '../lib/categoryOrder';
+import { round, sum } from '../lib/cents';
+import { money, shortDate } from '../lib/format';
+import { addMonths, iso, monthEnd, thisMonth, today } from '../lib/months';
+import { type FlowRow, NO_CATEGORY, type SpendRow, categoryTotals, fetchReports } from '../lib/reports';
 import Button from '../components/Button';
 import Combobox from '../components/Combobox';
 import HeaderFilter from '../components/HeaderFilter';
 import Switch from '../components/Switch';
 import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
-import { iso, monthEnd, sum, thisMonth } from '../lib/months';
 
+// series colors (validated for color-blind separation in styles.css)
 const INCOME = 'var(--viz-income)';
 const SPENDING = 'var(--viz-spending)';
 const EARLIER = 'var(--viz-cat-other)';
@@ -21,20 +25,14 @@ const RANGES = [
 ] as const;
 type RangeKey = (typeof RANGES)[number]['key'];
 
-type SpendRow = { month: string; category_id: string | null; category_name: string | null; spent: string };
-type FlowRow = { month: string; income: string; spending: string; net: string };
 type TagTotal = { tag_id: string; name: string; spent: string; transaction_count: number; first_date: string | null; last_date: string | null };
 type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
 type Category = { id: string; name: string };
+/** A month on a chart's axis: its YYYY-MM-01 key, "Mar" (or "Jan '26"), and "March 2026". */
 type MonthKey = { key: string; short: string; long: string };
+/** A row of the `spending_lines` view: one approved transaction's share of spending. */
 type Line = { posted_date: string; category_id: string | null; spent: string; tag_ids: string[] };
-
-/** The YYYY-MM-01 key `n` months before (negative) or after `key`. */
-const addMonths = (key: string, n: number) => {
-  const d = new Date(key + 'T12:00:00');
-  return iso(new Date(d.getFullYear(), d.getMonth() + n, 1, 12));
-};
 
 /** Every approved spending line from `start` on (paged; the API caps a response at 1,000 rows). */
 async function fetchLines(start: string) {
@@ -68,14 +66,14 @@ function runningTotals(lines: Line[], month: string, days: number, upTo = days) 
   let total = 0;
   return byDay.map((v, i) => {
     total += v;
-    return i < upTo ? Math.round(total * 100) / 100 : null;
+    return i < upTo ? round(total) : null;
   });
 }
 
-/** A category's spending (`none` = Uncategorized) for each of `months`. */
+/** A category's spending (NO_CATEGORY = Uncategorized) for each of `months`. */
 function monthValues(spend: SpendRow[], months: MonthKey[], category: string) {
   return months.map((m) =>
-    sum(spend.filter((r) => r.month === m.key && (r.category_id ?? 'none') === category).map((r) => Number(r.spent))),
+    sum(spend.filter((r) => r.month === m.key && (r.category_id ?? NO_CATEGORY) === category).map((r) => Number(r.spent))),
   );
 }
 
@@ -95,11 +93,13 @@ function monthsFor(range: RangeKey) {
 }
 
 /**
- * Trends: where the money went over a range of months (a single month's
- * category split is on Spending). Everything uses the same months and tag
- * toggles. Spending is your share
- * (net of reimbursements), excludes transfers, and leaves out tagged spending
- * unless its tag is toggled on.
+ * Trends: where the money went over a range of months (one month's category
+ * split is on Spending). From the top: this month's pace against earlier
+ * months, cash flow, one category over time, net worth, and tag totals.
+ *
+ * Spending is your share (net of reimbursements), excludes transfers, and
+ * leaves out tagged spending unless "Include tagged" picks its tag (`?tags=`).
+ * The range buttons (`?range=`) set the months for every chart but the pace.
  */
 export default function Trends() {
   const [params, setParams] = useSearchParams();
@@ -123,14 +123,16 @@ export default function Trends() {
       db().from('tag_spend').select('tag_id, name, spent, transaction_count, first_date, last_date').order('name'),
       db().from('balance_snapshots').select('account_id, date, balance').order('date'),
       db().from('accounts').select('id, connection_id, balance, hidden'),
-      db().from('categories').select('id, name').eq('archived', false).eq('is_income', false).order('sort_order'),
+      // most-used first, like every category picker (lib/categoryOrder)
+      db().from('categories').select('id, name, transactions(count)').eq('archived', false).eq('is_income', false),
     ]).then(([t, b, a, c]) => {
       const failed = t.error ?? b.error ?? a.error ?? c.error;
       if (failed) setError(failed.message);
       setTags((t.data ?? []) as TagTotal[]);
       setSnapshots((b.data ?? []) as Snapshot[]);
       setAccounts((a.data ?? []) as Account[]);
-      setCategories((c.data ?? []) as Category[]);
+      const counted = (c.data ?? []) as unknown as (Category & { transactions: { count: number }[] })[];
+      setCategories(byUse(counted).map(({ id, name }) => ({ id, name })));
     });
   }, []);
 
@@ -145,36 +147,19 @@ export default function Trends() {
 
   useEffect(() => {
     setLoading(true); // the charts keep their last render, faded, until this returns
-    Promise.all([
-      db().rpc('monthly_category_spend', { include_tags: included }),
-      db().rpc('monthly_cashflow', { include_tags: included }),
-    ]).then(([s, f]) => {
-      const failed = s.error ?? f.error;
-      if (failed) setError(failed.message);
-      setSpend((s.data ?? []) as SpendRow[]);
-      setFlow((f.data ?? []) as FlowRow[]);
+    fetchReports(included).then(({ spend, flow, error }) => {
+      if (error) setError(error.message);
+      setSpend(spend);
+      setFlow(flow);
       setLoading(false);
     });
   }, [included]);
 
   const months = useMemo(() => monthsFor(range), [range]);
   const start = months[0].key;
-  const end = todayIso();
+  const end = today();
 
-  /** Category totals for the months matching `keep`, largest first (positive only). */
-  const totalsBy = (keep: (month: string) => boolean) => {
-    const totals = new Map<string, { key: string; name: string; value: number }>();
-    for (const r of spend ?? []) {
-      if (!keep(r.month)) continue;
-      const key = r.category_id ?? 'none';
-      const t = totals.get(key) ?? { key, name: r.category_name ?? 'Uncategorized', value: 0 };
-      t.value = Math.round((t.value + Number(r.spent)) * 100) / 100;
-      totals.set(key, t);
-    }
-    return [...totals.values()].filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
-  };
-
-  const byCategory = useMemo(() => totalsBy((m) => m >= start), [spend, start]);
+  const byCategory = useMemo(() => categoryTotals(spend ?? [], (m) => m >= start), [spend, start]);
   // the category-over-time chart's picker: every spending category in picker
   // order, then any others with spending in the range (archived, Uncategorized)
   const categoryOptions = useMemo(() => {
@@ -218,14 +203,15 @@ export default function Trends() {
       for (; i < synced.length && synced[i].date <= asOf; i++) latest.set(synced[i].account_id, Number(synced[i].balance));
       if (latest.size) points.push({ date: m.key, long: m.long, value: sum([...latest.values()]) + manual });
     }
+    // no snapshots yet (only manual accounts, or before the first sync): just today's balances
     if (points.length === 0 && accounts.length) {
       const now = months[months.length - 1];
       points.push({ date: now.key, long: now.long, value: sum(accounts.filter((a) => !a.hidden).map((a) => Number(a.balance ?? 0))) });
     }
-    return { points };
+    return points;
   }, [snapshots, accounts, months, end]);
-  const nwLast = netWorth.points[netWorth.points.length - 1];
 
+  /** Changes the URL's settings; one left out keeps its value, null clears it. */
   function set(next: Record<string, string | null>) {
     const merged = {
       range: range === '12m' ? null : range,
@@ -264,7 +250,7 @@ export default function Trends() {
         name: 'Average month',
         color: EARLIER,
         dashed: true,
-        values: curves[0].map((_, i) => Math.round((sum(curves.map((c) => c[i])) / curves.length) * 100) / 100),
+        values: curves[0].map((_, i) => round(sum(curves.map((c) => c[i])) / curves.length)),
       });
     }
     return { days, series };
@@ -357,10 +343,8 @@ export default function Trends() {
         )}
 
         <h2>Net worth</h2>
-        {nwLast ? (
-          <>
-            <TimeLine points={netWorth.points} color={INCOME} format={money} label="Net worth by month" />
-          </>
+        {netWorth.length > 0 ? (
+          <TimeLine points={netWorth} color={INCOME} format={money} label="Net worth by month" />
         ) : (
           <p className="empty">No balances yet. They appear after the first sync.</p>
         )}
@@ -393,7 +377,6 @@ export default function Trends() {
           </>
         )}
       </div>
-
     </section>
   );
 }

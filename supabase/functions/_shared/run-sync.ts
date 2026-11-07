@@ -1,5 +1,6 @@
 // One sync run for one SimpleFIN connection, used by the daily `sync`
-// function and by `simplefin-claim` (the first sync after connecting).
+// function, `sync-now` (Settings → Sync now) and `simplefin-claim` (the first
+// sync after connecting). Read top-down: plan → fetch → accounts → transactions.
 //
 // Writes with the service role, which bypasses RLS, so every insert sets
 // user_id explicitly.
@@ -29,8 +30,15 @@ export type SyncResult =
   | { status: 'skipped'; reason: string }
   | { status: 'ok' | 'warning' | 'error'; new: number; updated: number; removed: number; messages: string[] };
 
+/** Counts and warnings gathered during a run, saved to `sync_runs`. */
 type Log = { requests: number; new: number; updated: number; removed: number; messages: string[] };
 
+/**
+ * Syncs one connection: works out which date windows to fetch, skips the run
+ * if that would go past the request cap (or a rate-limit cooldown), then
+ * fetches, saves accounts and balances, and saves transactions. Every run that
+ * isn't skipped is logged in `sync_runs`, and the connection's status updated.
+ */
 export async function runSync(
   admin: SupabaseClient,
   conn: Connection,

@@ -19,7 +19,7 @@ export default function BulkBar({
   onClear,
 }: {
   count: number;
-  /** selected rows that are unapproved and have a category or are transfers */
+  /** selected rows still waiting for review */
   approvable: number;
   allTags: Tag[];
   /** tags at least one selected row carries */

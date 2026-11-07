@@ -1,3 +1,5 @@
+// The app shell: the sign-in gate, navigation (a rail on desktop, a menu
+// drawer on phones) and the routes. Also keeps the nav's to-review count.
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './lib/auth';
@@ -12,6 +14,7 @@ import NotConfigured from './pages/NotConfigured';
 import Button from './components/Button';
 import Modal from './components/Modal';
 
+/** How many posted transactions wait for review; refreshed on every page change and on demand. */
 function useUnreviewedCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
   const location = useLocation();
@@ -30,10 +33,12 @@ function useUnreviewedCount(enabled: boolean) {
   return { count, refresh };
 }
 
+/** Old page URLs (Review, then Transactions) go to Spending, keeping their filters. */
 function ToSpending() {
   return <Navigate to={`/spending${useLocation().search}`} replace />;
 }
 
+/** The pages, in nav order. */
 const NAV: { to: string; label: string }[] = [
   { to: '/spending', label: 'Spending' },
   { to: '/trends', label: 'Trends' },
@@ -129,8 +134,7 @@ export default function App() {
       <PhoneMenu unreviewed={unreviewed} />
       <main className="page">
         <Routes>
-          <Route path="/spending" element={<Spending count={unreviewed} onChange={refreshUnreviewed} />} />
-          {/* the page was Review, then Transactions, until Nov 2026; old links keep their filters */}
+          <Route path="/spending" element={<Spending unreviewed={unreviewed} onApprovalsChanged={refreshUnreviewed} />} />
           <Route path="/transactions" element={<ToSpending />} />
           <Route path="/review" element={<ToSpending />} />
           <Route path="/trends" element={<Trends />} />

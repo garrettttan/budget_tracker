@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { db } from '../lib/supabase';
+import { plural } from '../lib/format';
 import Button from './Button';
 import Modal from './Modal';
 
 export type EditableCategory = { id: string; name: string; group_name: string | null; is_income: boolean };
-
-const plural = (n: number) => `${n} ${n === 1 ? 'transaction' : 'transactions'}`;
 
 /**
  * Edit one category in a modal: name, group, and whether it's income (income
@@ -84,7 +83,7 @@ export default function EditCategory({
             {needsTarget ? (
               <div className="fields single">
                 <label>
-                  Move its {plural(transactionCount)} to
+                  Move its {plural(transactionCount, 'transaction')} to
                   <select value={into} autoFocus disabled={busy} onChange={(e) => setInto(e.target.value)}>
                     <option value="">Uncategorized</option>
                     {others.map((c) => (
@@ -99,11 +98,7 @@ export default function EditCategory({
               <p className="muted">No transactions use it.</p>
             )}
             <div className="form-actions">
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={busy}
-              >
+              <Button type="submit" variant="primary" disabled={busy}>
                 Delete
               </Button>
               <Button variant="link" disabled={busy} onClick={() => setDeleting(false)}>

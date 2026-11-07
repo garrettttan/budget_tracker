@@ -1,3 +1,4 @@
+/** Shown instead of the app when the build has no Supabase settings. */
 export default function NotConfigured() {
   return (
     <div className="center-screen">

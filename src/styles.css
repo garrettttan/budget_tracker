@@ -1,3 +1,9 @@
+/*
+ * The app's one stylesheet. Colors and type sizes are tokens on :root, with
+ * dark-mode values under prefers-color-scheme; then the shell (rail, phone top
+ * bar), register tables, components and pages; the phone layout (< 720px) is last.
+ */
+
 :root {
   --paper: #f4f6f7;
   --surface: #ffffff;
@@ -203,7 +209,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register tr.unreviewed td:first-child { box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.625rem; }
 .register tfoot th, .register tfoot td { font-weight: 600; color: var(--ink); border-bottom: none; padding-top: 0.625rem; }
 .register select { padding: 0.2rem 0.4rem; }
-/* row buttons: compact, and set apart from the amount column */
 /* Settings → Bank connection: Last synced, Sync now, Sync log on one line (wraps on phones) */
 .sync-status { margin: 0 0 0.75rem; }
 .sync-status p { margin: 0; }
@@ -228,8 +233,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register.accounts td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
 .register.accounts tfoot th, .register.accounts tfoot td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
 
-
-/* merchant name in Review: looks like text; click/tap shows the row's details */
+/* merchant name in a transaction row: looks like text; click/tap shows the row's details */
 .btn-link.merchant-toggle { color: var(--ink); font-weight: inherit; text-align: left; }
 .row-details { color: var(--ink-soft); font-size: var(--step--1); margin-top: 0.2rem; overflow-wrap: anywhere; }
 .phone-only { display: none; }
@@ -261,19 +265,18 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register td.approved-col input { width: 1.1rem; height: 1.1rem; cursor: pointer; accent-color: var(--accent); }
 .register td.approved-col input:disabled { cursor: not-allowed; opacity: 0.45; }
 
-/* review filter: the pressed button is filled */
+/* button groups (Out / In, Trends' ranges): the pressed one is filled */
 .filter { display: flex; gap: 0.5rem; margin: 0 0 1rem; }
 .filter .btn[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .load-more { margin: 1rem 0; }
 
-/* Transactions → Pending: collapsible, above the main list */
 /* pending rows in the list: read-only and a little quieter */
 .register tr.pending td { color: var(--ink-soft); }
 .register tr.pending td.num { opacity: 0.75; }
 .register td.pending-category { font-size: var(--step--1); padding-top: 0.8rem; }
 .pending-line { font-size: var(--step--1); color: var(--ink-soft); margin-top: 0.15rem; }
 
-/* Transactions → Tags column */
+/* Spending → Tags column */
 .register .tags-col { min-width: 8rem; }
 .phone-only-block { display: none; }
 .row-details .tag-cell { margin-top: 0.4rem; }
@@ -300,7 +303,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .list-tools .merchant-filter, .list-tools .tag-new { margin: 0; }
 .list-tools input { padding: 0.3rem 0.55rem; font-size: var(--step-0); }
 
-/* Transactions → select column and the bar for selected rows */
+/* Spending → select column and the bar for selected rows */
 .register .select-col { width: 2rem; padding-right: 0.25rem; }
 /* the list fades while new rows load, only when that takes over 100ms (no flicker on fast loads) */
 .register.txns { transition: opacity 150ms; }
@@ -328,7 +331,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .bulk-bar .combobox input { width: 9.5rem; font-size: var(--step--1); }
 .row-note { display: block; color: var(--ink); margin-top: 0.2rem; }
 
-/* Add transaction / Add manual account: a form above the list */
+/* page header and footer; form fields in modals (Add transaction, Add manual account, Edit …) */
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .page-foot { margin-top: 2rem; }
 .page-sub { margin: 0.2rem 0 0; font-size: var(--step--1); }
@@ -346,10 +349,9 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .fields .filter .btn:first-child { border-radius: 6px 0 0 6px; }
 .fields .filter .btn:last-child { border-radius: 0 6px 6px 0; border-left: none; }
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1rem; }
-.balance-input { width: 7rem; padding: 0.2rem 0.4rem; text-align: right; }
 .btn-link.danger { color: var(--danger); }
 
-/* Modal (native <dialog>; Edit account) */
+/* Modal (native <dialog>, components/Modal.tsx) */
 .modal {
   width: min(26rem, calc(100vw - 2rem));
   padding: 1.25rem 1.25rem 1.25rem;

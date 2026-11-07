@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { db } from '../lib/supabase';
+import { sum } from '../lib/cents';
 import { money } from '../lib/format';
-import { iso, monthLong, sum } from '../lib/months';
+import { addMonths, monthLong } from '../lib/months';
+import { type FlowRow, type SpendRow, categoryTotals, fetchReports } from '../lib/reports';
 import Button from './Button';
 import { CategoryPie } from './charts';
-
-type SpendRow = { month: string; category_id: string | null; category_name: string | null; spent: string };
-type FlowRow = { month: string; income: string; spending: string };
 
 /**
  * One month's normal spending (untagged, your share, no transfers): a month
@@ -28,12 +26,14 @@ export default function MonthSpending({
   month: string;
   /** this month, YYYY-MM-01 */
   current: string;
+  /** the category key shown alone (highlighted in the pie), if any */
   selected: string | null;
   /** category keys filtered out: faded in the pie (the summary numbers ignore them) */
   hidden: string[];
   version: number;
   onMonth: (key: string) => void;
-  onSelect: (key: string, name: string) => void;
+  /** a slice was tapped */
+  onSelect: (key: string) => void;
   onError: (message: string) => void;
 }) {
   const [spend, setSpend] = useState<SpendRow[] | null>(null);
@@ -42,14 +42,10 @@ export default function MonthSpending({
 
   useEffect(() => {
     setLoading(true); // the pie keeps its last render, faded, until this returns
-    Promise.all([
-      db().rpc('monthly_category_spend', { include_tags: [] }),
-      db().rpc('monthly_cashflow', { include_tags: [] }),
-    ]).then(([s, f]) => {
-      const failed = s.error ?? f.error;
-      if (failed) onError(failed.message);
-      setSpend((s.data ?? []) as SpendRow[]);
-      setFlow((f.data ?? []) as FlowRow[]);
+    fetchReports([]).then(({ spend, flow, error }) => {
+      if (error) onError(error.message);
+      setSpend(spend);
+      setFlow(flow);
       setLoading(false);
     });
   }, [version]);
@@ -58,26 +54,12 @@ export default function MonthSpending({
   const options = useMemo(() => {
     const earliest = (spend ?? []).reduce((a, r) => (r.month < a ? r.month : a), month < current ? month : current);
     const list: string[] = [];
-    for (let d = new Date(current + 'T12:00:00'); iso(d) >= earliest; d = new Date(d.getFullYear(), d.getMonth() - 1, 1, 12)) {
-      list.push(iso(d));
-    }
+    for (let key = current; key >= earliest; key = addMonths(key, -1)) list.push(key);
     return list;
   }, [spend, month, current]);
 
-  // every category's total for the month, hidden ones included
-  const allCategories = useMemo(() => {
-    const totals = new Map<string, { key: string; name: string; value: number }>();
-    for (const r of spend ?? []) {
-      if (r.month !== month) continue;
-      const key = r.category_id ?? 'none';
-      const t = totals.get(key) ?? { key, name: r.category_name ?? 'Uncategorized', value: 0 };
-      t.value = Math.round((t.value + Number(r.spent)) * 100) / 100;
-      totals.set(key, t);
-    }
-    return [...totals.values()];
-  }, [spend, month]);
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it
-  const byCategory = allCategories.filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
+  const byCategory = useMemo(() => categoryTotals(spend ?? [], (m) => m === month), [spend, month]);
   const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
 
   // options run newest first, so "previous" is the next one down the list
@@ -150,7 +132,7 @@ export default function MonthSpending({
           selected={selected}
           hidden={hidden}
           selectHint="Shows its transactions"
-          onSelect={(key) => onSelect(key, byCategory.find((c) => c.key === key)?.name ?? '')}
+          onSelect={onSelect}
         />
       )}
     </div>

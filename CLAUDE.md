@@ -275,6 +275,17 @@ every row has a category picker and an Approved checkbox; `/transactions` and `/
 here keeping their query), Trends, Owed to me, Accounts, Settings, SignIn.
 Email + password auth (single user).
 
+Code map (cleanup, Nov 7): Spending's list lives in `lib/transactions.ts` (row type, `Scope`, filter
+keys, `fetchRows` / `fetchPending` / `fetchPresent`) and `components/TransactionRow.tsx` (a posted row,
+`PendingRow`, and the row's reimbursement actions, which keep their own form-open state); the page keeps
+state and handlers. Shared helpers: `lib/cents.ts` (`round`, `sum`), `lib/format.ts` (`plural`),
+`lib/months.ts` (`today`, `addMonths`), `lib/reports.ts` (`fetchReports`, `categoryTotals`, used by
+MonthSpending and Trends), `lib/supabase.ts` (`functionErrorMessage`, `CONNECTION_COLUMNS`),
+`lib/reimbursements.ts` (`yourShare`, `payers`, `reimbursementSummary`; the forms are
+`components/ReimbursementForms.tsx`). Edge functions share CORS + JWT checks in `_shared/http.ts`.
+`reimbursementMatch.ts` imports `./cents.ts` with the extension (Node's test runner needs it;
+tsconfig has `allowImportingTsExtensions`). The README is the public overview; keep it current.
+
 Design: Public Sans (tabular figures); text levels: page title h1 28px bold > section h2 20px
 semibold > body 15px regular (never bold, so it can't pass for a heading) > secondary (muted or 13px); paper `#F4F6F7`, ink `#16232F`, one accent teal
 `#0E6E74`, outflow `#9A3B2E`, inflow `#2D7550`; dark mode via prefers-color-scheme.

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { round } from '../lib/cents';
 import Button from './Button';
 
 /*
- * Small hand-rolled SVG charts for Trends. Rules (see the dataviz notes in the
- * PR): thin marks (columns <= 24px, 4px rounded tops, square at the baseline),
+ * Small hand-rolled SVG charts for Trends and Spending (no chart library).
+ * Conventions: thin marks (columns <= 24px, 4px rounded tops, square at the baseline),
  * 2px lines, hairline solid gridlines, one y-axis, text in ink colors (never
  * the series color), a tooltip on hover AND keyboard focus, and each mark's
  * accessible name carries its value for screen readers.
@@ -37,7 +38,7 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   const lo = Math.floor(min / step) * step;
   const hi = Math.ceil(max / step) * step;
   const ticks: number[] = [];
-  for (let v = lo; v <= hi + step / 2; v += step) ticks.push(Math.round(v * 100) / 100);
+  for (let v = lo; v <= hi + step / 2; v += step) ticks.push(round(v));
   return ticks;
 }
 

@@ -1,7 +1,44 @@
+// Reimbursements as the browser loads them. The matching logic itself lives in
+// reimbursementMatch.ts (re-exported here) so it can be unit-tested without a
+// database.
 import { db } from './supabase';
-import { type OpenItem, round } from './reimbursementMatch';
+import { round } from './cents';
+import { money } from './format';
+import type { OpenItem } from './reimbursementMatch';
 
 export * from './reimbursementMatch';
+
+/** Someone owes you part of a charge (as embedded in a transaction row). */
+export type Reimbursement = { id: string; who: string; amount: string; status: 'owed' | 'received' | 'written_off' };
+
+/** Part of a payment, linked to what it paid back. */
+export type PaymentLink = { amount: string; reimbursements: { who: string } | null };
+
+const STATUS_WORD = { owed: 'owes', received: 'paid back', written_off: 'written off:' } as const;
+
+/** One line per person for a charge: "Sam owes $40 · Alex paid back $30". */
+export function reimbursementSummary(items: Reimbursement[]): string {
+  return items.map((r) => `${r.who} ${STATUS_WORD[r.status]} ${money(r.amount)}`).join(' · ');
+}
+
+/** Who a linked payment paid back: "Sam", "Sam and Alex", "Sam, Alex and Kim". */
+export function payers(links: PaymentLink[]): string {
+  const names = [...new Set(links.map((l) => l.reimbursements?.who.trim()).filter(Boolean))] as string[];
+  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+/** Your share of a charge (`amount` negative): what's left after everything expected back. */
+export function yourShare(amount: number, items: Reimbursement[]): number {
+  const back = items.filter((r) => r.status !== 'written_off').reduce((sum, r) => sum + Number(r.amount), 0);
+  return round(-amount - back);
+}
+
+/**
+ * Embed for a reimbursement's charge. `reimbursements` reaches `transactions`
+ * two ways (directly, and through `reimbursement_payments`), so PostgREST needs
+ * the foreign key named.
+ */
+export const CHARGE = 'transactions!reimbursements_transaction_id_fkey';
 
 type OpenRow = {
   id: string;
@@ -11,10 +48,6 @@ type OpenRow = {
   transactions: { posted_date: string; description: string; merchants: { name: string } | null } | null;
   reimbursement_payments: { amount: string }[];
 };
-
-// reimbursements reach transactions two ways (directly, and through
-// reimbursement_payments), so embeds name the foreign key
-export const CHARGE = 'transactions!reimbursements_transaction_id_fkey';
 
 /** Everything still owed, oldest charge first. */
 export async function fetchOpen(): Promise<{ items: OpenItem[]; error: string | null }> {

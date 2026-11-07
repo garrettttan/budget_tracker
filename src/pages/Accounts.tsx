@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { db } from '../lib/supabase';
-import { money, relativeTime } from '../lib/format';
+import { CONNECTION_COLUMNS, type Connection, db } from '../lib/supabase';
+import { sum } from '../lib/cents';
+import { money, plural, relativeTime } from '../lib/format';
 import Button from '../components/Button';
 import AddAccount, { CLASSES } from '../components/AddAccount';
 import EditAccount, { type EditableAccount } from '../components/EditAccount';
 import PencilIcon from '../components/PencilIcon';
 
 type Account = EditableAccount & { balance_date: string | null };
-
-type Connection = { id: string; label: string; status: string; status_message: string | null; last_synced_at: string | null };
 
 // Daily sync + GitHub's schedule jitter; past this, something stopped it
 const STALE_HOURS = 36;
@@ -18,8 +17,13 @@ function isStale(lastSyncedAt: string | null): boolean {
   return lastSyncedAt !== null && Date.now() - new Date(lastSyncedAt).getTime() > STALE_HOURS * 3_600_000;
 }
 
-const total = (accounts: Account[]) => accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
+const total = (accounts: Account[]) => sum(accounts.map((a) => Number(a.balance ?? 0)));
 
+/**
+ * Accounts: balances by class (Cash, Investments, Liabilities) with totals and
+ * net worth, the last sync time, and a warning if the daily sync stopped. Each
+ * account opens Edit (name, class, hide; balance and delete for manual ones).
+ */
 export default function Accounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<Connection[] | null>(null);
@@ -41,8 +45,7 @@ export default function Accounts() {
         .select('id, name, institution, class, balance, balance_date, connection_id, hidden')
         .order('sort_order')
         .order('name'),
-      // explicit columns: the Vault pointer isn't readable from the browser
-      db().from('connections').select('id, label, status, status_message, last_synced_at'),
+      db().from('connections').select(CONNECTION_COLUMNS),
     ]);
     if (a.error || c.error) setError((a.error ?? c.error)!.message);
     setAccounts((a.data ?? []) as Account[]);
@@ -148,21 +151,19 @@ export default function Accounts() {
         {hiddenCount > 0 && (
           <p>
             <Button variant="link" onClick={() => setShowHidden((v) => !v)}>
-              {showHidden
-                ? 'Hide hidden accounts'
-                : `Show ${hiddenCount} hidden ${hiddenCount === 1 ? 'account' : 'accounts'}`}
+              {showHidden ? 'Hide hidden accounts' : `Show ${plural(hiddenCount, 'hidden account')}`}
             </Button>
           </p>
         )}
-          <Button
-            variant="link"
-            onClick={() => {
-              setAdding(true);
-              setNotice(null);
-            }}
-          >
-            Add manual account
-          </Button>
+        <Button
+          variant="link"
+          onClick={() => {
+            setAdding(true);
+            setNotice(null);
+          }}
+        >
+          Add manual account
+        </Button>
       </div>
 
       {adding && (
@@ -170,7 +171,7 @@ export default function Accounts() {
           onCancel={() => setAdding(false)}
           onAdded={async (name) => {
             setAdding(false);
-            setNotice(`Added ${name}. Add its transactions from the Transactions page.`);
+            setNotice(`Added ${name}. Add its transactions from the Spending page.`);
             await load();
           }}
         />

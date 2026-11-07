@@ -20,6 +20,7 @@ export async function selectAll<T>(page: (from: number, to: number) => Result): 
   }
 }
 
+/** Splits `items` into arrays of at most `size` (to keep `in (...)` lists and inserts small). */
 export function chunks<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));

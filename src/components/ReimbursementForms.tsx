@@ -1,29 +1,10 @@
+// The two inline forms in a transaction's details: Expect reimbursement (on a
+// charge) and Link to what someone owes (on money in). Also used by Paid back?
 import { useId, useState } from 'react';
 import { money, parseAmount } from '../lib/format';
-import { type OpenItem, allocate, byPerson, personKey, round } from '../lib/reimbursements';
+import { round } from '../lib/cents';
+import { type OpenItem, allocate, byPerson, personKey } from '../lib/reimbursements';
 import Button from './Button';
-
-export type Reimbursement = { id: string; who: string; amount: string; status: 'owed' | 'received' | 'written_off' };
-export type PaymentLink = { amount: string; reimbursements: { who: string } | null };
-
-const STATUS_WORD = { owed: 'owes', received: 'paid back', written_off: 'written off:' } as const;
-
-/** One line per person for a charge: "Sam owes $40 · Alex paid back $30". */
-export function reimbursementSummary(items: Reimbursement[]): string {
-  return items.map((r) => `${r.who} ${STATUS_WORD[r.status]} ${money(r.amount)}`).join(' · ');
-}
-
-/** Who a linked payment paid back: "Sam" or "Sam and Alex". */
-export function payers(links: PaymentLink[]): string {
-  const names = [...new Set(links.map((l) => l.reimbursements?.who.trim()).filter(Boolean))] as string[];
-  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-}
-
-/** Your share of a charge: what's left after everything expected back (written-off items count as yours). */
-export function yourShare(amount: number, items: Reimbursement[]): number {
-  const back = items.filter((r) => r.status !== 'written_off').reduce((sum, r) => sum + Number(r.amount), 0);
-  return round(-amount - back);
-}
 
 /**
  * Expect reimbursement: someone owes you part of a charge. Who (with the
