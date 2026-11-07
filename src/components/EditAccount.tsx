@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { db } from '../lib/supabase';
-import { money, parseAmount } from '../lib/format';
+import { money, parseAmount, plural } from '../lib/format';
 import Button from './Button';
 import Modal from './Modal';
 import { type AccountClass, CLASSES } from './AddAccount';
@@ -15,11 +15,10 @@ export type EditableAccount = {
   hidden: boolean; // a dead account: off Accounts (until shown), net worth and the account picker
 };
 
+/** How many transactions an account has (deleting or moving it to Investments deletes them). */
 async function countTransactions(accountId: string) {
   return db().from('transactions').select('id', { count: 'exact', head: true }).eq('account_id', accountId);
 }
-
-const plural = (n: number) => `${n} ${n === 1 ? 'transaction' : 'transactions'}`;
 
 /**
  * Edit one account in a modal: your name for it (the sync sets the bank's name
@@ -68,7 +67,7 @@ export default function EditAccount({
       if (countError) return fail(countError.message);
       if (count) {
         const ok = window.confirm(
-          `Move ${account.name} to Investments? Only its balance is kept: its ${plural(count)} ` +
+          `Move ${account.name} to Investments? Only its balance is kept: its ${plural(count, 'transaction')} ` +
             `(and any notes, reimbursements or tags on them) will be deleted.`,
         );
         if (!ok) return setBusy(false);
@@ -86,7 +85,7 @@ export default function EditAccount({
     const { count, error: countError } = await countTransactions(account.id);
     if (countError) return setError(countError.message);
     const what = count
-      ? `its ${plural(count)} (and any tags or reimbursements on them) will be deleted too.`
+      ? `its ${plural(count, 'transaction')} (and any tags or reimbursements on them) will be deleted too.`
       : 'it has no transactions.';
     if (!window.confirm(`Delete ${account.name}? This can’t be undone; ${what}`)) return;
     setBusy(true);

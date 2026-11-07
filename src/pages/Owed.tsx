@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
+import { round } from '../lib/cents';
 import { money, shortDate } from '../lib/format';
-import { CHARGE, personKey, round } from '../lib/reimbursements';
+import { CHARGE, personKey } from '../lib/reimbursements';
 import Button from '../components/Button';
 
 type Status = 'owed' | 'received' | 'written_off';
@@ -18,15 +19,19 @@ type Item = {
   reimbursement_payments: { amount: string; payment: { posted_date: string } | null }[];
 };
 
-const paidOf = (i: Item) => round(i.reimbursement_payments.reduce((sum, p) => sum + Number(p.amount), 0));
-const leftOf = (i: Item) => round(Number(i.amount) - paidOf(i));
-const label = (i: Item) => i.transactions?.merchants?.name ?? i.transactions?.description ?? '';
+/** How many settled items to show (the most recently changed). */
 const SETTLED_SHOWN = 30;
 
+const paidOf = (i: Item) => round(i.reimbursement_payments.reduce((sum, p) => sum + Number(p.amount), 0));
+const leftOf = (i: Item) => round(Number(i.amount) - paidOf(i));
+/** The charge it's for: merchant name, else the bank's text. */
+const label = (i: Item) => i.transactions?.merchants?.name ?? i.transactions?.description ?? '';
+
 /**
- * Everything people owe you, by person, with what they've paid so far. Mark an
- * item received (paid in cash, say) or write it off; payments that arrive in
- * your accounts are linked from Transactions.
+ * Owed to me: everything people owe you, by person, with what they've paid so
+ * far, then the last few settled items. Mark an item received (paid in cash,
+ * say) or write it off; payments that arrive in your accounts are linked from
+ * Spending.
  */
 export default function Owed() {
   const [items, setItems] = useState<Item[] | null>(null);
@@ -50,6 +55,7 @@ export default function Owed() {
     load();
   }, [load]);
 
+  /** Runs one change, says `done` if it worked, and reloads. */
   async function update(change: () => PromiseLike<{ error: { message: string } | null }>, done: string) {
     setBusy(true);
     setError(null);
@@ -99,7 +105,7 @@ export default function Owed() {
             <span className="muted">Total owed</span> <strong className="num">{money(total)}</strong>
           </p>
           <p className="muted small">
-            When someone pays you back, link the payment on Transactions (it’s suggested under Paid back?), or enter a
+            When someone pays you back, link the payment on Spending (it’s suggested under Paid back?), or enter a
             Venmo payment with Add transaction. Paid in cash? Mark it received.
           </p>
         </>
@@ -228,7 +234,7 @@ export default function Owed() {
               })}
             </tbody>
           </table>
-          <p className="muted small">Fully paid items reopen by unlinking their payment on Transactions.</p>
+          <p className="muted small">Fully paid items reopen by unlinking their payment on Spending.</p>
         </>
       )}
     </section>

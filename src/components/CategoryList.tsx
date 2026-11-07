@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
+import { byUse, usageCount as count } from '../lib/categoryOrder';
 import Button from './Button';
-import PencilIcon from './PencilIcon';
 import EditCategory, { type EditableCategory } from './EditCategory';
-import { byUse, usageCount } from '../lib/categoryOrder';
+import PencilIcon from './PencilIcon';
 
 type CategoryRow = EditableCategory & { transactions: { count: number }[] };
 
@@ -35,6 +35,7 @@ export default function CategoryList() {
     load();
   }, [load]);
 
+  /** Clears the last message before a new action. */
   function reset() {
     setError(null);
     setNotice(null);
@@ -56,7 +57,6 @@ export default function CategoryList() {
   }
 
   if (!categories) return null;
-  const count = usageCount;
   const typed = filter.trim().toLowerCase();
   const shown = typed
     ? categories.filter((c) => c.name.toLowerCase().includes(typed) || c.group_name?.toLowerCase().includes(typed))
@@ -158,7 +158,7 @@ export default function CategoryList() {
               <td>{c.group_name ?? <span className="muted">None</span>}</td>
               <td className="num">
                 {count(c) > 0 ? (
-                  <Link to={`/transactions?status=all&category=${c.id}`} title={`Show ${c.name} transactions`}>
+                  <Link to={`/spending?status=all&category=${c.id}`} title={`Show ${c.name} transactions`}>
                     {count(c)}
                   </Link>
                 ) : (

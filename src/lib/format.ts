@@ -1,9 +1,17 @@
+// Turning values into text for the page, and typed text back into values.
+import { round } from './cents';
+
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 /** Formats a signed amount; negative = money out. */
 export function money(amount: number | string | null | undefined): string {
   if (amount === null || amount === undefined || amount === '') return '—';
   return usd.format(Number(amount));
+}
+
+/** "1 transaction", "3 transactions". */
+export function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 /**
@@ -13,18 +21,12 @@ export function money(amount: number | string | null | undefined): string {
 export function parseAmount(text: string, { allowNegative = false } = {}): number | null {
   const cleaned = text.replace(/[$,\s]/g, '');
   if (!/^-?(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
-  const n = Math.round(Number(cleaned) * 100) / 100;
+  const n = round(Number(cleaned));
   if (!Number.isFinite(n) || (n < 0 && !allowNegative) || Math.abs(n) >= 1e10) return null;
   return n;
 }
 
-/** Today as YYYY-MM-DD in local time (what a date input expects). */
-export function todayIso(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
+/** "Nov 3, 2026" for a date (YYYY-MM-DD) or a timestamp. */
 export function shortDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   // Dates without a time are calendar dates; don't let the timezone shift them
@@ -32,12 +34,13 @@ export function shortDate(iso: string | null | undefined): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** "just now", "5 minutes ago", "3 hours ago", then the date. */
 export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return 'never';
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} ${mins === 1 ? 'minute' : 'minutes'} ago`;
+  if (mins < 60) return `${plural(mins, 'minute')} ago`;
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  if (hours < 24) return `${plural(hours, 'hour')} ago`;
   return shortDate(iso);
 }

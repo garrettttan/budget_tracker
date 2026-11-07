@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { db } from '../lib/supabase';
+import { plural } from '../lib/format';
 import Button from './Button';
 import Combobox from './Combobox';
 
@@ -11,12 +12,14 @@ type Merchant = {
   merchant_aliases: { count: number }[];
 };
 
+/** The row being renamed or merged. */
 type Editing = { id: string; mode: 'rename' | 'merge' };
 type Sort = { by: 'name' | 'count'; desc: boolean };
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-/** Settings → Merchants: rename a merchant, or merge duplicates into one. */
+/**
+ * Settings → Merchants: rename a merchant, or merge duplicates into one. A
+ * merchant groups every bank description the sync has matched to it.
+ */
 export default function MerchantList() {
   const [merchants, setMerchants] = useState<Merchant[] | null>(null);
   const [filter, setFilter] = useState('');
@@ -47,6 +50,7 @@ export default function MerchantList() {
     setNotice(null);
   }
 
+  /** Runs one change and reloads. */
   async function act(action: () => PromiseLike<{ error: { message: string } | null }>, success: string) {
     setBusy(true);
     setError(null);
@@ -144,7 +148,7 @@ export default function MerchantList() {
                       }}
                     />
                   ) : (
-                    <span title={plural(aliases, 'bank description', 'bank descriptions')}>{m.name}</span>
+                    <span title={plural(aliases, 'bank description')}>{m.name}</span>
                   )}
                 </td>
                 <td>{m.categories?.name ?? <span className="muted">None yet</span>}</td>
@@ -209,8 +213,8 @@ export default function MerchantList() {
                       </Button>
                     </div>
                     <p className="muted small">
-                      Its {plural(count(m), 'transaction', 'transactions')} and{' '}
-                      {plural(aliases, 'bank description', 'bank descriptions')} move to the merchant you pick, and{' '}
+                      Its {plural(count(m), 'transaction')} and{' '}
+                      {plural(aliases, 'bank description')} move to the merchant you pick, and{' '}
                       {m.name} is removed.
                     </p>
                   </td>

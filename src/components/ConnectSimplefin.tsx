@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { FunctionsHttpError } from '@supabase/supabase-js';
-import { db } from '../lib/supabase';
+import { db, functionErrorMessage } from '../lib/supabase';
 import Button from './Button';
 
+/** What the simplefin-claim edge function returns. */
 type ClaimResponse = {
   sync: { status: 'skipped'; reason: string } | { status: 'ok' | 'warning' | 'error'; new: number };
 };
@@ -32,9 +32,7 @@ export default function ConnectSimplefin({
     setNotice(null);
     const { data, error } = await db().functions.invoke<ClaimResponse>('simplefin-claim', { body: { setupToken: token } });
     if (error) {
-      // the function's own message is in the response body
-      const body = error instanceof FunctionsHttpError ? await error.context.json().catch(() => null) : null;
-      setError(body?.error ?? error.message);
+      setError(await functionErrorMessage(error));
     } else if (data) {
       setToken('');
       const s = data.sync;

@@ -6,6 +6,7 @@ import Modal from './Modal';
 
 export type AccountClass = 'cash' | 'investment' | 'liability';
 
+/** The account classes, in the order Accounts lists them. */
 export const CLASSES: { value: AccountClass; label: string }[] = [
   { value: 'cash', label: 'Cash' },
   { value: 'investment', label: 'Investments' },
@@ -46,7 +47,7 @@ export default function AddAccount({ onAdded, onCancel }: { onAdded: (name: stri
         <form onSubmit={save}>
           <h2 id="add-account-title">Add manual account</h2>
           <p className="muted small">
-            For accounts SimpleFIN can’t see, like Venmo. Enter their transactions with Add transaction on the Transactions
+            For accounts SimpleFIN can’t see, like Venmo. Enter their transactions with Add transaction on the Spending
             page.
           </p>
           {error && <p className="error" role="alert">{error}</p>}

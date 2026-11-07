@@ -1,9 +1,11 @@
 import { Fragment, useState } from 'react';
+import { round } from '../lib/cents';
 import { money, shortDate } from '../lib/format';
-import { type OpenItem, allocate, round } from '../lib/reimbursements';
+import { type OpenItem, allocate } from '../lib/reimbursements';
 import Button from './Button';
-import { LinkForm } from './RowReimbursements';
+import { LinkForm } from './ReimbursementForms';
 
+/** Unreviewed money in (lib/transactions fetchUnreviewedIncome). */
 export type PaymentRow = {
   id: string;
   posted_date: string;
@@ -13,8 +15,10 @@ export type PaymentRow = {
   merchants: { name: string } | null;
 };
 
+/** A payment and the open items it probably pays back (lib/reimbursementMatch suggestFor). */
 export type ReimbursementMatch = { payment: PaymentRow; items: OpenItem[] };
 
+/** How much of a payment is left over once `plan` has covered what's owed. */
 const extra = (amount: number, plan: { part: number }[]) => round(amount - plan.reduce((sum, p) => sum + p.part, 0));
 
 /**
@@ -55,58 +59,58 @@ export default function ReimbursementSuggestions({
             const plan = allocate(amount, m.items);
             return (
               <Fragment key={m.payment.id}>
-              <tr>
-                <td>
-                  {m.payment.merchants?.name ?? m.payment.description}
-                  <div className="muted small">
-                    {shortDate(m.payment.posted_date)} · {m.payment.accounts?.name}
-                    <span className="phone-only in"> · {money(amount)}</span>
-                  </div>
-                </td>
-                <td>
-                  {plan.map(({ item, part }) => (
-                    <div key={item.id}>
-                      {item.who}: {item.label} {money(part)}
-                      {part < item.remaining && <span className="muted"> of {money(item.remaining)}</span>}
+                <tr>
+                  <td>
+                    {m.payment.merchants?.name ?? m.payment.description}
+                    <div className="muted small">
+                      {shortDate(m.payment.posted_date)} · {m.payment.accounts?.name}
+                      <span className="phone-only in"> · {money(amount)}</span>
                     </div>
-                  ))}
-                  {extra(amount, plan) > 0 && (
-                    <div className="muted small">{money(extra(amount, plan))} more than they owe; not counted as income</div>
-                  )}
-                </td>
-                <td className="num in">{money(amount)}</td>
-                <td className="action">
-                  <Button size="small" disabled={busy} onClick={() => onLink(m.payment.id, plan.map((p) => p.item.id))}>
-                    Link
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="link"
-                    disabled={busy}
-                    aria-expanded={choosing === m.payment.id}
-                    onClick={() => setChoosing(choosing === m.payment.id ? null : m.payment.id)}
-                  >
-                    Choose…
-                  </Button>
-                </td>
-              </tr>
-              {choosing === m.payment.id && (
-                <tr className="choose-row">
-                  <td colSpan={4}>
-                    <LinkForm
-                      payment={amount}
-                      open={open}
-                      initial={m.items}
-                      busy={busy}
-                      onCancel={() => setChoosing(null)}
-                      onLink={(ids) => {
-                        setChoosing(null);
-                        onLink(m.payment.id, ids);
-                      }}
-                    />
+                  </td>
+                  <td>
+                    {plan.map(({ item, part }) => (
+                      <div key={item.id}>
+                        {item.who}: {item.label} {money(part)}
+                        {part < item.remaining && <span className="muted"> of {money(item.remaining)}</span>}
+                      </div>
+                    ))}
+                    {extra(amount, plan) > 0 && (
+                      <div className="muted small">{money(extra(amount, plan))} more than they owe; not counted as income</div>
+                    )}
+                  </td>
+                  <td className="num in">{money(amount)}</td>
+                  <td className="action">
+                    <Button size="small" disabled={busy} onClick={() => onLink(m.payment.id, plan.map((p) => p.item.id))}>
+                      Link
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="link"
+                      disabled={busy}
+                      aria-expanded={choosing === m.payment.id}
+                      onClick={() => setChoosing(choosing === m.payment.id ? null : m.payment.id)}
+                    >
+                      Choose…
+                    </Button>
                   </td>
                 </tr>
-              )}
+                {choosing === m.payment.id && (
+                  <tr className="choose-row">
+                    <td colSpan={4}>
+                      <LinkForm
+                        payment={amount}
+                        open={open}
+                        initial={m.items}
+                        busy={busy}
+                        onCancel={() => setChoosing(null)}
+                        onLink={(ids) => {
+                          setChoosing(null);
+                          onLink(m.payment.id, ids);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             );
           })}

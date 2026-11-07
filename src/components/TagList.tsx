@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
+import { plural } from '../lib/format';
 import Button from './Button';
 
 type TagRow = { id: string; name: string; transaction_tags: { count: number }[] };
 
+/** The row being renamed or confirming a delete. */
 type Editing = { id: string; mode: 'rename' | 'delete' };
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-/** Settings → Tags: add, rename or delete tags. Tagging itself happens on Transactions. */
+/** Settings → Tags: add, rename or delete tags. Tagging itself happens on Spending. */
 export default function TagList() {
   const [tags, setTags] = useState<TagRow[] | null>(null);
   const [newName, setNewName] = useState('');
@@ -29,6 +29,7 @@ export default function TagList() {
     load();
   }, [load]);
 
+  /** Runs one change and reloads; returns whether it worked. */
   async function act(action: () => PromiseLike<{ error: { message: string; code?: string } | null }>, success: string) {
     setBusy(true);
     setError(null);
@@ -46,7 +47,7 @@ export default function TagList() {
 
   async function add() {
     const name = newName.trim();
-    if (await act(() => db().from('tags').insert({ name }), `Added ${name}. Tag transactions with it from Transactions.`)) {
+    if (await act(() => db().from('tags').insert({ name }), `Added ${name}. Tag transactions with it on Spending.`)) {
       setNewName('');
     }
   }
@@ -172,7 +173,7 @@ export default function TagList() {
                         <span>
                           Delete {t.name}?{' '}
                           {count(t) > 0
-                            ? `It comes off its ${plural(count(t), 'transaction', 'transactions')}; the transactions stay.`
+                            ? `It comes off its ${plural(count(t), 'transaction')}; the transactions stay.`
                             : 'No transactions carry it.'}
                         </span>
                         <Button size="small" variant="primary" disabled={busy} onClick={() => remove(t)}>

@@ -2,395 +2,91 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { byUse } from '../lib/categoryOrder';
-import { money, shortDate } from '../lib/format';
-import Button from '../components/Button';
-import CategorySelect, { type Category, TRANSFER, UNCATEGORIZED } from '../components/CategorySelect';
-import MerchantCell from '../components/MerchantCell';
-import TagCell, { type Tag } from '../components/TagCell';
-import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
+import { money, plural, shortDate } from '../lib/format';
+import { monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
+import { type OpenItem, fetchOpen, payers, personKey, suggestFor } from '../lib/reimbursements';
+import {
+  NO_CATEGORY,
+  PAGE,
+  type Present,
+  type Row,
+  type Scope,
+  STATUSES,
+  type Status,
+  TRANSFER_KEY,
+  UNTAGGED,
+  fetchPending,
+  fetchPresent,
+  fetchRows,
+  fetchUnreviewedIncome,
+  isLinked,
+  rowName,
+} from '../lib/transactions';
 import AddTransaction, { type AccountOption } from '../components/AddTransaction';
 import BulkBar from '../components/BulkBar';
-import {
-  ExpectForm,
-  LinkForm,
-  type PaymentLink,
-  type Reimbursement,
-  payers,
-  reimbursementSummary,
-  yourShare,
-} from '../components/RowReimbursements';
-import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
-import MonthSpending from '../components/MonthSpending';
+import Button from '../components/Button';
+import { type Category, TRANSFER, UNCATEGORIZED } from '../components/CategorySelect';
 import HeaderFilter from '../components/HeaderFilter';
+import MonthSpending from '../components/MonthSpending';
+import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
+import type { Tag } from '../components/TagCell';
+import TransactionRow, { PendingRow } from '../components/TransactionRow';
+import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
 
-/** Keys for `?hidecat=` beyond category ids, and for `?hidetag=` beyond tag ids. */
-const NO_CATEGORY = 'none'; // Uncategorized
-const TRANSFER_KEY = 'transfer';
-const UNTAGGED = 'untagged';
-import { type OpenItem, fetchOpen, personKey, suggestFor } from '../lib/reimbursements';
-import { monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
+/** The URL's filters (see Scope); `setFilters` changes any of them. */
+type Filters = Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag', string | null>>;
 
-const PAGE = 100;
-
-type Status = 'review' | 'approved' | 'all';
-const STATUSES: Status[] = ['review', 'approved', 'all'];
-
-type Row = {
-  id: string;
-  posted_date: string;
-  amount: string;
-  description: string;
-  pending: boolean;
-  approved: boolean;
-  is_transfer: boolean;
-  transfer_pair_id: string | null;
-  category_id: string | null;
-  note: string | null;
-  /** 'manual' = entered with Add transaction (only those can be deleted) */
-  source: string;
-  accounts: { name: string } | null;
-  merchants: { name: string } | null;
-  transaction_tags: { tag_id: string }[];
-  /** what people owe you on this charge */
-  reimbursements: Reimbursement[];
-  /** what this money in paid back, if it's linked */
-  reimbursement_payments: PaymentLink[];
-};
-
-const COLUMNS =
-  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, source, accounts(name), merchants(name), transaction_tags(tag_id), ' +
-  // both tables reach transactions more than one way, so name the foreign key
-  'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
-  'reimbursement_payments!reimbursement_payments_payment_transaction_id_fkey(amount, reimbursements(who))';
-
-/** Narrower views: a date range, and categories / tags to hide. */
-type Scope = { start: string | null; end: string | null; hideCategories: string[]; hideTags: string[] };
-
-/** PostgREST `or` filter keeping rows outside the hidden categories ('none' and 'transfer' included); null if none hidden. */
-function keepCategories(hidden: string[]): string | null {
-  if (hidden.length === 0) return null;
-  const ids = hidden.filter((h) => h !== NO_CATEGORY && h !== TRANSFER_KEY);
-  // transfers have no category, so each kind of row gets its own branch
-  return [
-    hidden.includes(TRANSFER_KEY) ? null : 'is_transfer.eq.true',
-    hidden.includes(NO_CATEGORY) ? null : 'and(category_id.is.null,is_transfer.eq.false)',
-    ids.length ? `category_id.not.in.(${ids.join(',')})` : 'category_id.not.is.null',
-  ]
-    .filter(Boolean)
-    .join(',');
-}
-
-/** The same rule for rows already loaded (pending ones). */
-function shownCategory(r: { category_id: string | null; is_transfer: boolean }, hidden: string[]) {
-  const key = r.is_transfer ? TRANSFER_KEY : (r.category_id ?? NO_CATEGORY);
-  return !hidden.includes(key);
-}
+/** A database call as `act` runs it. */
+type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | null }>;
 
 /**
- * Posted rows only: pending ones have their own section. With a tag, a second,
- * inner join on the tags keeps only rows carrying it, while transaction_tags
- * still lists all of each row's tags.
+ * Spending: a month's totals and category donut on top, then every
+ * transaction, which is also the review inbox.
+ *
+ * The list's column headers filter it (Approved → `?status=`, Category →
+ * `?hidecat=`, Tags → `?hidetag=` or `?tag=`). All and Approved show the month
+ * picked above (`?month=`); To review and a single tag aren't limited to it.
+ * A link's `?category=` (Settings, Trends) becomes Only that category.
+ *
+ * Each posted row can be categorized, tagged, approved or unapproved, and
+ * carries reimbursement actions in its details; selected rows get bulk actions.
  */
-function fetchRows(status: Status, tag: string | null, scope: Scope, from: number, to: number) {
-  const hiddenTagIds = scope.hideTags.filter((t) => t !== UNTAGGED);
-  const hideUntagged = scope.hideTags.includes(UNTAGGED);
-  const embeds = [
-    COLUMNS,
-    tag ? 'tag_filter:transaction_tags!inner(tag_id)' : null,
-    // anti-join: rows whose hidden_tags embed comes back empty carry none of them
-    hiddenTagIds.length ? 'hidden_tags:transaction_tags!left(tag_id)' : null,
-    // "No tags" unticked: keep only rows with at least one tag
-    hideUntagged ? 'has_tag:transaction_tags!inner(tag_id)' : null,
-  ];
-  let q = db()
-    .from('transactions')
-    .select(embeds.filter(Boolean).join(', '))
-    .eq('pending', false);
-  if (tag) q = q.eq('tag_filter.tag_id', tag);
-  if (hiddenTagIds.length) q = q.in('hidden_tags.tag_id', hiddenTagIds).is('hidden_tags', null);
-  const keep = keepCategories(scope.hideCategories);
-  if (keep) q = q.or(keep);
-  if (scope.start) q = q.gte('posted_date', scope.start);
-  if (scope.end) q = q.lte('posted_date', scope.end);
-  if (status !== 'all') q = q.eq('approved', status === 'approved');
-  return q.order('posted_date', { ascending: false }).order('id', { ascending: false }).range(from, to);
-}
+export default function Spending({
+  unreviewed,
+  onApprovalsChanged,
+}: {
+  /** the to-review count, for the Approved filter's label */
+  unreviewed: number | null;
+  /** refreshes that count (and the nav badge) after a change */
+  onApprovalsChanged: () => Promise<void>;
+}) {
+  // ---- filters, from the URL ---------------------------------------------------
 
-/** How many transactions in the current range have each category key and each tag (`UNTAGGED` = none). */
-type Present = { categories: Map<string, number>; tags: Map<string, number> };
-
-/**
- * For the header filters: what the list's range and approval filter hold,
- * ignoring the header filters themselves (so unticked items can be ticked
- * again). Only three small columns, a page of 1,000 at a time.
- */
-async function fetchPresent(status: Status, tag: string | null, start: string | null, end: string | null) {
-  const present: Present = { categories: new Map(), tags: new Map() };
-  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-  for (let from = 0; from < 50_000; from += 1000) {
-    let q = db()
-      .from('transactions')
-      .select(tag ? 'category_id, is_transfer, transaction_tags(tag_id), tag_filter:transaction_tags!inner(tag_id)' : 'category_id, is_transfer, transaction_tags(tag_id)')
-      .eq('pending', false);
-    if (tag) q = q.eq('tag_filter.tag_id', tag);
-    if (start) q = q.gte('posted_date', start);
-    if (end) q = q.lte('posted_date', end);
-    if (status !== 'all') q = q.eq('approved', status === 'approved');
-    const { data, error } = await q.order('id').range(from, from + 999);
-    if (error) return { present, error };
-    const page = (data ?? []) as unknown as { category_id: string | null; is_transfer: boolean; transaction_tags: { tag_id: string }[] }[];
-    for (const r of page) {
-      bump(present.categories, r.is_transfer ? TRANSFER_KEY : (r.category_id ?? NO_CATEGORY));
-      if (r.transaction_tags.length === 0) bump(present.tags, UNTAGGED);
-      for (const t of r.transaction_tags) bump(present.tags, t.tag_id);
-    }
-    if (page.length < 1000) break;
-  }
-  return { present, error: null };
-}
-
-/**
- * Pending rows are never approved, and there are only ever a few, so all of
- * them at once. They show in the list read-only: when a charge posts, the
- * bank usually sends it under a new id and the sync deletes the pending row,
- * so anything set on it would be lost.
- */
-function fetchPending() {
-  return db()
-    .from('transactions')
-    .select(COLUMNS)
-    .eq('pending', true)
-    .order('posted_date', { ascending: false })
-    .order('id', { ascending: false });
-}
-
-/**
- * A month's spending by category on top, then every transaction, filtered by
- * review status, category and tags (the column headers). Each posted row can get
- * or change its category and tags, and is approved or unapproved from here.
- * Approved and All show the picked month (`?month=`); To review and a tag
- * (`?tag=`) aren't limited to it. A link's `?category=` (Settings, Trends)
- * becomes Only that category, as if tapped in the pie.
- */
-export default function Spending({ count, onChange }: { count: number | null; onChange: () => Promise<void> }) {
   const [params, setParams] = useSearchParams();
   const status: Status = STATUSES.find((s) => s === params.get('status')) ?? 'all';
   const tagFilter = params.get('tag');
-  const category = params.get('category');
+  const categoryLink = params.get('category');
   const current = thisMonth();
   const asked = parseMonth(params.get('month'));
   const month = asked && asked <= current ? asked : current;
   const monthScoped = status !== 'review' && !tagFilter;
-  const start = monthScoped ? month : null;
-  const end = monthScoped ? monthEnd(month) : null;
   const hidecat = params.get('hidecat') ?? '';
   const hidetag = params.get('hidetag') ?? '';
-  const hideCategories = useMemo(() => hidecat.split(',').filter(Boolean), [hidecat]);
-  const hideTags = useMemo(() => hidetag.split(',').filter(Boolean), [hidetag]);
-  // bumped after edits so the month's totals follow them
-  const [version, setVersion] = useState(0);
-  const bump = () => setVersion((v) => v + 1);
-
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const latestReload = useRef(0);
-  // the list fades while new rows load (only if it takes a moment: see .refetching)
-  const [reloading, setReloading] = useState(false);
-  // what the range holds, for the header filters (null until loaded: everything is listed)
-  const [present, setPresent] = useState<Present | null>(null);
-  const [pending, setPending] = useState<Row[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [categories, setCategories] = useState<Category[] | null>(null);
-  const [accounts, setAccounts] = useState<Map<string, string>>(new Map());
-  const [entryAccounts, setEntryAccounts] = useState<AccountOption[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [open, setOpen] = useState<OpenItem[]>([]);
-  const [people, setPeople] = useState<string[]>([]);
-  const [paybacks, setPaybacks] = useState<ReimbursementMatch[]>([]);
-  const [expecting, setExpecting] = useState<string | null>(null); // row id with Expect reimbursement open
-  const [linking, setLinking] = useState<string | null>(null); // row id with Link open
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    Promise.all([
-      // most-used first in every picker (lib/categoryOrder)
-      db().from('categories').select('id, name, is_income, transactions(count)').eq('archived', false),
-      db().from('accounts').select('id, name, class, connection_id, hidden').order('sort_order').order('name'),
-      db().from('tags').select('id, name').order('name'),
-    ]).then(([c, a, t]) => {
-      const failed = c.error ?? a.error ?? t.error;
-      if (failed) setError(failed.message);
-      setCategories(byUse((c.data ?? []) as unknown as (Category & { transactions: { count: number }[] })[]).map(({ id, name, is_income }) => ({ id, name, is_income })));
-      const all = (a.data ?? []) as { id: string; name: string; class: string; connection_id: string | null; hidden: boolean }[];
-      setAccounts(new Map(all.map((x) => [x.id, x.name])));
-      // investments are balance-only, so no transactions; manual accounts first
-      setEntryAccounts(
-        all
-          .filter((x) => x.class !== 'investment' && !x.hidden)
-          .map((x) => ({ id: x.id, name: x.name, manual: x.connection_id === null }))
-          .sort((x, y) => Number(y.manual) - Number(x.manual)),
-      );
-      setTags((t.data ?? []) as Tag[]);
-    });
-  }, []);
-
-  /** Loads the first `size` rows of the current filter, plus transfer suggestions. */
-  const reload = useCallback(
-    async (size: number) => {
-      // a later reload (e.g. the next filter tap) wins, even if this one answers last
-      const mine = ++latestReload.current;
-      setReloading(true);
-      const none = Promise.resolve({ data: [], error: null });
-      const reviewing = status !== 'approved' && !tagFilter;
-      const [t, p, s, o, w, m, h] = await Promise.all([
-        fetchRows(status, tagFilter, { start, end, hideCategories, hideTags }, 0, size - 1),
-        // pending rows can't carry tags, so a tag filter leaves them out
-        status === 'approved' || tagFilter ? none : fetchPending(),
-        status === 'approved' || tagFilter
-          ? none
-          : db()
-              .from('transfer_suggestions')
-              .select('out_id, in_id, out_account_id, in_account_id, amount, out_date, in_date')
-              .order('out_date'),
-        fetchOpen(),
-        db().from('reimbursements').select('who'),
-        // money in waiting for review: candidates for "Paid back?" (a linked payment is already approved)
-        reviewing
-          ? db()
-              .from('transactions')
-              .select('id, posted_date, amount, description, accounts(name), merchants(name)')
-              .eq('approved', false)
-              .eq('pending', false)
-              .eq('is_transfer', false)
-              .gt('amount', 0)
-              .order('posted_date')
-              .limit(200)
-          : none,
-        fetchPresent(status, tagFilter, start, end),
-      ]);
-      if (h.error) setError(h.error.message);
-      setPresent(h.present);
-      if (mine !== latestReload.current) return;
-      setReloading(false);
-      const failed = t.error ?? p.error ?? s.error ?? w.error ?? m.error;
-      if (failed) setError(failed.message);
-      if (o.error) setError(o.error);
-      setOpen(o.items);
-      // everyone you've entered before, for Expect reimbursement's suggestions
-      const names = new Map<string, string>();
-      for (const r of (w.data ?? []) as { who: string }[]) names.set(personKey(r.who), r.who.trim());
-      setPeople([...names.values()].sort((x, y) => x.localeCompare(y)));
-      setPaybacks(
-        ((m.data ?? []) as unknown as PaymentRow[]).flatMap((payment) => {
-          const match = suggestFor(
-            { amount: Number(payment.amount), text: `${payment.description} ${payment.merchants?.name ?? ''}` },
-            o.items,
-          );
-          return match ? [{ payment, items: match.items }] : [];
-        }),
-      );
-      const loaded = (t.data ?? []) as unknown as Row[];
-      setRows(loaded);
-      setHasMore(loaded.length === size);
-      // drop selected rows that left the list (approved out of To review, untagged out of a tag filter)
-      const visible = new Set(loaded.map((r) => r.id));
-      setSelected((sel) => (sel.size && [...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
-      // pending rows carry no tags: only hidden categories apply, and unticking "No tags" hides them all
-      // the same date range and category filters as the list
-      setPending(
-        hideTags.includes(UNTAGGED)
-          ? []
-          : ((p.data ?? []) as unknown as Row[]).filter(
-              (r) => shownCategory(r, hideCategories) && (!start || r.posted_date >= start) && (!end || r.posted_date <= end),
-            ),
-      );
-      setSuggestions((s.data ?? []) as Suggestion[]);
-    },
-    [status, tagFilter, start, end, hideCategories, hideTags],
+  const scope: Scope = useMemo(
+    () => ({
+      status,
+      tag: tagFilter,
+      start: monthScoped ? month : null,
+      end: monthScoped ? monthEnd(month) : null,
+      hideCategories: hidecat.split(',').filter(Boolean),
+      hideTags: hidetag.split(',').filter(Boolean),
+    }),
+    [status, tagFilter, monthScoped, month, hidecat, hidetag],
   );
+  const { hideCategories, hideTags } = scope;
 
-  // a link's ?category= (Settings → Categories, Trends) means Only that category, like a pie tap
-  useEffect(() => {
-    if (!category || !categories) return;
-    const others = [...categories.map((c) => c.id), NO_CATEGORY, TRANSFER_KEY].filter((k) => k !== category);
-    const next = new URLSearchParams(params);
-    next.delete('category');
-    if (next.get('status') === 'all') next.delete('status'); // the default
-    next.set('hidecat', others.join(','));
-    setParams(next, { replace: true });
-  }, [category, categories]);
-
-  // categories first, so rows never flash an empty picker (and a ?category= link is converted first)
-  useEffect(() => {
-    if (!categories || category) return;
-    // the rows on screen (pending ones too) stay until the new ones arrive: no blink, and an open header filter stays open
-    setSelected(new Set());
-    reload(PAGE);
-  }, [categories, category, reload]);
-
-  async function loadMore() {
-    const from = rows?.length ?? 0;
-    setBusy(true);
-    const { data, error } = await fetchRows(status, tagFilter, { start, end, hideCategories, hideTags }, from, from + PAGE - 1);
-    if (error) setError(error.message);
-    else {
-      setRows((rs) => [...(rs ?? []), ...((data ?? []) as unknown as Row[])]);
-      setHasMore((data ?? []).length === PAGE);
-    }
-    setBusy(false);
-  }
-
-  /** Runs one action, then reloads the rows on screen and the unreviewed badge. */
-  async function act(action: () => PromiseLike<{ data?: unknown; error: { message: string } | null }>, success: (data: unknown) => string) {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    const { data, error } = await action();
-    if (error) setError(error.message);
-    await reload(Math.max(rows?.length ?? 0, PAGE));
-    await onChange();
-    bump();
-    if (!error) setNotice(success(data)); // after the reload, so the list already shows it
-    setBusy(false);
-  }
-
-  const name = (r: Row) => r.merchants?.name ?? r.description;
-  const pairNote = (r: Row) => (r.transfer_pair_id ? ' The other side of the transfer is back in To review.' : '');
-
-  async function setCategory(r: Row, value: string) {
-    if (value === TRANSFER) {
-      return act(() => db().rpc('mark_transfer', { p_id: r.id }), () => `${name(r)} is now a transfer and approved.`);
-    }
-    const id = value === UNCATEGORIZED ? null : value; // Uncategorized = no category
-    if (r.approved) {
-      const category = id ? categories?.find((c) => c.id === id)?.name : 'Uncategorized';
-      return act(
-        () => db().rpc('recategorize_transactions', { p_ids: [r.id], p_category: id }),
-        () => `${name(r)} is now ${category}.${pairNote(r)}`,
-      );
-    }
-    // just a pre-fill: the row stays unapproved until you approve it
-    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, category_id: id } : x)) ?? null);
-    const { error } = await db().from('transactions').update({ category_id: id }).eq('id', r.id);
-    if (error) setError(error.message);
-    bump();
-  }
-
-  const approve = (ids: string[]) =>
-    act(
-      () => db().rpc('approve_transactions', { p_ids: ids }),
-      (n) => `Approved ${n} ${n === 1 ? 'transaction' : 'transactions'}.`,
-    );
-
-  const unapprove = (r: Row) =>
-    act(() => db().rpc('send_to_review', { p_ids: [r.id] }), () => `${name(r)} is back in To review.${pairNote(r)}`);
-
-  /** Changes the filters in the URL; a filter left out keeps its value, null clears it. */
-  function setFilters(next: Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag', string | null>>) {
+  /** Changes filters in the URL; one left out keeps its value, null clears it. */
+  function setFilters(next: Filters) {
     setNotice(null);
     setError(null);
     const merged = {
@@ -405,11 +101,349 @@ export default function Spending({ count, onChange }: { count: number | null; on
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  // the column header filters; while they hide something the table (and its headers) stays even if empty
-  const hiding = hideCategories.length > 0 || hideTags.length > 0 || Boolean(tagFilter) || status !== 'all';
-  // Approved column: both ticked = All (`?status=` absent); one unticked = To review or Approved only
+  // ---- state ---------------------------------------------------------------------
+
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [pending, setPending] = useState<Row[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  // what the range holds, for the header filters (null until loaded: everything is listed)
+  const [present, setPresent] = useState<Present | null>(null);
+  // the list fades while new rows load (only if it takes a moment: see .refetching)
+  const [reloading, setReloading] = useState(false);
+  const latestReload = useRef(0);
+
+  const [categories, setCategories] = useState<Category[] | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
+  const [entryAccounts, setEntryAccounts] = useState<AccountOption[]>([]);
+
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [open, setOpen] = useState<OpenItem[]>([]);
+  const [people, setPeople] = useState<string[]>([]);
+  const [paybacks, setPaybacks] = useState<ReimbursementMatch[]>([]);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // bumped after edits so the month's totals (MonthSpending) follow them
+  const [version, setVersion] = useState(0);
+  const bump = () => setVersion((v) => v + 1);
+
+  // ---- loading -------------------------------------------------------------------
+
+  // categories, tags and accounts: loaded once
+  useEffect(() => {
+    Promise.all([
+      // most-used first in every picker (lib/categoryOrder)
+      db().from('categories').select('id, name, is_income, transactions(count)').eq('archived', false),
+      db().from('accounts').select('id, name, class, connection_id, hidden').order('sort_order').order('name'),
+      db().from('tags').select('id, name').order('name'),
+    ]).then(([c, a, t]) => {
+      const failed = c.error ?? a.error ?? t.error;
+      if (failed) setError(failed.message);
+      const counted = (c.data ?? []) as unknown as (Category & { transactions: { count: number }[] })[];
+      setCategories(byUse(counted).map(({ id, name, is_income }) => ({ id, name, is_income })));
+      const all = (a.data ?? []) as { id: string; name: string; class: string; connection_id: string | null; hidden: boolean }[];
+      setAccountNames(new Map(all.map((x) => [x.id, x.name])));
+      // Add transaction's accounts: no investments (balance-only) or hidden ones; manual accounts first
+      setEntryAccounts(
+        all
+          .filter((x) => x.class !== 'investment' && !x.hidden)
+          .map((x) => ({ id: x.id, name: x.name, manual: x.connection_id === null }))
+          .sort((x, y) => Number(y.manual) - Number(x.manual)),
+      );
+      setTags((t.data ?? []) as Tag[]);
+    });
+  }, []);
+
+  /** Loads the first `size` rows in scope, plus everything shown around them. */
+  const reload = useCallback(
+    async (size: number) => {
+      // a later reload (e.g. the next filter tap) wins, even if this one answers last
+      const mine = ++latestReload.current;
+      setReloading(true);
+      const none = Promise.resolve({ data: [], error: null });
+      // pending rows are never approved and carry no tags, so Approved and a tag filter leave them out
+      const withPending = status !== 'approved' && !tagFilter;
+      const [t, p, s, o, w, m, h] = await Promise.all([
+        fetchRows(scope, 0, size - 1),
+        withPending ? fetchPending(scope) : Promise.resolve({ rows: [], error: null }),
+        withPending
+          ? db()
+              .from('transfer_suggestions')
+              .select('out_id, in_id, out_account_id, in_account_id, amount, out_date, in_date')
+              .order('out_date')
+          : none,
+        fetchOpen(),
+        db().from('reimbursements').select('who'),
+        withPending ? fetchUnreviewedIncome() : none,
+        fetchPresent(scope),
+      ]);
+      if (h.error) setError(h.error.message);
+      setPresent(h.present);
+      if (mine !== latestReload.current) return;
+      setReloading(false);
+      const failed = t.error ?? p.error ?? s.error ?? w.error ?? m.error;
+      if (failed) setError(failed.message);
+      if (o.error) setError(o.error);
+
+      const loaded = (t.data ?? []) as unknown as Row[];
+      setRows(loaded);
+      setHasMore(loaded.length === size);
+      setPending(p.rows);
+      setSuggestions((s.data ?? []) as Suggestion[]);
+      // drop selected rows that left the list (approved out of To review, untagged out of a tag filter)
+      const visible = new Set(loaded.map((r) => r.id));
+      setSelected((sel) => ([...sel].some((id) => !visible.has(id)) ? new Set([...sel].filter((id) => visible.has(id))) : sel));
+
+      setOpen(o.items);
+      // everyone you've entered before, for Expect reimbursement's suggestions
+      const names = new Map<string, string>();
+      for (const r of (w.data ?? []) as { who: string }[]) names.set(personKey(r.who), r.who.trim());
+      setPeople([...names.values()].sort((x, y) => x.localeCompare(y)));
+      setPaybacks(
+        ((m.data ?? []) as unknown as PaymentRow[]).flatMap((payment) => {
+          const text = `${payment.description} ${payment.merchants?.name ?? ''}`;
+          const match = suggestFor({ amount: Number(payment.amount), text }, o.items);
+          return match ? [{ payment, items: match.items }] : [];
+        }),
+      );
+    },
+    [scope, status, tagFilter],
+  );
+
+  // a link's ?category= (Settings → Categories, Trends) means Only that category, like a pie tap
+  useEffect(() => {
+    if (!categoryLink || !categories) return;
+    const others = [...categories.map((c) => c.id), NO_CATEGORY, TRANSFER_KEY].filter((k) => k !== categoryLink);
+    const next = new URLSearchParams(params);
+    next.delete('category');
+    if (next.get('status') === 'all') next.delete('status'); // the default
+    next.set('hidecat', others.join(','));
+    setParams(next, { replace: true });
+  }, [categoryLink, categories]);
+
+  // categories first, so rows never flash an empty picker (and a ?category= link is converted first)
+  useEffect(() => {
+    if (!categories || categoryLink) return;
+    // the rows on screen stay until the new ones arrive: no blink, and an open header filter stays open
+    setSelected(new Set());
+    reload(PAGE);
+  }, [categories, categoryLink, reload]);
+
+  const reloadShown = () => reload(Math.max(rows?.length ?? 0, PAGE));
+
+  async function loadMore() {
+    const from = rows?.length ?? 0;
+    setBusy(true);
+    const { data, error } = await fetchRows(scope, from, from + PAGE - 1);
+    if (error) setError(error.message);
+    else {
+      setRows((rs) => [...(rs ?? []), ...((data ?? []) as unknown as Row[])]);
+      setHasMore((data ?? []).length === PAGE);
+    }
+    setBusy(false);
+  }
+
+  /**
+   * Runs one change, then reloads the rows on screen, the to-review count and
+   * the month's totals. Says `success(data)` if it worked; returns whether it did.
+   */
+  async function act(action: Action, success: (data: unknown) => string): Promise<boolean> {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    const { data, error } = await action();
+    if (error) setError(error.message);
+    await reloadShown();
+    await onApprovalsChanged();
+    bump();
+    if (!error) setNotice(success(data)); // after the reload, so the list already shows it
+    setBusy(false);
+    return !error;
+  }
+
+  // ---- category and approval ---------------------------------------------------
+
+  const pairNote = (r: Row) => (r.transfer_pair_id ? ' The other side of the transfer is back in To review.' : '');
+
+  async function setCategory(r: Row, value: string) {
+    if (value === TRANSFER) {
+      return act(() => db().rpc('mark_transfer', { p_id: r.id }), () => `${rowName(r)} is now a transfer and approved.`);
+    }
+    const id = value === UNCATEGORIZED ? null : value; // Uncategorized = no category
+    if (r.approved) {
+      const category = id ? categories?.find((c) => c.id === id)?.name : 'Uncategorized';
+      return act(
+        () => db().rpc('recategorize_transactions', { p_ids: [r.id], p_category: id }),
+        () => `${rowName(r)} is now ${category}.${pairNote(r)}`,
+      );
+    }
+    // just a pre-fill: the row stays unapproved until you approve it
+    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, category_id: id } : x)) ?? null);
+    const { error } = await db().from('transactions').update({ category_id: id }).eq('id', r.id);
+    if (error) setError(error.message);
+    bump();
+  }
+
+  const approve = (ids: string[]) =>
+    act(
+      () => db().rpc('approve_transactions', { p_ids: ids }),
+      (n) => `Approved ${plural(Number(n), 'transaction')}.`,
+    );
+
+  function toggleApproved(r: Row) {
+    // flip the box right away; the reload that follows confirms it
+    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, approved: !x.approved } : x)) ?? null);
+    if (!r.approved) return approve([r.id]);
+    return act(
+      () => db().rpc('send_to_review', { p_ids: [r.id] }),
+      () => `${rowName(r)} is back in To review.${pairNote(r)}`,
+    );
+  }
+
+  // ---- tags ----------------------------------------------------------------------
+
+  const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag';
+  const tagIds = (r: Row) => r.transaction_tags.map((x) => x.tag_id);
+
+  /** The tag called `typed` (ignoring case), created if there's none yet; null if that failed. */
+  async function findOrCreateTag(typed: string): Promise<Tag | null> {
+    const existing = tags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
+    if (existing) return existing;
+    const { data, error } = await db().from('tags').insert({ name: typed }).select('id, name').single();
+    if (error) {
+      setError(error.message);
+      return null;
+    }
+    const tag = data as Tag;
+    setTags((ts) => [...ts, tag].sort((a, b) => a.name.localeCompare(b.name)));
+    return tag;
+  }
+
+  /** Shows a row's tag change right away, then saves it; reloads the rows if saving failed. */
+  async function saveTags(r: Row, next: string[], save: Action) {
+    setError(null);
+    setNotice(null);
+    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, transaction_tags: next.map((tag_id) => ({ tag_id })) } : x)) ?? null);
+    const { error } = await save();
+    if (error) {
+      setError(error.message);
+      await reloadShown();
+    }
+    bump(); // tagged spending leaves the month's totals
+  }
+
+  function addTag(r: Row, tagId: string) {
+    if (tagIds(r).includes(tagId)) return;
+    return saveTags(r, [...tagIds(r), tagId], () => db().from('transaction_tags').insert({ transaction_id: r.id, tag_id: tagId }));
+  }
+
+  function removeTag(r: Row, tagId: string) {
+    return saveTags(
+      r,
+      tagIds(r).filter((x) => x !== tagId),
+      () => db().from('transaction_tags').delete().eq('transaction_id', r.id).eq('tag_id', tagId),
+    );
+  }
+
+  async function createTag(r: Row, typed: string) {
+    const tag = await findOrCreateTag(typed);
+    if (tag) return addTag(r, tag.id);
+  }
+
+  // ---- reimbursements and deleting -----------------------------------------------
+
+  const expect = (r: Row, who: string, amount: number, note: string) =>
+    act(
+      () => db().rpc('expect_reimbursement', { p_transaction: r.id, p_who: who, p_amount: amount, p_note: note || null }),
+      () => `${who} owes you ${money(amount)} for ${rowName(r)}. It's on Owed to me, and only your share counts as spending.`,
+    );
+
+  const link = (paymentId: string, ids: string[]) =>
+    act(
+      () => db().rpc('link_reimbursement_payment', { p_payment: paymentId, p_reimbursements: ids }),
+      (n) => `Linked ${money(Number(n))} as paid back. It's approved and doesn't count as income.`,
+    );
+
+  const unlink = (r: Row) =>
+    act(
+      () => db().rpc('unlink_reimbursement_payment', { p_payment: r.id }),
+      () => `Unlinked ${rowName(r)}. It's back in To review, and what it paid back is owed again.`,
+    );
+
+  /** Rows you entered by hand can be deleted; the database tidies what hangs off them. */
+  function remove(r: Row) {
+    const also = [
+      r.reimbursements.length ? 'what people owe you on it is removed too' : '',
+      isLinked(r) ? `what it paid back is owed again by ${payers(r.reimbursement_payments)}` : '',
+      r.transfer_pair_id ? 'the other side of the transfer goes back to To review' : '',
+    ].filter(Boolean);
+    const summary = `${rowName(r)} (${money(r.amount)}, ${shortDate(r.posted_date)})`;
+    if (!window.confirm(`Delete ${summary}? This can’t be undone${also.length ? `; ${also.join(', and ')}` : ''}.`)) return;
+    return act(
+      () => db().rpc('delete_manual_transaction', { p_id: r.id }),
+      () => `Deleted ${summary}.`,
+    );
+  }
+
+  // ---- selected rows -------------------------------------------------------------
+
+  const selectedRows = (rows ?? []).filter((r) => selected.has(r.id));
+  // no category is fine: it's approved as Uncategorized
+  const approvable = selectedRows.filter((r) => !r.approved);
+  const allSelected = Boolean(rows?.length) && rows!.every((r) => selected.has(r.id));
+  const tagsOnSelected = tags.filter((t) => selectedRows.some((r) => tagIds(r).includes(t.id)));
+
+  function toggleSelected(id: string) {
+    setSelected((sel) => {
+      const next = new Set(sel);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set((rows ?? []).map((r) => r.id)));
+
+  /** Adds the tag to every selected row that doesn't have it yet. */
+  function tagSelected(tagId: string, name = tagName(tagId)) {
+    const missing = selectedRows.filter((r) => !tagIds(r).includes(tagId));
+    if (missing.length === 0) return setNotice(`All selected transactions already carry ${name}.`);
+    return act(
+      () =>
+        db()
+          .from('transaction_tags')
+          .upsert(
+            missing.map((r) => ({ transaction_id: r.id, tag_id: tagId })),
+            { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true },
+          ),
+      () => `Tagged ${plural(missing.length, 'transaction')} ${name}.`,
+    );
+  }
+
+  async function createTagForSelected(typed: string) {
+    const tag = await findOrCreateTag(typed);
+    if (tag) return tagSelected(tag.id, tag.name);
+  }
+
+  function untagSelected(tagId: string) {
+    const carrying = selectedRows.filter((r) => tagIds(r).includes(tagId)).map((r) => r.id);
+    return act(
+      () => db().from('transaction_tags').delete().eq('tag_id', tagId).in('transaction_id', carrying),
+      () => `Removed ${tagName(tagId)} from ${plural(carrying.length, 'transaction')}.`,
+    );
+  }
+
+  // ---- header filters ------------------------------------------------------------
+
+  // anything filtered: shows "Filters are on · Show all"
+  const filtering = hideCategories.length > 0 || hideTags.length > 0 || Boolean(tagFilter) || status !== 'all';
+
+  // Approved: both ticked = All (no `?status=`); one unticked = To review or Approved only
   const approvalItems = [
-    { id: 'review', name: `To review${count ? ` (${count})` : ''}` },
+    { id: 'review', name: `To review${unreviewed ? ` (${unreviewed})` : ''}` },
     { id: 'approved', name: 'Approved' },
   ];
   const approvalHidden = status === 'review' ? ['approved'] : status === 'approved' ? ['review'] : [];
@@ -417,6 +451,7 @@ export default function Spending({ count, onChange }: { count: number | null; on
     if (next.length > 1) return; // hiding both would show nothing
     setFilters({ status: next.includes('approved') ? 'review' : next.includes('review') ? 'approved' : 'all' });
   }
+
   const allCategoryItems = [
     ...(categories ?? []).map((c) => ({ id: c.id, name: c.name })),
     { id: NO_CATEGORY, name: 'Uncategorized' },
@@ -430,278 +465,35 @@ export default function Spending({ count, onChange }: { count: number | null; on
   // showing one tag (?tag=) reads as every other one unticked, so the header turns teal
   const tagHidden = tagFilter ? allTagItems.map((i) => i.id).filter((k) => k !== tagFilter) : hideTags;
   const tagItems = listed(allTagItems, present?.tags, tagHidden);
-  /** Only one category: hide every other key (the pie's own pick is cleared). */
-  const onlyCategory = (key: string) =>
-    // every key, not just this range's, so switching months still shows only this one
-    setFilters({ hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
+
+  /** Only one category: hide every other key (every key, so switching months keeps showing just this one). */
+  const onlyCategory = (key: string) => setFilters({ hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
   // the one category left showing, if just one is (the pie highlights it)
   const visibleCategories = allCategoryItems.filter((i) => !hideCategories.includes(i.id));
   const onlyKey = hideCategories.length > 0 && visibleCategories.length === 1 ? visibleCategories[0].id : null;
-  /** A pie category: the same as its Only in the Category header; tapping it again shows every category. */
+  /** A pie slice: the same as Only in the Category header; tapping it again shows every category. */
   const pickCategory = (key: string) => (onlyKey === key ? setFilters({ hidecat: null }) : onlyCategory(key));
-  /** Only one tag: the show-one-tag filter, so rows with that tag and others still show. */
+  /** Only one tag: the `?tag=` filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
-    id === UNTAGGED
-      ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null })
-      : setFilters({ tag: id, hidetag: null });
+    id === UNTAGGED ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null }) : setFilters({ tag: id, hidetag: null });
 
-  const tagCell = (r: Row) => (
-    <TagCell
-      tags={rowTags(r)}
-      allTags={tags}
-      rowName={name(r)}
-      onAdd={(id) => addTag(r, id)}
-      onCreate={(typed) => createTag(r, typed)}
-      onRemove={(id) => removeTag(r, id)}
-      onFilter={(id) => setFilters({ tag: id })}
-    />
-  );
-
-  const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag';
-  const rowTags = (r: Row) =>
-    r.transaction_tags
-      .map((x) => tags.find((t) => t.id === x.tag_id))
-      .filter((t): t is Tag => Boolean(t))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-  /** Shows a tag change right away; reloads the rows if saving it failed. */
-  async function saveTags(r: Row, tagIds: string[], save: () => PromiseLike<{ error: { message: string } | null }>) {
-    setError(null);
-    setNotice(null);
-    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, transaction_tags: tagIds.map((tag_id) => ({ tag_id })) } : x)) ?? null);
-    const { error } = await save();
-    if (error) {
-      setError(error.message);
-      await reload(Math.max(rows?.length ?? 0, PAGE));
-    }
-    bump(); // tagged spending leaves the month's totals
-  }
-
-  const ids = (r: Row) => r.transaction_tags.map((x) => x.tag_id);
-
-  function addTag(r: Row, tagId: string) {
-    if (ids(r).includes(tagId)) return;
-    return saveTags(r, [...ids(r), tagId], () =>
-      db().from('transaction_tags').insert({ transaction_id: r.id, tag_id: tagId }),
-    );
-  }
-
-  function removeTag(r: Row, tagId: string) {
-    return saveTags(
-      r,
-      ids(r).filter((x) => x !== tagId),
-      () => db().from('transaction_tags').delete().eq('transaction_id', r.id).eq('tag_id', tagId),
-    );
-  }
-
-  async function createTag(r: Row, typed: string) {
-    const existing = tags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
-    if (existing) return addTag(r, existing.id);
-    const { data, error } = await db().from('tags').insert({ name: typed }).select('id, name').single();
-    if (error) return setError(error.message);
-    const tag = data as Tag;
-    setTags((ts) => [...ts, tag].sort((a, b) => a.name.localeCompare(b.name)));
-    return addTag(r, tag.id);
-  }
-
-  // ---- reimbursements ------------------------------------------------------
-
-  const expect = (r: Row, who: string, amount: number, note: string) =>
-    act(
-      () => db().rpc('expect_reimbursement', { p_transaction: r.id, p_who: who, p_amount: amount, p_note: note || null }),
-      () => {
-        setExpecting(null);
-        return `${who} owes you ${money(amount)} for ${name(r)}. It's on Owed to me, and only your share counts as spending.`;
-      },
-    );
-
-  const link = (paymentId: string, ids: string[]) =>
-    act(
-      () => db().rpc('link_reimbursement_payment', { p_payment: paymentId, p_reimbursements: ids }),
-      (n) => {
-        setLinking(null);
-        return `Linked ${money(Number(n))} as paid back. It's approved and doesn't count as income.`;
-      },
-    );
-
-  const unlink = (r: Row) =>
-    act(
-      () => db().rpc('unlink_reimbursement_payment', { p_payment: r.id }),
-      () => `Unlinked ${name(r)}. It's back in To review, and what it paid back is owed again.`,
-    );
-
-  /** Rows you entered by hand can be deleted; the database tidies what hangs off them. */
-  function remove(r: Row) {
-    const also = [
-      r.reimbursements.length ? 'what people owe you on it is removed too' : '',
-      isLinked(r) ? `what it paid back is owed again by ${payers(r.reimbursement_payments)}` : '',
-      r.transfer_pair_id ? 'the other side of the transfer goes back to To review' : '',
-    ].filter(Boolean);
-    const summary = `${name(r)} (${money(r.amount)}, ${shortDate(r.posted_date)})`;
-    if (!window.confirm(`Delete ${summary}? This can’t be undone${also.length ? `; ${also.join(', and ')}` : ''}.`)) return;
-    return act(
-      () => db().rpc('delete_manual_transaction', { p_id: r.id }),
-      () => `Deleted ${summary}.`,
-    );
-  }
-
-  const isCharge = (r: Row) => Number(r.amount) < 0 && !r.is_transfer;
-  const isLinked = (r: Row) => r.reimbursement_payments.length > 0;
-  const expectedOn = (r: Row) =>
-    r.reimbursements.filter((x) => x.status !== 'written_off').reduce((sum, x) => sum + Number(x.amount), 0);
-
-  /** The row's reimbursement actions, shown in its tap-to-expand details. */
-  function reimbursementDetails(r: Row) {
-    if (isCharge(r)) {
-      if (expecting === r.id) {
-        return (
-          <ExpectForm
-            charge={-Number(r.amount)}
-            expected={expectedOn(r)}
-            people={people}
-            busy={busy}
-            onCancel={() => setExpecting(null)}
-            onSave={(who, amount, note) => expect(r, who, amount, note)}
-          />
-        );
-      }
-      const full = expectedOn(r) >= -Number(r.amount);
-      return (
-        <div className="row-actions">
-          <Button
-            variant="link"
-            size="small"
-            disabled={busy || full}
-            title={full ? 'The whole charge is already expected back' : 'Someone owes you part of this'}
-            aria-label={`Expect reimbursement on ${name(r)}`}
-            onClick={() => setExpecting(r.id)}
-          >
-            Expect reimbursement
-          </Button>
-        </div>
-      );
-    }
-    if (Number(r.amount) > 0 && !r.is_transfer) {
-      if (isLinked(r)) {
-        return (
-          <div className="row-actions">
-            <Button variant="link" size="small" disabled={busy} aria-label={`Unlink payment ${name(r)}`} onClick={() => unlink(r)}>
-              Unlink payment
-            </Button>
-          </div>
-        );
-      }
-      if (linking === r.id) {
-        return (
-          <LinkForm
-            payment={Number(r.amount)}
-            open={open}
-            busy={busy}
-            onCancel={() => setLinking(null)}
-            onLink={(ids) => link(r.id, ids)}
-          />
-        );
-      }
-      return (
-        <div className="row-actions">
-          <Button
-            variant="link"
-            size="small"
-            disabled={busy}
-            aria-label={`Link ${name(r)} to what someone owes`}
-            onClick={() => setLinking(r.id)}
-          >
-            Link to what someone owes
-          </Button>
-        </div>
-      );
-    }
-    return null;
-  }
-
-  // ---- selected rows -------------------------------------------------------
-
-  const selectedRows = (rows ?? []).filter((r) => selected.has(r.id));
-  // no category is fine: it's approved as Uncategorized
-  const canApprove = (r: Row) => !r.approved;
-  const approvable = selectedRows.filter(canApprove);
-  const allSelected = Boolean(rows?.length) && rows!.every((r) => selected.has(r.id));
-  const plural = (n: number) => `${n} ${n === 1 ? 'transaction' : 'transactions'}`;
-
-  function toggleSelected(id: string) {
-    setSelected((sel) => {
-      const next = new Set(sel);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-  }
-
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set((rows ?? []).map((r) => r.id)));
-
-  const tagsOnSelected = tags.filter((t) => selectedRows.some((r) => r.transaction_tags.some((x) => x.tag_id === t.id)));
-
-  function approveSelected() {
-    return act(
-      () => db().rpc('approve_transactions', { p_ids: approvable.map((r) => r.id) }),
-      (n) => `Approved ${plural(Number(n))}.`,
-    );
-  }
-
-  /** Adds the tag to every selected row that doesn't have it yet. */
-  function tagSelected(tagId: string) {
-    const missing = selectedRows.filter((r) => !r.transaction_tags.some((x) => x.tag_id === tagId));
-    if (missing.length === 0) return setNotice(`All selected transactions already carry ${tagName(tagId)}.`);
-    return act(
-      () =>
-        db()
-          .from('transaction_tags')
-          .upsert(
-            missing.map((r) => ({ transaction_id: r.id, tag_id: tagId })),
-            { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true },
-          ),
-      () => `Tagged ${plural(missing.length)} ${tagName(tagId)}.`,
-    );
-  }
-
-  async function createTagForSelected(typed: string) {
-    const existing = tags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
-    if (existing) return tagSelected(existing.id);
-    const { data, error } = await db().from('tags').insert({ name: typed }).select('id, name').single();
-    if (error) return setError(error.message);
-    const tag = data as Tag;
-    setTags((ts) => [...ts, tag].sort((a, b) => a.name.localeCompare(b.name)));
-    const missing = selectedRows.map((r) => ({ transaction_id: r.id, tag_id: tag.id }));
-    return act(
-      () => db().from('transaction_tags').insert(missing),
-      () => `Tagged ${plural(missing.length)} ${tag.name}.`,
-    );
-  }
-
-  function untagSelected(tagId: string) {
-    const carrying = selectedRows.filter((r) => r.transaction_tags.some((x) => x.tag_id === tagId)).map((r) => r.id);
-    return act(
-      () => db().from('transaction_tags').delete().eq('tag_id', tagId).in('transaction_id', carrying),
-      () => `Removed ${tagName(tagId)} from ${plural(carrying.length)}.`,
-    );
-  }
-
-  function toggleApproved(r: Row) {
-    // flip the box right away; the reload that follows confirms it
-    setRows((rs) => rs?.map((x) => (x.id === r.id ? { ...x, approved: !x.approved } : x)) ?? null);
-    return r.approved ? unapprove(r) : approve([r.id]);
-  }
-
-  const approvedTitle = (r: Row) =>
-    isLinked(r)
-      ? 'Linked as a payback; use Unlink payment in its details to change this'
-      : r.approved
-        ? 'Untick to move it back to To review'
-        : 'Tick to approve';
+  // ---- render --------------------------------------------------------------------
 
   // pending rows join the list by date (newest first; pending first on the same day)
   const shownRows = [...pending, ...(rows ?? [])].sort(
     (a, b) => b.posted_date.localeCompare(a.posted_date) || Number(b.pending) - Number(a.pending),
   );
+
+  const emptyMessage =
+    hideCategories.length > 0 || hideTags.length > 0
+      ? 'No transactions match.'
+      : tagFilter
+        ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
+        : status === 'review'
+          ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'
+          : monthScoped
+            ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
+            : "No transactions yet. They'll appear here after your first sync or import.";
 
   return (
     <section>
@@ -730,8 +522,6 @@ export default function Spending({ count, onChange }: { count: number | null; on
         onError={setError}
       />
 
-
-
       {adding && (
         <AddTransaction
           accounts={entryAccounts}
@@ -741,27 +531,21 @@ export default function Spending({ count, onChange }: { count: number | null; on
           onAdded={async () => {
             // the modal says what was added; the list and totals behind it catch up
             setError(null);
-            await reload(Math.max(rows?.length ?? 0, PAGE));
+            await reloadShown();
             bump();
           }}
         />
       )}
 
       {error && <p className="error" role="alert">{error}</p>}
-      {notice && (
-        <p className="notice" role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <p className="notice" role="status">{notice}</p>}
 
       {suggestions.length > 0 && (
         <TransferSuggestions
           suggestions={suggestions}
-          accountName={(id) => accounts.get(id) ?? ''}
+          accountName={(id) => accountNames.get(id) ?? ''}
           busy={busy}
-          onConfirm={(s) =>
-            act(() => db().rpc('confirm_transfer', { p_out: s.out_id, p_in: s.in_id }), () => 'Transfer confirmed and approved.')
-          }
+          onConfirm={(s) => act(() => db().rpc('confirm_transfer', { p_out: s.out_id, p_in: s.in_id }), () => 'Transfer confirmed and approved.')}
           onDismiss={(s) =>
             act(
               () => db().from('dismissed_transfer_pairs').insert({ out_id: s.out_id, in_id: s.in_id }),
@@ -771,18 +555,15 @@ export default function Spending({ count, onChange }: { count: number | null; on
         />
       )}
 
-      {paybacks.length > 0 && (
-        <ReimbursementSuggestions matches={paybacks} open={open} busy={busy} onLink={link} />
-      )}
+      {paybacks.length > 0 && <ReimbursementSuggestions matches={paybacks} open={open} busy={busy} onLink={link} />}
 
-
-      {/* always the table, so its header filters (Approved, Category, Tags) are reachable even when empty */}
+      {/* always the table, even when empty, so its header filters stay reachable */}
       {rows && (
         <>
           {/* the filter note sits beside the heading, so turning a filter on doesn't push the list down */}
           <div className="list-head">
             <h2>Transactions</h2>
-            {hiding && (
+            {filtering && (
               <p className="filters-on">
                 Filters are on.
                 <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null, tag: null })}>
@@ -798,8 +579,8 @@ export default function Spending({ count, onChange }: { count: number | null; on
               allTags={tags}
               tagsOnSelected={tagsOnSelected}
               busy={busy}
-              onApprove={approveSelected}
-              onAddTag={tagSelected}
+              onApprove={() => approve(approvable.map((r) => r.id))}
+              onAddTag={(id) => tagSelected(id)}
               onCreateTag={createTagForSelected}
               onRemoveTag={untagSelected}
               onClear={() => setSelected(new Set())}
@@ -867,131 +648,36 @@ export default function Spending({ count, onChange }: { count: number | null; on
             <tbody>
               {shownRows.map((r) =>
                 r.pending ? (
-                  // read-only: the posted version usually replaces this row, taking anything set here with it
-                  <tr key={r.id} className="pending">
-                    <td className="select-col" />
-                    <td className="date-col">{shortDate(r.posted_date)}</td>
-                    <td>
-                      <MerchantCell
-                        name={r.merchants?.name}
-                        description={r.description}
-                        postedDate={r.posted_date}
-                        account={r.accounts?.name}
-                        summary={<div className="pending-line">Pending</div>}
-                      />
-                    </td>
-                    <td className="account-col">{r.accounts?.name}</td>
-                    <td className="pending-category">
-                      {r.is_transfer ? 'Transfer' : (categories?.find((c) => c.id === r.category_id)?.name ?? 'Uncategorized')}
-                    </td>
-                    <td className="tags-col" />
-                    <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
-                    <td className="approved-col" />
-                  </tr>
+                  <PendingRow key={r.id} row={r} categories={categories ?? []} />
                 ) : (
-                <tr
-                  key={r.id}
-                  className={[r.approved ? '' : 'unreviewed', selected.has(r.id) ? 'selected' : ''].join(' ').trim() || undefined}
-                >
-                  <td className="select-col">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${name(r)}`}
-                      checked={selected.has(r.id)}
-                      disabled={busy}
-                      onChange={() => toggleSelected(r.id)}
-                    />
-                  </td>
-                  <td className="date-col">{shortDate(r.posted_date)}</td>
-                  <td>
-                    <MerchantCell
-                      name={r.merchants?.name}
-                      description={r.description}
-                      postedDate={r.posted_date}
-                      account={r.accounts?.name}
-                      note={r.note}
-                      summary={
-                        r.reimbursements.length > 0 ? (
-                          <div className="reimb-line">{reimbursementSummary(r.reimbursements)}</div>
-                        ) : isLinked(r) ? (
-                          <div className="reimb-line">Paid back by {payers(r.reimbursement_payments)}</div>
-                        ) : undefined
-                      }
-                    >
-                      {/* phones hide the Tags column, so tags live in the row's details there */}
-                      <div className="phone-only-block">{tagCell(r)}</div>
-                      {reimbursementDetails(r)}
-                      {r.source === 'manual' && (
-                        <div className="row-actions">
-                          <Button
-                            variant="link"
-                            size="small"
-                            className="danger"
-                            disabled={busy}
-                            title="You added this by hand, so you can delete it"
-                            aria-label={`Delete ${name(r)}`}
-                            onClick={() => remove(r)}
-                          >
-                            Delete transaction
-                          </Button>
-                        </div>
-                      )}
-                    </MerchantCell>
-                  </td>
-                  <td className="account-col">{r.accounts?.name}</td>
-                  <td>
-                    {isLinked(r) ? (
-                      <span className="muted">Payback, not income</span>
-                    ) : (
-                      <CategorySelect
-                        categories={categories ?? []}
-                        value={r.is_transfer ? TRANSFER : r.category_id}
-                        disabled={busy}
-                        label={`Category for ${name(r)}`}
-                        onChange={(value) => setCategory(r, value)}
-                      />
-                    )}
-                  </td>
-                  <td className="tags-col">
-                    <div className="tags-full">{tagCell(r)}</div>
-                    {/* phones: just how many; the tags themselves are in the row's details */}
-                    <span className="tags-count" aria-label={`${r.transaction_tags.length} tags`}>
-                      {r.transaction_tags.length || ''}
-                    </span>
-                  </td>
-                  <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
-                    {money(r.amount)}
-                    {r.reimbursements.length > 0 && (
-                      <div className="share">your share {money(-yourShare(Number(r.amount), r.reimbursements))}</div>
-                    )}
-                  </td>
-                  <td className="approved-col">
-                    <input
-                      type="checkbox"
-                      aria-label={`Approved: ${name(r)}`}
-                      title={approvedTitle(r)}
-                      checked={r.approved}
-                      disabled={busy || isLinked(r)}
-                      onChange={() => toggleApproved(r)}
-                    />
-                  </td>
-                </tr>
-              ))}
+                  <TransactionRow
+                    key={r.id}
+                    row={r}
+                    categories={categories ?? []}
+                    tags={tags}
+                    people={people}
+                    open={open}
+                    busy={busy}
+                    selected={selected.has(r.id)}
+                    actions={{
+                      onSelect: () => toggleSelected(r.id),
+                      onCategory: (value) => setCategory(r, value),
+                      onToggleApproved: () => toggleApproved(r),
+                      onAddTag: (id) => addTag(r, id),
+                      onCreateTag: (typed) => createTag(r, typed),
+                      onRemoveTag: (id) => removeTag(r, id),
+                      onFilterTag: (id) => setFilters({ tag: id }),
+                      onExpect: (who, amount, note) => expect(r, who, amount, note),
+                      onLink: (ids) => link(r.id, ids),
+                      onUnlink: () => unlink(r),
+                      onDelete: () => remove(r),
+                    }}
+                  />
+                ),
+              )}
             </tbody>
           </table>
-          {shownRows.length === 0 && (
-            <p className="empty">
-              {hideCategories.length > 0 || hideTags.length > 0
-                ? 'No transactions match.'
-                : tagFilter
-                ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'} carry this tag.`
-                : status === 'review'
-                ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'
-                : monthScoped
-                ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
-                : "No transactions yet. They'll appear here after your first sync or import."}
-            </p>
-          )}
+          {shownRows.length === 0 && <p className="empty">{emptyMessage}</p>}
           {hasMore && (
             <div className="load-more">
               <Button disabled={busy} onClick={loadMore}>

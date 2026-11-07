@@ -1,5 +1,7 @@
-// Pure helpers for matching payments to what people owe (no imports, so Node
-// can unit-test them: supabase/tests/reimbursements.test.ts).
+// Pure helpers for matching payments to what people owe. No database access,
+// so Node can unit-test them (supabase/tests/reimbursements.test.ts); that's
+// also why the import below spells out `.ts`, which Node needs and Vite allows.
+import { round } from './cents.ts';
 
 /** Something someone still owes you (status owed), with what's been paid so far. */
 export type OpenItem = {
@@ -13,8 +15,6 @@ export type OpenItem = {
   label: string;
   transactionId: string;
 };
-
-export const round = (n: number) => Math.round(n * 100) / 100;
 
 /** People are matched by name ignoring case and spaces: "sam " and "Sam" are one person. */
 export const personKey = (who: string) => who.trim().toLowerCase();

@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
+// The signed-in session, shared through React context (useAuth).
+
+/** `loading` is true until the stored session has been read. */
 type AuthState = { session: Session | null; loading: boolean };
 
 const AuthContext = createContext<AuthState>({ session: null, loading: true });
@@ -24,4 +27,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }
 
+/** The current session; null when signed out. */
 export const useAuth = () => useContext(AuthContext);

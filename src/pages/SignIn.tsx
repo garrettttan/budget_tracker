@@ -4,6 +4,10 @@ import Button from '../components/Button';
 
 type Mode = 'sign-in' | 'create';
 
+/**
+ * Email + password sign-in. "Create your account" is for the first run only;
+ * after that, sign-ups are turned off in Supabase.
+ */
 export default function SignIn() {
   const [mode, setMode] = useState<Mode>('sign-in');
   const [email, setEmail] = useState('');

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FunctionsHttpError } from '@supabase/supabase-js';
-import { db } from '../lib/supabase';
+import { CONNECTION_COLUMNS, type Connection, db, functionErrorMessage } from '../lib/supabase';
 import { relativeTime } from '../lib/format';
 import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
@@ -12,8 +11,7 @@ import SettingsRow from '../components/SettingsRow';
 import TagList from '../components/TagList';
 import CategoryList from '../components/CategoryList';
 
-type Connection = { id: string; label: string; status: string; status_message: string | null; last_synced_at: string | null };
-
+/** What the sync-now edge function returns (SyncResult in supabase/functions/_shared/run-sync.ts). */
 type SyncNowResponse = {
   sync:
     | { status: 'skipped'; reason: string }
@@ -30,7 +28,11 @@ const STATUS_LABEL: Record<string, string> = {
 const SECTIONS = ['Categories', 'Merchants', 'Tags'] as const;
 type Section = (typeof SECTIONS)[number];
 
-/** onSynced refreshes the nav's to-review count after Sync now. */
+/**
+ * Settings: the bank connection (status, Sync now, Sync log, Reconnect),
+ * Categories / Merchants / Tags (one row each, opening a modal), and the
+ * signed-in account. `onSynced` refreshes the nav's to-review count.
+ */
 export default function Settings({ email, onSynced }: { email: string; onSynced: () => void }) {
   const [connection, setConnection] = useState<Connection | null | undefined>(undefined); // undefined = loading
   const [runs, setRuns] = useState<SyncRun[]>([]);
@@ -54,8 +56,7 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
 
   const loadSync = useCallback(async () => {
     const [c, r] = await Promise.all([
-      // explicit columns: the Vault pointer isn't readable from the browser
-      db().from('connections').select('id, label, status, status_message, last_synced_at').limit(1),
+      db().from('connections').select(CONNECTION_COLUMNS).limit(1),
       db()
         .from('sync_runs')
         .select('id, trigger, started_at, status, new_count, updated_count, removed_count, messages')
@@ -77,9 +78,7 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
     setSyncNote(null);
     const { data, error } = await db().functions.invoke<SyncNowResponse>('sync-now');
     if (error) {
-      // the function's own message is in the response body
-      const body = error instanceof FunctionsHttpError ? await error.context.json().catch(() => null) : null;
-      setSyncNote({ text: `Couldn't sync: ${body?.error ?? error.message}`, error: true });
+      setSyncNote({ text: `Couldn't sync: ${await functionErrorMessage(error)}`, error: true });
     } else if (data) {
       const s = data.sync;
       if (s.status === 'skipped') setSyncNote({ text: `Sync skipped: ${s.reason}.`, error: false });

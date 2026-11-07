@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import { db } from '../lib/supabase';
-import { money, parseAmount, todayIso } from '../lib/format';
+import { round } from '../lib/cents';
+import { money, parseAmount } from '../lib/format';
+import { today } from '../lib/months';
+import { type OpenItem, allocate, byPerson, personKey } from '../lib/reimbursements';
 import Button from './Button';
-import Modal from './Modal';
 import CategorySelect, { type Category, TRANSFER, UNCATEGORIZED } from './CategorySelect';
-import { type OpenItem, allocate, byPerson, personKey, round } from '../lib/reimbursements';
+import Modal from './Modal';
 
 export type AccountOption = { id: string; name: string; manual: boolean };
 
@@ -29,7 +31,7 @@ export default function AddTransaction({
   onClose: () => void;
 }) {
   const [accountId, setAccountId] = useState(() => (accounts.find((a) => a.manual) ?? accounts[0])?.id ?? '');
-  const [date, setDate] = useState(todayIso);
+  const [date, setDate] = useState(today);
   const [direction, setDirection] = useState<'out' | 'in'>('out');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -198,17 +200,21 @@ export default function AddTransaction({
                   : 'Enter the amount to see what it covers.'}
               </p>
             ) : (
-            <div className="field">
-              {/* the picker labels itself; this is the visible caption */}
-              <span aria-hidden="true">Category</span>
-              <CategorySelect categories={categories} value={category} disabled={busy} label="Category"
-                onChange={(value) => {
-                  setCategory(value === UNCATEGORIZED ? null : value);
-                  // a paycheck or refund into Income is money in
-                  if (categories.find((c) => c.id === value)?.is_income) setDirection('in');
-                }}
-              />
-            </div>
+              <div className="field">
+                {/* the picker labels itself; this is the visible caption */}
+                <span aria-hidden="true">Category</span>
+                <CategorySelect
+                  categories={categories}
+                  value={category}
+                  disabled={busy}
+                  label="Category"
+                  onChange={(value) => {
+                    setCategory(value === UNCATEGORIZED ? null : value);
+                    // a paycheck or refund into Income is money in
+                    if (categories.find((c) => c.id === value)?.is_income) setDirection('in');
+                  }}
+                />
+              </div>
             )}
             <label className="wide">
               <span>
