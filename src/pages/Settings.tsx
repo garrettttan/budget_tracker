@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CONNECTION_COLUMNS, type Connection, db, functionErrorMessage } from '../lib/supabase';
 import { relativeTime } from '../lib/format';
 import Button from '../components/Button';
@@ -9,7 +10,6 @@ import SettingsModal from '../components/SettingsModal';
 import MerchantList from '../components/MerchantList';
 import SettingsRow from '../components/SettingsRow';
 import TagList from '../components/TagList';
-import CategoryList from '../components/CategoryList';
 
 /** What the sync-now edge function returns (SyncResult in supabase/functions/_shared/run-sync.ts). */
 type SyncNowResponse = {
@@ -30,7 +30,8 @@ type Section = (typeof SECTIONS)[number];
 
 /**
  * Settings: the bank connection (status, Sync now, Sync log, Reconnect),
- * Categories / Merchants / Tags (one row each, opening a modal), and the
+ * Categories / Merchants / Tags (one row each: Categories opens its own page,
+ * the others a modal), and the
  * signed-in account. `onSynced` refreshes the nav's to-review count.
  */
 export default function Settings({ email, onSynced }: { email: string; onSynced: () => void }) {
@@ -41,9 +42,10 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
   const [showReconnect, setShowReconnect] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<{ text: string; error: boolean } | null>(null);
-  // Categories, Merchants and Tags are one row each; their lists open in a modal
+  // Categories, Merchants and Tags are one row each
   const [counts, setCounts] = useState<Record<Section, number> | null>(null);
-  const [showing, setShowing] = useState<Section | null>(null);
+  const [showing, setShowing] = useState<Exclude<Section, 'Categories'> | null>(null);
+  const navigate = useNavigate();
 
   const loadCounts = useCallback(async () => {
     const results = await Promise.all(
@@ -155,7 +157,7 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
           key={section}
           label={section}
           detail={counts ? (counts[section] ? String(counts[section]) : 'None yet') : undefined}
-          onOpen={() => setShowing(section)}
+          onOpen={() => (section === 'Categories' ? navigate('/settings/categories') : setShowing(section))}
         />
       ))}
       {showing && (
@@ -166,7 +168,6 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
             loadCounts(); // adds, deletes and merges change them
           }}
         >
-          {showing === 'Categories' && <CategoryList />}
           {showing === 'Merchants' && <MerchantList />}
           {showing === 'Tags' && <TagList />}
         </SettingsModal>
