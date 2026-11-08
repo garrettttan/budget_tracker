@@ -430,7 +430,25 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 /* Reimbursements: a charge's line, your share, row forms, Owed to me */
 .reimb-line { font-size: var(--step--1); color: var(--accent); margin-top: 0.15rem; }
 .register td .share { font-size: var(--step--1); color: var(--ink-soft); font-weight: 400; white-space: normal; }
-.row-actions { margin-top: 0.4rem; }
+/* a row's ⋯ menu */
+.register .menu-col { width: 2rem; padding-left: 0.25rem; padding-right: 0; text-align: right; }
+.register td.menu-col { padding-top: 0.45rem; }
+.btn-icon.row-menu-button { font-size: var(--step-1); padding: 0.1rem 0.35rem; border-radius: 4px; }
+.btn-icon.row-menu-button[aria-expanded='true'] { color: var(--ink); background: var(--accent-wash); }
+.row-menu {
+  position: fixed; z-index: 30;
+  padding: 0.35rem;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  overflow-y: auto;
+}
+.row-menu [role='menu'] { display: flex; flex-direction: column; }
+.row-menu .btn-link { text-align: left; padding: 0.45rem 0.6rem; border-radius: 4px; text-decoration: none; }
+.row-menu .btn-link:hover:not(:disabled), .row-menu .btn-link:focus-visible { background: var(--accent-wash); text-decoration: none; }
+/* in a modal, the reimbursement forms drop their inline box */
+.modal .inline-form { display: grid; margin-top: 0.75rem; padding: 0; background: none; border: none; font-size: var(--step-0); }
+.modal .inline-form input[type='text'], .modal .inline-form select { width: 100%; font-size: var(--step-0); }
 .inline-form {
   display: flex;
   flex-wrap: wrap;
@@ -749,6 +767,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.txns .select-col { width: 1.5rem; }
   .register.txns .combobox input { width: 5.25rem; }
   .register.txns .approved-col { width: 2rem; padding-right: 0; }
+  .register.txns .menu-col { width: 1.75rem; padding-left: 0; padding-right: 0; }
   .register.txns .label-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .register.txns .label-short { display: inline; }
   .register.txns .btn-link.th-filter { gap: 0.15rem; padding: 0.1rem 0; margin: -0.1rem 0; }

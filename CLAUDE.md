@@ -26,7 +26,7 @@ whose bar approves, adds a tag to (or creates one), or removes a tag from every 
 manual accounts (Accounts → Add manual account: name, class, balance; Edit sets name and
 balance, Delete removes it and its transactions); Add transaction on Transactions (account,
 date, amount out/in, description, category or Transfer, note), saved with `source = 'manual'`
-and already approved, in a modal that stays open for the next one (saying what was added) (Delete transaction in its details
+and already approved, in a modal that stays open for the next one (saying what was added) (Delete transaction in its ⋯ menu
 removes it). All of these are direct table
 writes under RLS, no new database functions.
 
@@ -38,13 +38,14 @@ writes under RLS, no new database functions.
   ("Show N hidden accounts" at the bottom lists them, faded, outside the totals), net worth
   (Accounts and Trends) and the Add transaction account picker. Their transactions still show.
 
-**Phase 4 (Reimbursements): done** (Nov 3). In a charge's tap-to-expand details,
-Expect reimbursement (who, how much with Half / The rest, note); the row then shows "Sam owes
+**Phase 4 (Reimbursements): done** (Nov 3). Every Spending row ends in a ⋯ menu (`components/RowMenu.tsx`,
+Nov 8; the actions used to hide in the tap-to-expand details): on a charge,
+Expect reimbursement, in a modal (who, how much with Half / The rest, note); the row then shows "Sam owes
 $40" and "your share". Money in gets "Link to what someone owes" (pick the person, untick
 items), and Transactions suggests likely paybacks under "Paid back?" (someone named in the
 text, else one unique exact amount: `src/lib/reimbursementMatch.ts`). Add transaction can
 record money in as "Pays back Sam" (a Venmo payment), which links it. A linked payment shows
-"Payback, not income" instead of a category; Unlink payment in its details undoes it. Owed to me
+"Payback, not income" instead of a category; Unlink payment in its ⋯ menu undoes it. Owed to me
 (`/owed`) lists open items by person (Received for cash, Write off, × to stop expecting) and
 the last 30 settled ones (Reopen).
 
@@ -239,7 +240,7 @@ money in only with a non-income category), `tag_spend`
   must name the foreign key (`reimbursements!reimbursements_transaction_id_fkey(...)`): the
   link table gives PostgREST a second path.
 - `delete_manual_transaction(id)` (security invoker, `rpc`): Delete transaction in a manual
-  row's details. Only `source = 'manual'`; refuses a charge whose reimbursements have payments
+  row's ⋯ menu. Only `source = 'manual'`; refuses a charge whose reimbursements have payments
   linked (unlink them first); unlinks a payback first (what it paid is owed again); sends the
   other side of a transfer back to Review; unpaid reimbursements and tags cascade.
 - Settings → Categories: add, and an Edit
