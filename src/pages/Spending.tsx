@@ -49,7 +49,7 @@ type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | n
  * A link's `?category=` (Settings, Trends) becomes Only that category.
  *
  * Each posted row can be categorized, tagged, approved or unapproved, and
- * carries reimbursement actions in its details; selected rows get bulk actions.
+ * has a ⋯ menu of reimbursement actions; selected rows get bulk actions.
  */
 export default function Spending({
   unreviewed,
@@ -642,6 +642,9 @@ export default function Spending({
                       ✓
                     </span>
                   </HeaderFilter>
+                </th>
+                <th scope="col" className="menu-col">
+                  <span className="visually-hidden">Actions</span>
                 </th>
               </tr>
             </thead>

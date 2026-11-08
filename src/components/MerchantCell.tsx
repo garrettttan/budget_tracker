@@ -5,7 +5,7 @@ import Button from './Button';
 /**
  * A transaction's merchant name. Hover (desktop) shows the bank's text;
  * click/tap shows details: date and account (phones hide those columns), the
- * bank's text, your note, and any extra actions passed as children.
+ * bank's text, your note, and anything passed as children.
  */
 export default function MerchantCell({
   name,

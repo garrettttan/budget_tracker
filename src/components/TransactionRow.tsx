@@ -1,14 +1,15 @@
 // One row of the transaction list on Spending. A posted row is editable
-// (select box, category, tags, Approved, and actions in its tap-to-expand
-// details); a pending row is read-only (see PendingRow).
-import { type ComponentProps, useState } from 'react';
+// (select box, category, tags, Approved, and a ⋯ menu of actions); a pending
+// row is read-only (see PendingRow).
+import { useId, useState } from 'react';
 import { money, shortDate } from '../lib/format';
 import { type OpenItem, payers, reimbursementSummary, yourShare } from '../lib/reimbursements';
 import { type Row, expectedOn, isCharge, isLinked, rowName } from '../lib/transactions';
-import Button from './Button';
 import CategorySelect, { type Category, TRANSFER } from './CategorySelect';
 import MerchantCell from './MerchantCell';
+import Modal from './Modal';
 import { ExpectForm, LinkForm } from './ReimbursementForms';
+import RowMenu, { type MenuItem } from './RowMenu';
 import TagCell, { type Tag } from './TagCell';
 
 /** What a row can ask the page to do. The async ones resolve true once saved. */
@@ -89,18 +90,6 @@ export default function TransactionRow({
         >
           {/* phones hide the Tags column, so tags live in the row's details there */}
           <div className="phone-only-block">{tagCell}</div>
-          <ReimbursementActions row={r} people={people} open={open} busy={busy} actions={actions} />
-          {r.source === 'manual' && (
-            <RowAction
-              className="danger"
-              disabled={busy}
-              title="You added this by hand, so you can delete it"
-              aria-label={`Delete ${name}`}
-              onClick={actions.onDelete}
-            >
-              Delete transaction
-            </RowAction>
-          )}
         </MerchantCell>
       </td>
       <td className="account-col">{r.accounts?.name}</td>
@@ -136,7 +125,7 @@ export default function TransactionRow({
           aria-label={`Approved: ${name}`}
           title={
             isLinked(r)
-              ? 'Linked as a payback; use Unlink payment in its details to change this'
+              ? 'Linked as a payback; use Unlink payment in its ⋯ menu to change this'
               : r.approved
                 ? 'Untick to move it back to To review'
                 : 'Tick to approve'
@@ -145,6 +134,9 @@ export default function TransactionRow({
           disabled={busy || isLinked(r)}
           onChange={actions.onToggleApproved}
         />
+      </td>
+      <td className="menu-col">
+        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} />
       </td>
     </tr>
   );
@@ -176,16 +168,19 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
       <td className="tags-col" />
       <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
       <td className="approved-col" />
+      <td className="menu-col" />
     </tr>
   );
 }
 
+type Form = 'expect' | 'link';
+
 /**
- * The reimbursement action in a row's details: Expect reimbursement on a
- * charge; on money in, Link to what someone owes, or Unlink payment once
- * linked. Each opens its form in place.
+ * A row's ⋯ menu: Expect reimbursement on a charge; on money in, Link to what
+ * someone owes, or Unlink payment once linked; Delete transaction on one you
+ * added by hand. Expect and Link open their form in a modal. No menu if none apply.
  */
-function ReimbursementActions({
+function ActionsMenu({
   row: r,
   people,
   open,
@@ -198,70 +193,82 @@ function ReimbursementActions({
   busy: boolean;
   actions: RowActions;
 }) {
-  const [form, setForm] = useState(false);
+  const [form, setForm] = useState<Form | null>(null);
+  const [failed, setFailed] = useState(false);
+  const titleId = useId();
   const name = rowName(r);
+  const show = (f: Form) => {
+    setFailed(false);
+    setForm(f);
+  };
 
+  const items: MenuItem[] = [];
   if (isCharge(r)) {
-    const charge = -Number(r.amount);
-    if (form) {
-      return (
-        <ExpectForm
-          charge={charge}
-          expected={expectedOn(r)}
-          people={people}
-          busy={busy}
-          onCancel={() => setForm(false)}
-          onSave={async (who, amount, note) => (await actions.onExpect(who, amount, note)) && setForm(false)}
-        />
-      );
-    }
-    const full = expectedOn(r) >= charge;
-    return (
-      <RowAction
-        disabled={busy || full}
-        title={full ? 'The whole charge is already expected back' : 'Someone owes you part of this'}
-        aria-label={`Expect reimbursement on ${name}`}
-        onClick={() => setForm(true)}
-      >
-        Expect reimbursement
-      </RowAction>
+    const full = expectedOn(r) >= -Number(r.amount);
+    items.push({
+      label: 'Expect reimbursement',
+      disabled: full,
+      title: full ? 'The whole charge is already expected back' : 'Someone owes you part of this',
+      onSelect: () => show('expect'),
+    });
+  } else if (Number(r.amount) > 0 && !r.is_transfer) {
+    items.push(
+      isLinked(r)
+        ? { label: 'Unlink payment', onSelect: actions.onUnlink }
+        : { label: 'Link to what someone owes', onSelect: () => show('link') },
     );
   }
-
-  if (Number(r.amount) > 0 && !r.is_transfer) {
-    if (isLinked(r)) {
-      return (
-        <RowAction disabled={busy} aria-label={`Unlink payment ${name}`} onClick={actions.onUnlink}>
-          Unlink payment
-        </RowAction>
-      );
-    }
-    if (form) {
-      return (
-        <LinkForm
-          payment={Number(r.amount)}
-          open={open}
-          busy={busy}
-          onCancel={() => setForm(false)}
-          onLink={async (ids) => (await actions.onLink(ids)) && setForm(false)}
-        />
-      );
-    }
-    return (
-      <RowAction disabled={busy} aria-label={`Link ${name} to what someone owes`} onClick={() => setForm(true)}>
-        Link to what someone owes
-      </RowAction>
-    );
+  if (r.source === 'manual') {
+    items.push({
+      label: 'Delete transaction',
+      danger: true,
+      title: 'You added this by hand, so you can delete it',
+      onSelect: actions.onDelete,
+    });
   }
+  if (items.length === 0) return null;
 
-  return null;
-}
+  // the modal stays open if saving failed, so nothing typed is lost
+  const saved = (ok: boolean, close: () => void) => (ok ? close() : setFailed(true));
 
-/** A small link button on its own line in a row's details. */
-function RowAction(props: ComponentProps<typeof Button>) {
   return (
-    <div className="row-actions">
-      <Button variant="link" size="small" {...props} />
-    </div>
+    <>
+      <RowMenu label={`More for ${name}`} items={items} disabled={busy} />
+      {form && (
+        <Modal labelledBy={titleId} busy={busy} onClose={() => setForm(null)}>
+          {(close) => (
+            <>
+              <h2 id={titleId}>{form === 'expect' ? 'Expect reimbursement' : 'Link to what someone owes'}</h2>
+              <p className="muted small">
+                {name} · {shortDate(r.posted_date)} · {money(r.amount)}
+              </p>
+              {failed && (
+                <p className="error" role="alert">
+                  Couldn’t save. Try again.
+                </p>
+              )}
+              {form === 'expect' ? (
+                <ExpectForm
+                  charge={-Number(r.amount)}
+                  expected={expectedOn(r)}
+                  people={people}
+                  busy={busy}
+                  onCancel={close}
+                  onSave={async (who, amount, note) => saved(await actions.onExpect(who, amount, note), close)}
+                />
+              ) : (
+                <LinkForm
+                  payment={Number(r.amount)}
+                  open={open}
+                  busy={busy}
+                  onCancel={close}
+                  onLink={async (ids) => saved(await actions.onLink(ids), close)}
+                />
+              )}
+            </>
+          )}
+        </Modal>
+      )}
+    </>
   );
 }

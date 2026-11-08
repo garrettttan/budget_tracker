@@ -1,5 +1,6 @@
-// The two inline forms in a transaction's details: Expect reimbursement (on a
-// charge) and Link to what someone owes (on money in). Also used by Paid back?
+// The two reimbursement forms: Expect reimbursement (on a charge) and Link to
+// what someone owes (on money in), opened from a row's ⋯ menu. Paid back? uses
+// LinkForm too.
 import { useId, useState } from 'react';
 import { money, parseAmount } from '../lib/format';
 import { round } from '../lib/cents';

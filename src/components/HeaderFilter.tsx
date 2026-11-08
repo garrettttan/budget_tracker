@@ -1,11 +1,11 @@
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import Button from './Button';
+import { usePopover } from './usePopover';
 
 /** `count`: how many transactions have it in the current range, shown beside the name. */
 type Item = { id: string; name: string; count?: number };
 
 const WIDTH = 288; // 18rem
-const GUTTER = 16;
 
 /**
  * A column header that filters its column: tap it for a searchable checklist,
@@ -47,9 +47,6 @@ export default function HeaderFilter({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const pop = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
   const count = items.filter((i) => hidden.includes(i.id)).length;
@@ -68,45 +65,7 @@ export default function HeaderFilter({
     if (refocus) trigger.current?.focus();
   }
 
-  // under the header (above it when there's more room there), kept inside the screen
-  function place() {
-    if (!trigger.current) return;
-    const r = trigger.current.getBoundingClientRect();
-    const width = Math.min(WIDTH, window.innerWidth - 2 * GUTTER);
-    const wanted = align === 'end' ? r.right - width : r.left;
-    const left = Math.max(GUTTER, Math.min(wanted, window.innerWidth - width - GUTTER));
-    const below = window.innerHeight - r.bottom - 4 - GUTTER;
-    const above = r.top - 4 - GUTTER;
-    if (below >= 320 || below >= above) setPos({ top: r.bottom + 4, left, maxHeight: below });
-    else setPos({ bottom: window.innerHeight - r.top + 4, left, maxHeight: above });
-  }
-
-  useLayoutEffect(() => {
-    if (open) place();
-  }, [open, align]);
-
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (!pop.current?.contains(t) && !trigger.current?.contains(t)) close(false);
-    };
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && close();
-    // the page scrolling (e.g. a phone bringing the search box into view) moves it along
-    const follow = (e: Event) => {
-      if (!pop.current?.contains(e.target as Node)) place();
-    };
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', key);
-    window.addEventListener('scroll', follow, true);
-    window.addEventListener('resize', follow);
-    return () => {
-      document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', key);
-      window.removeEventListener('scroll', follow, true);
-      window.removeEventListener('resize', follow);
-    };
-  }, [open]);
+  const { trigger, pop, style } = usePopover({ open, width: WIDTH, align, onDismiss: close });
 
   const toggle = (id: string) => onChange(hidden.includes(id) ? hidden.filter((h) => h !== id) : [...hidden, id]);
   const ids = matches.map((i) => i.id);
@@ -135,7 +94,7 @@ export default function HeaderFilter({
           className="header-filter-pop"
           role="dialog"
           aria-labelledby={titleId}
-          style={pos ? { ...pos, width: Math.min(WIDTH, window.innerWidth - 2 * GUTTER) } : { visibility: 'hidden' }}
+          style={style}
         >
           <span id={titleId} className="visually-hidden">
             Filter {label}
