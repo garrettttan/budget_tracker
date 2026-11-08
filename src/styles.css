@@ -613,11 +613,12 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .modal.settings-modal.resizing { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .modal.settings-modal { transition: none; } }
 /* fixed column widths, so filtering rows doesn't re-space the columns either */
-.settings-modal .register.categories, .settings-modal .register.merchants { table-layout: fixed; width: 100%; }
-.settings-modal .register.categories th:nth-child(3), .settings-modal .register.merchants th:nth-child(3) { width: 7.5rem; }
-.settings-modal .register.categories th:nth-child(4) { width: 3rem; }
+.register.categories, .settings-modal .register.merchants { table-layout: fixed; width: 100%; }
+.register.categories th:nth-child(2), .settings-modal .register.merchants th:nth-child(3) { width: 7.5rem; }
+.register.categories th:nth-child(3) { width: 3rem; }
 .settings-modal .register.merchants th:nth-child(4) { width: 9.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
+.group-name-input { width: 10rem; max-width: 100%; padding: 0.2rem 0.4rem; }
 .register tr.merge-row td { background: var(--accent-wash); }
 .merge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .merge-row p { margin: 0.4rem 0 0; }
@@ -646,8 +647,29 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 
 /* ---- categories ---------------------------------------------------- */
 
+/* Settings → Categories page: a quiet way back above the title */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem; /* a comfortable tap target on phones */
+  margin: -0.5rem 0 0.25rem;
+  font-size: var(--step-1);
+  color: var(--accent);
+  text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+
 .register.categories td { padding-top: 0.45rem; padding-bottom: 0.45rem; }
 .register.categories td.action .btn + .btn { margin-left: 0.25rem; }
+/* a heading row per group, a step below the column headers' rule */
+.register.categories tr.group-row th {
+  font-size: var(--step-0);
+  color: var(--ink);
+  padding-top: 1.25rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--rule);
+}
+.register.categories tbody:first-of-type tr.group-row th { padding-top: 0.75rem; }
 .fields .checkbox-field { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; font-size: var(--step-0); }
 .fields .checkbox-field input { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
 
