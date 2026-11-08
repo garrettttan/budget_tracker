@@ -8,9 +8,31 @@ import PencilIcon from './PencilIcon';
 
 type CategoryRow = EditableCategory & { transactions: { count: number }[] };
 
+/** One group's heading and its categories; `name` null = no group. */
+type Group = { name: string | null; categories: CategoryRow[] };
+
 /**
- * Settings → Categories: add, and edit or delete in a modal. Listed most-used
- * first (then A–Z), the order every category picker uses (lib/categoryOrder).
+ * Groups in order of use (most transactions first, then A–Z), "No group" last.
+ * Categories keep their most-used-first order inside each group.
+ */
+function byGroup(categories: CategoryRow[]): Group[] {
+  const groups = new Map<string | null, CategoryRow[]>();
+  for (const c of categories) {
+    const key = c.group_name?.trim() || null;
+    groups.set(key, [...(groups.get(key) ?? []), c]);
+  }
+  const total = (g: Group) => g.categories.reduce((n, c) => n + count(c), 0);
+  return [...groups.entries()]
+    .map(([name, categories]) => ({ name, categories }))
+    .sort((a, b) =>
+      a.name === null ? 1 : b.name === null ? -1 : total(b) - total(a) || a.name.localeCompare(b.name),
+    );
+}
+
+/**
+ * Settings → Categories: add, and edit or delete in a modal. Listed under a
+ * heading per group; inside a group most-used first (then A–Z), the order every
+ * category picker uses (lib/categoryOrder).
  */
 export default function CategoryList() {
   const [categories, setCategories] = useState<CategoryRow[] | null>(null);
@@ -61,6 +83,7 @@ export default function CategoryList() {
   const shown = typed
     ? categories.filter((c) => c.name.toLowerCase().includes(typed) || c.group_name?.toLowerCase().includes(typed))
     : categories;
+  const groups = byGroup(shown);
 
   return (
     <>
@@ -139,7 +162,6 @@ export default function CategoryList() {
         <thead>
           <tr>
             <th scope="col">Category</th>
-            <th scope="col">Group</th>
             <th scope="col" className="num">
               Transactions
             </th>
@@ -148,40 +170,46 @@ export default function CategoryList() {
             </th>
           </tr>
         </thead>
-        <tbody>
-          {shown.map((c) => (
-            <tr key={c.id}>
-              <td>
-                {c.name}
-                {c.is_income && <span className="account-sub">Income</span>}
-              </td>
-              <td>{c.group_name ?? <span className="muted">None</span>}</td>
-              <td className="num">
-                {count(c) > 0 ? (
-                  <Link to={`/spending?status=all&category=${c.id}`} title={`Show ${c.name} transactions`}>
-                    {count(c)}
-                  </Link>
-                ) : (
-                  0
-                )}
-              </td>
-              <td className="action">
-                <Button
-                  variant="icon"
-                  aria-label={`Edit ${c.name}`}
-                  title="Edit"
-                  disabled={busy}
-                  onClick={() => {
-                    reset();
-                    setEditing(c);
-                  }}
-                >
-                  <PencilIcon />
-                </Button>
-              </td>
+        {groups.map((g) => (
+          <tbody key={g.name ?? ''}>
+            <tr className="group-row">
+              <th scope="rowgroup" colSpan={3}>
+                {g.name ?? 'No group'}
+              </th>
             </tr>
-          ))}
-        </tbody>
+            {g.categories.map((c) => (
+              <tr key={c.id}>
+                <td>
+                  {c.name}
+                  {c.is_income && <span className="account-sub">Income</span>}
+                </td>
+                <td className="num">
+                  {count(c) > 0 ? (
+                    <Link to={`/spending?status=all&category=${c.id}`} title={`Show ${c.name} transactions`}>
+                      {count(c)}
+                    </Link>
+                  ) : (
+                    0
+                  )}
+                </td>
+                <td className="action">
+                  <Button
+                    variant="icon"
+                    aria-label={`Edit ${c.name}`}
+                    title="Edit"
+                    disabled={busy}
+                    onClick={() => {
+                      reset();
+                      setEditing(c);
+                    }}
+                  >
+                    <PencilIcon />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        ))}
       </table>
       {shown.length === 0 && <p className="muted">No category matches "{filter}".</p>}
 
