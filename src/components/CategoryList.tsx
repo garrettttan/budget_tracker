@@ -37,6 +37,7 @@ function byGroup(categories: CategoryRow[]): Group[] {
 export default function CategoryList() {
   const [categories, setCategories] = useState<CategoryRow[] | null>(null);
   const [newName, setNewName] = useState('');
+  const [newGroup, setNewGroup] = useState('');
   const [filter, setFilter] = useState('');
   const [adding, setAdding] = useState(false); // the name box shows only after Add category
   const [editing, setEditing] = useState<CategoryRow | null>(null);
@@ -65,20 +66,35 @@ export default function CategoryList() {
 
   async function add() {
     const name = newName.trim();
+    const group = newGroup.trim() || null;
     setBusy(true);
     reset();
-    const { error } = await db().from('categories').insert({ name });
+    const { error } = await db().from('categories').insert({ name, group_name: group });
     if (error) setError(error.code === '23505' ? 'You already have a category with that name.' : error.message);
     else {
-      setNewName('');
-      setAdding(false);
-      setNotice(`Added ${name}.`);
+      closeAdd();
+      setNotice(group ? `Added ${name} to ${group}.` : `Added ${name}.`);
     }
     await load();
     setBusy(false);
   }
 
+  function closeAdd() {
+    setAdding(false);
+    setNewName('');
+    setNewGroup('');
+  }
+
+  /** Esc closes just the add box, not the modal around it. */
+  function closeOnEscape(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAdd();
+    }
+  }
+
   if (!categories) return null;
+  const groupNames = [...new Set(categories.map((c) => c.group_name?.trim()).filter((g): g is string => Boolean(g)))];
   const typed = filter.trim().toLowerCase();
   const shown = typed
     ? categories.filter((c) => c.name.toLowerCase().includes(typed) || c.group_name?.toLowerCase().includes(typed))
@@ -116,15 +132,25 @@ export default function CategoryList() {
               disabled={busy}
               autoFocus
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                // Esc closes just this box, not the modal around it
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setAdding(false);
-                  setNewName('');
-                }
-              }}
+              onKeyDown={closeOnEscape}
             />
+            {/* pick an existing group or type a new one; blank = No group */}
+            <input
+              type="text"
+              className="group-name-input"
+              placeholder="Group"
+              aria-label="New category's group"
+              list="new-category-groups"
+              value={newGroup}
+              disabled={busy}
+              onChange={(e) => setNewGroup(e.target.value)}
+              onKeyDown={closeOnEscape}
+            />
+            <datalist id="new-category-groups">
+              {groupNames.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
             <Button
               type="submit"
               size="small"
@@ -137,10 +163,7 @@ export default function CategoryList() {
               size="small"
               variant="link"
               disabled={busy}
-              onClick={() => {
-                setAdding(false);
-                setNewName('');
-              }}
+              onClick={closeAdd}
             >
               Cancel
             </Button>
@@ -218,7 +241,7 @@ export default function CategoryList() {
           category={editing}
           transactionCount={count(editing)}
           others={categories.filter((c) => c.id !== editing.id)}
-          groups={[...new Set(categories.map((c) => c.group_name).filter((g): g is string => Boolean(g)))]}
+          groups={groupNames}
           onClose={() => setEditing(null)}
           onSaved={async (message) => {
             setNotice(message);

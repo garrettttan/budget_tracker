@@ -618,6 +618,7 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .settings-modal .register.categories th:nth-child(3) { width: 3rem; }
 .settings-modal .register.merchants th:nth-child(4) { width: 9.5rem; }
 .merchant-name-input { width: 14rem; max-width: 100%; padding: 0.2rem 0.4rem; }
+.group-name-input { width: 10rem; max-width: 100%; padding: 0.2rem 0.4rem; }
 .register tr.merge-row td { background: var(--accent-wash); }
 .merge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .merge-row p { margin: 0.4rem 0 0; }
