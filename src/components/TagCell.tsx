@@ -32,6 +32,8 @@ export default function TagCell({
   noAddButton?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
+  // nothing to show (phones' row details, no tags): no empty line holding the place of "+ Tag"
+  if (noAddButton && tags.length === 0 && !adding) return null;
   const on = new Set(tags.map((t) => t.id));
 
   return (
