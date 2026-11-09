@@ -312,6 +312,26 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .list-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1rem; margin: 2.5rem 0 0.75rem; }
 .list-head h2 { margin: 0; }
 .filters-on { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-size: var(--step--1); color: var(--ink-soft); }
+/* phones: every column's filter in one sheet (components/FiltersSheet.tsx) */
+.btn-link.filters-button { font-size: var(--step--1); }
+.modal.filters-sheet { max-height: calc(100dvh - 2rem); }
+.modal.filters-sheet[open] { display: flex; flex-direction: column; }
+.sheet-filters { list-style: none; margin: 0.75rem 0 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--rule); }
+.sheet-filters > li { border-bottom: 1px solid var(--rule); }
+.btn-link.sheet-filter-row {
+  display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem 0; border-radius: 0;
+  color: var(--ink); font: inherit; text-align: left; text-decoration: none;
+}
+.btn-link.sheet-filter-row:hover:not(:disabled) { background: var(--accent-wash); text-decoration: none; }
+.sheet-filter-label { flex: 1; }
+.sheet-filter-summary { color: var(--ink-soft); font-size: var(--step--1); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-filter-summary.on { color: var(--accent); }
+.sheet-chevron { width: 6px; height: 10px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms; }
+.sheet-filter-row[aria-expanded='true'] .sheet-chevron { transform: rotate(90deg); }
+.sheet-filter-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0 0 0.75rem; }
+.sheet-filter-body .header-filter-list { max-height: 40dvh; }
+.sheet-foot { display: flex; justify-content: flex-end; padding-top: 0.75rem; }
+@media (prefers-reduced-motion: reduce) { .sheet-chevron { transition: none; } }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
 /* a list's search box and add form on one line (Settings → Categories) */
 .list-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }

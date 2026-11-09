@@ -63,11 +63,16 @@ unticks what the search matches; Only per row). Category and Tags list only what
 and approval filter hold, with a count each (`fetchPresent`, three columns paged 1,000 at a time;
 the header filters themselves don't narrow it, and unticked items stay listed so they can come back). Category keys: category ids, `none` (Uncategorized),
 `transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only); account ids → `?hideacct=`
-(every account, hidden ones too; the Account column, so desktop only: it's hidden on phones).
+(every account, hidden ones too; on phones, in the Filters sheet).
 **Typed filters** (`components/HeaderFields.tsx`: a small form, Apply / Clear) on Date ("After" / "Before", `?after=&before=`, both inclusive,
-within the month; desktop only, like Account), Merchant (`?merchant=`: text in the merchant's name or the bank's) and
+within the month; on phones, in the Filters sheet), Merchant (`?merchant=`: text in the merchant's name or the bank's) and
 Amount ("Min" / "Max" with a $ in the box, `?min=&max=`, dollars either direction); `typedFilters` / `matchesTyped` / `matchingMerchants` in `lib/transactions.ts`.
-The list's `or=` filters (categories, min amount, merchant) are separate params, which PostgREST ANDs. Hidden
+The list's `or=` filters (categories, min amount, merchant) are separate params, which PostgREST ANDs.
+**Phones: Filters sheet** (`components/FiltersSheet.tsx`, Nov 9): Date and Account columns are hidden under 720px, so a
+"Filters (n)" link beside the Transactions heading opens a modal listing every column filter with its state ("2 of 3",
+"Oct 10 – Oct 25", "Min $5"); a row expands in place to the same body its header uses. `HeaderFilter` / `HeaderFields`
+are a trigger + popover around `FilterChecklist` / `FieldsForm`; Spending defines each filter once (`dateFilter`,
+`accountFilter`, …) and spreads it into both. Checklists have no "Show all" footer (only `reset`, for Trends). Hidden
 categories leave the list and fade in the pie (its middle shows what's visible); Spent / Income / Saved always cover the whole month, whatever the filters; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
