@@ -106,13 +106,8 @@ export default function TransactionRow({
           />
         )}
       </td>
-      <td className="tags-col">
-        <div className="tags-full">{tagCell}</div>
-        {/* phones: just how many; the tags themselves are in the row's details */}
-        <span className="tags-count" aria-label={`${r.transaction_tags.length} tags`}>
-          {r.transaction_tags.length || ''}
-        </span>
-      </td>
+      {/* hidden on phones, where tags live in the row's details (and the Filters sheet filters them) */}
+      <td className="tags-col">{tagCell}</td>
       <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
         {money(r.amount)}
         {r.reimbursements.length > 0 && (

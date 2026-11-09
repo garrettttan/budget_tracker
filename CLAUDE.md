@@ -83,8 +83,8 @@ To review or Approved; the last ticked can't be unticked) and replaced the To re
 buttons; the table and its headers always render, even for an empty month. Every filter shows the same way (teal header + "Filters are on · Show all", which clears them all); there are no other
 filter banners. A link's `?category=` (Settings → Categories, Trends) is rewritten on arrival to Only that category; `?tag=`
 (one tag, from a row's tag, Only in the Tags header, or a tag link) shows in the Tags header as every other tag unticked. `?from=&to=` is gone. On phones the Tags
-column shows just a count (tags are edited in the row's details) and Approved's header is ✓, so the
-table fits at 390px. **Pending transactions** sit in the list by date (All and To review, not Approved),
+column is hidden too (tags are edited in the row's details; filtered from the Filters sheet) and Approved's header is ✓, so the
+table fits at 390px (Nov 9: the count column overflowed by ~40px on All time; a Date column would need ~50px more). **Pending transactions** sit in the list by date (All and To review, not Approved),
 following the date range and category filters, **read-only**: when a charge posts, the bank usually
 sends it under a new id and the sync deletes the pending row, so a category, tags or a note set on it
 would be lost. No select box, picker or Approved box; the pre-filled category shows as text. Tapping a

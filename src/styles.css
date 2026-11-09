@@ -472,7 +472,6 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .header-fields-box.has-prefix input { padding-left: 1.3rem; }
 .header-fields-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; }
 /* tags column: full chips on wide screens, just a count on phones */
-.register.txns .tags-count { display: none; }
 
 /* Reimbursements: a charge's line, your share, row forms, Owed to me */
 .reimb-line { font-size: var(--step--1); color: var(--accent); margin-top: 0.15rem; }
@@ -793,7 +792,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   html { scroll-padding-top: calc(var(--topbar-h) + 0.5rem); }
 
   /* transactions: hide date and account columns (they're in the row's details) */
-  .register.txns .date-col, .register.txns .account-col { display: none; }
+  .register.txns .date-col, .register.txns .account-col, .register.txns .tags-col { display: none; }
   .register .approved-col { width: auto; font-size: var(--step--1); }
   .page-head .btn:not(.btn-link) { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
   .bulk-bar { top: var(--topbar-h); } /* sticks just under the pinned top bar */
@@ -831,7 +830,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
   .phone-only-block { display: block; }
-  .register.txns .tags-col { min-width: 0; width: 2.75rem; text-align: center; }
   /* five columns plus tags at 390px: tighter gaps, a narrower picker, ✓ for Approved */
   .register.txns th, .register.txns td { padding-right: 0.4rem; }
   .register.txns .select-col { width: 1.5rem; }
@@ -842,8 +840,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.txns .label-short { display: inline; }
   .register.txns .btn-link.th-filter { gap: 0.15rem; padding: 0.1rem 0; margin: -0.1rem 0; }
   .register.txns .th-caret { width: 8px; height: 5px; }
-  .register.txns .tags-full { display: none; }
-  .register.txns .tags-count { display: inline; color: var(--ink-soft); font-size: var(--step--1); }
   .register.txns td, .register.txns th,
   .register.merchants td, .register.merchants th,
   .register.transfers td, .register.transfers th,
