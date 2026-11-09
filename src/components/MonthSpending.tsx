@@ -14,7 +14,7 @@ const BY_GROUP = 'spending-pie-by-group';
 /**
  * One month's approved spending (your share, no transfers): a month dropdown in
  * line with Spent / Income / Saved, and a category donut whose categories filter
- * the list below it. The numbers and the pie follow the list's tag filters; hidden
+ * the list below it. The numbers and the pie follow the list's tag and account filters; hidden
  * categories fade in the pie (in place, so it never reshapes) and leave the numbers. The dropdown ends with All time (every
  * month added up). A Category | Group control above its
  * ranked list shows it by category group instead (remembered in this browser).
@@ -27,6 +27,7 @@ export default function MonthSpending({
   hidden,
   tag,
   hiddenTags,
+  hiddenAccounts,
   version,
   onMonth,
   onSelect,
@@ -45,6 +46,8 @@ export default function MonthSpending({
   tag: string | null;
   /** tag ids (or UNTAGGED) filtered out: transactions carrying any of them don't count */
   hiddenTags: string[];
+  /** account ids filtered out: their transactions don't count */
+  hiddenAccounts: string[];
   version: number;
   onMonth: (key: string) => void;
   /** a slice was tapped */
@@ -102,17 +105,19 @@ export default function MonthSpending({
     return [...list, ALL_TIME]; // All time last, past the oldest month
   }, [earliest, month, current, allTime]);
 
-  // the list's tag filters, as in lib/transactions fetchRows
+  // the list's tag and account filters, as in lib/transactions fetchRows
   const hiddenTagKey = hiddenTags.join();
+  const hiddenAccountKey = hiddenAccounts.join();
   const tagged = useMemo(
     () =>
       (lines ?? []).filter(
         (l) =>
           (!tag || l.tagIds.includes(tag)) &&
           !(hiddenTags.includes(UNTAGGED) && l.tagIds.length === 0) &&
-          !l.tagIds.some((t) => hiddenTags.includes(t)),
+          !l.tagIds.some((t) => hiddenTags.includes(t)) &&
+          !hiddenAccounts.includes(l.accountId),
       ),
-    [lines, tag, hiddenTagKey],
+    [lines, tag, hiddenTagKey, hiddenAccountKey],
   );
 
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it

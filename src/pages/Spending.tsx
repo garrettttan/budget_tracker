@@ -34,7 +34,7 @@ import TransactionRow, { PendingRow } from '../components/TransactionRow';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
 
 /** The URL's filters (see Scope); `setFilters` changes any of them. */
-type Filters = Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag', string | null>>;
+type Filters = Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag' | 'hideacct', string | null>>;
 
 /** A database call as `act` runs it. */
 type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | null }>;
@@ -44,9 +44,9 @@ type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | n
  * transaction, which is also the review inbox.
  *
  * The list's column headers filter it (Approved → `?status=`, Category →
- * `?hidecat=`, Tags → `?hidetag=` or `?tag=`). All and Approved show the month
- * picked above (`?month=`, or `all` for All time), and so do the totals and pie,
- * which follow the category and tag filters too; To review isn't limited to it.
+ * `?hidecat=`, Tags → `?hidetag=` or `?tag=`, Account → `?hideacct=`). All and
+ * Approved show the month picked above (`?month=`, or `all` for All time), and so
+ * do the totals and pie, which follow the other filters too; To review isn't limited to it.
  * A link's `?category=` (Settings, Trends) becomes Only that category.
  *
  * Each posted row can be categorized, tagged, approved or unapproved, and
@@ -73,6 +73,7 @@ export default function Spending({
   const monthScoped = status !== 'review' && month !== ALL_TIME;
   const hidecat = params.get('hidecat') ?? '';
   const hidetag = params.get('hidetag') ?? '';
+  const hideacct = params.get('hideacct') ?? '';
   const scope: Scope = useMemo(
     () => ({
       status,
@@ -81,10 +82,11 @@ export default function Spending({
       end: monthScoped ? monthEnd(month) : null,
       hideCategories: hidecat.split(',').filter(Boolean),
       hideTags: hidetag.split(',').filter(Boolean),
+      hideAccounts: hideacct.split(',').filter(Boolean),
     }),
-    [status, tagFilter, monthScoped, month, hidecat, hidetag],
+    [status, tagFilter, monthScoped, month, hidecat, hidetag, hideacct],
   );
-  const { hideCategories, hideTags } = scope;
+  const { hideCategories, hideTags, hideAccounts } = scope;
 
   /** Changes filters in the URL; one left out keeps its value, null clears it. */
   function setFilters(next: Filters) {
@@ -96,6 +98,7 @@ export default function Spending({
       month: params.get('month'),
       hidecat: hidecat || null,
       hidetag: hidetag || null,
+      hideacct: hideacct || null,
       ...next,
     };
     if (merged.status === 'all') merged.status = null; // the default
@@ -468,7 +471,8 @@ export default function Spending({
   // ---- header filters ------------------------------------------------------------
 
   // anything filtered: shows "Filters are on · Show all"
-  const filtering = hideCategories.length > 0 || hideTags.length > 0 || Boolean(tagFilter) || status !== 'all';
+  const filtering =
+    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0 || Boolean(tagFilter) || status !== 'all';
 
   // Approved: both ticked = All (no `?status=`); one unticked = To review or Approved only
   const approvalItems = [
@@ -494,6 +498,12 @@ export default function Spending({
   // showing one tag (?tag=) reads as every other one unticked, so the header turns teal
   const tagHidden = tagFilter ? allTagItems.map((i) => i.id).filter((k) => k !== tagFilter) : hideTags;
   const tagItems = listed(allTagItems, present?.tags, tagHidden);
+  // every account, hidden ones too (their transactions still show)
+  const accountItems = listed(
+    [...accountNames].map(([id, name]) => ({ id, name })),
+    present?.accounts,
+    hideAccounts,
+  );
 
   /** Only one category: hide every other key (every key, so switching months keeps showing just this one). */
   const onlyCategory = (key: string) => setFilters({ hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
@@ -538,7 +548,7 @@ export default function Spending({
   );
 
   const emptyMessage =
-    hideCategories.length > 0 || hideTags.length > 0
+    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0
       ? 'No transactions match.'
       : tagFilter
         ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'}${monthScoped ? ` in ${monthLong(month)}` : ''} carry this tag.`
@@ -571,6 +581,7 @@ export default function Spending({
         hidden={hideCategories}
         tag={tagFilter}
         hiddenTags={hideTags}
+        hiddenAccounts={hideAccounts}
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key === ALL_TIME ? ALL_TIME : key.slice(0, 7) })}
         onSelect={pickCategory}
@@ -622,7 +633,7 @@ export default function Spending({
             {filtering && (
               <p className="filters-on">
                 Filters are on.
-                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null, tag: null })}>
+                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null, hideacct: null, tag: null })}>
                   Show all
                 </Button>
               </p>
@@ -663,7 +674,15 @@ export default function Spending({
                 </th>
                 <th scope="col" className="date-col">Date</th>
                 <th scope="col">Merchant</th>
-                <th scope="col" className="account-col">Account</th>
+                <th scope="col" className="account-col">
+                  <HeaderFilter
+                    label="Account"
+                    items={accountItems}
+                    hidden={hideAccounts}
+                    onChange={(next) => setFilters({ hideacct: next.join(',') || null })}
+                    onOnly={(id) => setFilters({ hideacct: [...accountNames.keys()].filter((k) => k !== id).join(',') || null })}
+                  />
+                </th>
                 <th scope="col">
                   <HeaderFilter
                     label="Category"

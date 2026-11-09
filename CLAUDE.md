@@ -57,12 +57,13 @@ with the summary numbers (no "Spending in" prefix; its own line on phones), `?mo
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
 into gray "Other"). Tapping a category is Only in the Category header (tap again
 to clear). All (the default) and Approved show the picked month; To review and `?tag=` aren't
-limited to it. The list's **Approved**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
+limited to it. The list's **Approved**, **Account**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
 tap one for a searchable checklist, spreadsheet style (all ticked; untick to hide; Select all ticks or
 unticks what the search matches; Only per row). Category and Tags list only what the list's range
 and approval filter hold, with a count each (`fetchPresent`, three columns paged 1,000 at a time;
 the header filters themselves don't narrow it, and unticked items stay listed so they can come back). Category keys: category ids, `none` (Uncategorized),
-`transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only). Hidden
+`transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only); account ids → `?hideacct=`
+(every account, hidden ones too; the Account column, so desktop only: it's hidden on phones). Hidden
 categories leave the list and fade in the pie (its middle shows what's visible); Spent / Income / Saved always cover the whole month, whatever the filters; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
@@ -210,7 +211,8 @@ rate-limit warning.
 14 tables: connections, accounts, categories, merchants, merchant_aliases, import_batches,
 transactions, reimbursements, reimbursement_payments, tags, transaction_tags,
 dismissed_transfer_pairs, balance_snapshots, sync_runs.
-Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`; approved rows only,
+Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids` + `account_id`, appended Nov 9, so
+older migrations that define it can't be re-run after it: the DB test re-runs those right after they apply; approved rows only,
 money in only with a non-income category), `tag_spend`
 (total per tag, e.g. a trip). Functions (call with `rpc`): `monthly_category_spend(include_tags)`,
 `monthly_cashflow(include_tags)`.
