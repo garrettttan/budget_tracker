@@ -10,7 +10,7 @@ import Accounts from './pages/Accounts';
 import Owed from './pages/Owed';
 import Trends from './pages/Trends';
 import Settings from './pages/Settings';
-import Categories from './pages/Categories';
+import SettingsSection from './pages/SettingsSection';
 import NotConfigured from './pages/NotConfigured';
 import Button from './components/Button';
 import Modal from './components/Modal';
@@ -142,7 +142,9 @@ export default function App() {
           <Route path="/owed" element={<Owed />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/settings" element={<Settings email={session.user.email ?? ''} onSynced={refreshUnreviewed} />} />
-          <Route path="/settings/categories" element={<Categories />} />
+          <Route path="/settings/categories" element={<SettingsSection title="Categories" />} />
+          <Route path="/settings/merchants" element={<SettingsSection title="Merchants" />} />
+          <Route path="/settings/tags" element={<SettingsSection title="Tags" />} />
           <Route path="*" element={<Navigate to="/spending" replace />} />
         </Routes>
       </main>
