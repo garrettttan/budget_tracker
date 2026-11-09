@@ -542,7 +542,13 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .switch input:checked + .switch-track { background: var(--accent); }
 .switch input:checked + .switch-track::after { transform: translateX(14px); }
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .switch-track, .switch-track::after { transition: none; } }
+/* two options, one each side: both are valid, so the track stays accent and the chosen name reads darker */
+.switch.two-way { cursor: default; }
+.switch.two-way label { display: inline-flex; cursor: pointer; }
+.switch.two-way > span { cursor: pointer; transition: color 150ms; }
+.switch.two-way > span.on { color: var(--ink); }
+.switch.two-way .switch-track { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .switch-track, .switch-track::after, .switch.two-way > span { transition: none; } }
 .heading-select {
   font: inherit;
   color: inherit;

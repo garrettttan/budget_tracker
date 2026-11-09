@@ -4,7 +4,7 @@ import { money } from '../lib/format';
 import { addMonths, monthLong } from '../lib/months';
 import { type FlowRow, type SpendRow, categoryTotals, fetchReports, groupTotals } from '../lib/reports';
 import Button from './Button';
-import Switch from './Switch';
+import { TwoWaySwitch } from './Switch';
 import { CategoryPie } from './charts';
 
 /** localStorage key: the pie shows category groups */
@@ -13,7 +13,7 @@ const BY_GROUP = 'spending-pie-by-group';
 /**
  * One month's normal spending (untagged, your share, no transfers): a month
  * dropdown in line with Spent / Income / Saved, and a category donut whose
- * categories filter the list below it. A By group switch above its
+ * categories filter the list below it. A Category / Group switch above its
  * ranked list shows it by category group instead (remembered in this browser).
  * `version` changes after edits so the numbers follow them.
  */
@@ -160,9 +160,7 @@ export default function MonthSpending({
           selectHint="Shows its transactions"
           onSelect={byGroup ? groups.onSelect : onSelect}
           listHeader={
-            <Switch checked={byGroup} onChange={showByGroup}>
-              By group
-            </Switch>
+            <TwoWaySwitch left="Category" right="Group" label="Show by group" checked={byGroup} onChange={showByGroup} />
           }
         />
       )}
