@@ -40,7 +40,7 @@ export default function HeaderFilter({
   keepOne?: boolean;
   /** the "filter on" look; defaults to "anything unticked" (for an opt-in list, say when something's ticked) */
   active?: boolean;
-  /** replaces the footer's Show all */
+  /** a footer button (Trends' Clear); the Spending headers have none */
   reset?: { label: string; onClick: () => void; disabled: boolean; title?: string };
   /** what the header shows, if not `label` */
   children?: ReactNode;
@@ -155,23 +155,13 @@ export default function HeaderFilter({
             ))}
             {matches.length === 0 && <li className="muted small">No matches.</li>}
           </ul>
-          <div className="header-filter-foot">
-            {reset ? (
+          {reset && (
+            <div className="header-filter-foot">
               <Button variant="link" size="small" disabled={reset.disabled} title={reset.title} onClick={reset.onClick}>
                 {reset.label}
               </Button>
-            ) : (
-              <Button
-                variant="link"
-                size="small"
-                disabled={count === 0}
-                title={count ? undefined : 'Nothing is hidden'}
-                onClick={() => onChange([])}
-              >
-                Show all
-              </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </>
