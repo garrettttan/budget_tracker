@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 import { money, shortDate } from '../lib/format';
 import { type OpenItem, payers, reimbursementSummary, yourShare } from '../lib/reimbursements';
 import { type Row, expectedOn, isCharge, isLinked, rowName } from '../lib/transactions';
+import Combobox from './Combobox';
 import CategorySelect, { type Category, TRANSFER } from './CategorySelect';
 import MerchantCell, { rowToggle } from './MerchantCell';
 import Modal from './Modal';
@@ -53,12 +54,6 @@ export default function TransactionRow({
   const name = rowName(r);
   const [details, setDetails] = useState(false);
   const toggleDetails = () => setDetails((d) => !d);
-  // the tag picker: "+ Tag" in the Tags column (wider screens), or ⋯ → Add tag (phones), which opens the details
-  const [addingTag, setAddingTag] = useState(false);
-  const addTagFromMenu = () => {
-    setDetails(true);
-    setAddingTag(true);
-  };
   const rowTags = r.transaction_tags
     .map((x) => tags.find((t) => t.id === x.tag_id))
     .filter((t): t is Tag => Boolean(t))
@@ -72,8 +67,6 @@ export default function TransactionRow({
       onCreate={actions.onCreateTag}
       onRemove={actions.onRemoveTag}
       onFilter={actions.onFilterTag}
-      adding={addingTag}
-      onAddingChange={setAddingTag}
       noAddButton={phone}
     />
   );
@@ -147,7 +140,7 @@ export default function TransactionRow({
         />
       </td>
       <td className="menu-col">
-        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} onAddTag={addTagFromMenu} />
+        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} tags={tags} rowTags={rowTags} />
       </td>
     </tr>
   );
@@ -203,15 +196,18 @@ function ActionsMenu({
   open,
   busy,
   actions,
-  onAddTag,
+  tags,
+  rowTags,
 }: {
   row: Row;
   people: string[];
   open: OpenItem[];
   busy: boolean;
   actions: RowActions;
-  /** opens the row's details with the tag picker */
-  onAddTag: () => void;
+  /** every tag, for Add tag's picker */
+  tags: Tag[];
+  /** the row's own, left out of it */
+  rowTags: Tag[];
 }) {
   const [form, setForm] = useState<Form | null>(null);
   const [failed, setFailed] = useState(false);
@@ -222,7 +218,36 @@ function ActionsMenu({
     setForm(f);
   };
 
-  const items: MenuItem[] = [{ label: 'Add tag', phoneOnly: true, onSelect: onAddTag }];
+  // Add tag (phones): a picker in the menu's popover; picking or creating a tag adds it and closes
+  const items: MenuItem[] = [
+    {
+      label: 'Add tag',
+      phoneOnly: true,
+      panel: (close) => (
+        <div className="add-tag-panel">
+          <span className="add-tag-title" aria-hidden="true">
+            Add tag
+          </span>
+          <Combobox
+            options={tags.filter((t) => !rowTags.some((x) => x.id === t.id)).map((t) => ({ value: t.id, text: t.name }))}
+            value={null}
+            label={`Add a tag to ${name}`}
+            placeholder="Tag name"
+            autoFocus
+            onChange={(id) => {
+              actions.onAddTag(id);
+              close();
+            }}
+            onCreate={(text) => {
+              actions.onCreateTag(text);
+              close();
+            }}
+            createLabel={(text) => `New tag “${text}”`}
+          />
+        </div>
+      ),
+    },
+  ];
   if (isCharge(r)) {
     const full = expectedOn(r) >= -Number(r.amount);
     items.push({

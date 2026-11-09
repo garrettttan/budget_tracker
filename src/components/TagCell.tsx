@@ -7,7 +7,7 @@ export type Tag = { id: string; name: string };
 /**
  * A transaction's tags: each one links to the transactions carrying it and has
  * an × to take it off; "+ Tag" opens a picker that can also create a new tag.
- * On phones the row's ⋯ menu opens the picker instead (`adding`, `noAddButton`).
+ * On phones the row's ⋯ menu has Add tag instead (`noAddButton`).
  */
 export default function TagCell({
   tags,
@@ -18,8 +18,6 @@ export default function TagCell({
   onCreate,
   onRemove,
   onFilter,
-  adding: addingProp,
-  onAddingChange,
   noAddButton = false,
 }: {
   tags: Tag[];
@@ -30,15 +28,10 @@ export default function TagCell({
   onCreate: (name: string) => void;
   onRemove: (tagId: string) => void;
   onFilter: (tagId: string) => void;
-  /** the picker's open state, when the row holds it (its ⋯ menu's Add tag opens it) */
-  adding?: boolean;
-  onAddingChange?: (adding: boolean) => void;
   /** leave out "+ Tag" (phones: Add tag is in the ⋯ menu) */
   noAddButton?: boolean;
 }) {
-  const [ownAdding, setOwnAdding] = useState(false);
-  const adding = addingProp ?? ownAdding;
-  const setAdding = onAddingChange ?? setOwnAdding;
+  const [adding, setAdding] = useState(false);
   const on = new Set(tags.map((t) => t.id));
 
   return (

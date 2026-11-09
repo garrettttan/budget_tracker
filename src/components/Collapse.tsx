@@ -19,6 +19,10 @@ export default function Collapse({ open, children }: { open: boolean; children: 
   useEffect(() => {
     if (open) {
       setMounted(true);
+      if (reducedMotion()) {
+        setExpanded(true);
+        return;
+      }
       // mount shut first, then open on a later frame, so the row has something to grow from
       let second = 0;
       const first = requestAnimationFrame(() => {
