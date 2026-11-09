@@ -85,7 +85,11 @@ motion is off under prefers-reduced-motion. `/trends`, top to bottom: range butt
 `spending_lines`, against last month and, dashed, the average of the 3 months before with data; Housing (rent) is left out
 unless the "Include Housing" switch (`components/Switch.tsx`) is on, `?housing=1`; tags apply,
 the range doesn't); then, scoped by both, cash flow (income vs spending columns),
-Categories over time (one category; a searchable picker (`Combobox`) under the heading picks it, `?cat=`), net worth (one
+Categories over time and Category groups over time (one line per pick: a `HeaderFilter` checklist with `keepOne` and
+`max` 6, ticked order kept so lines keep their colors (one line = spending orange, several = `--viz-cat-1..6` + legend),
+Reset = the range's biggest; `?cat=` / `?group=` comma lists, a group name's commas escaped; groups named as Spending's
+group pie names them; no total/average text; the group chart has its own Include Housing switch, `?grouphousing=1`, shown
+when a picked group holds Housing; a month opens Spending with `?hidecat=` every other category), net worth (one
 point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts
 at their current balance). No tag totals section (removed Nov 9; search Spending by tag). Clicking a month opens Spending
 with `?status=all&month=` (+ `category=` from the category chart). Charts

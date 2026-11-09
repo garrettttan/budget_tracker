@@ -22,6 +22,7 @@ export default function HeaderFilter({
   align = 'start',
   searchable = true,
   keepOne = false,
+  max,
   active,
   reset,
   children,
@@ -38,6 +39,8 @@ export default function HeaderFilter({
   searchable?: boolean;
   /** true where hiding everything makes no sense: the last ticked item can't be unticked */
   keepOne?: boolean;
+  /** at most this many ticked (Trends' lines: one per chart color); the rest can't be ticked */
+  max?: number;
   /** the "filter on" look; defaults to "anything unticked" (for an opt-in list, say when something's ticked) */
   active?: boolean;
   /** replaces the footer's Show all */
@@ -58,6 +61,11 @@ export default function HeaderFilter({
   const lastShown = keepOne && items.filter((i) => !hidden.includes(i.id)).length === 1;
   // with keepOne, unticking every match would hide everything
   const cantClearAll = keepOne && allShown && matches.length === items.length;
+  const ticked = items.filter((i) => !hidden.includes(i.id)).length;
+  const full = max !== undefined && ticked >= max;
+  // ticking every match would pass max
+  const cantSelectAll = max !== undefined && !allShown && ticked + (matches.length - shownMatches) > max;
+  const lockedOut = (id: string) => full && hidden.includes(id);
 
   function close(refocus = true) {
     setOpen(false);
@@ -116,8 +124,8 @@ export default function HeaderFilter({
               type="checkbox"
               autoFocus={!searchable}
               checked={allShown}
-              disabled={matches.length === 0 || cantClearAll}
-              title={cantClearAll ? 'At least one has to stay ticked' : undefined}
+              disabled={matches.length === 0 || cantClearAll || cantSelectAll}
+              title={cantClearAll ? 'At least one has to stay ticked' : cantSelectAll ? `Up to ${max} at a time` : undefined}
               ref={(el) => {
                 if (el) el.indeterminate = shownMatches > 0 && !allShown;
               }}
@@ -132,8 +140,14 @@ export default function HeaderFilter({
                   <input
                     type="checkbox"
                     checked={!hidden.includes(i.id)}
-                    disabled={lastShown && !hidden.includes(i.id)}
-                    title={lastShown && !hidden.includes(i.id) ? 'At least one has to stay ticked' : undefined}
+                    disabled={(lastShown && !hidden.includes(i.id)) || lockedOut(i.id)}
+                    title={
+                      lastShown && !hidden.includes(i.id)
+                        ? 'At least one has to stay ticked'
+                        : lockedOut(i.id)
+                          ? `Up to ${max} at a time`
+                          : undefined
+                    }
                     onChange={() => toggle(i.id)}
                   />
                   <span>{i.name}</span>

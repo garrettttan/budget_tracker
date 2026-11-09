@@ -208,48 +208,48 @@ export function MonthColumns({
 }
 
 /**
- * One series over time (net worth, a category by month): a 2px line with a
- * crosshair that snaps to the nearest point, and the latest value labeled at
- * the end. With `onSelect`, clicking (or Enter on) a point picks it.
+ * Lines over time (net worth, categories by month): 2px lines with a crosshair
+ * that snaps to the nearest point; the tooltip lists every series that month,
+ * largest first. One series gets its latest value labeled at the end. With
+ * `onSelect`, clicking (or Enter on) a point picks it.
  */
 export function TimeLine({
-  points,
-  color,
+  dates,
+  series,
   format,
   label,
-  name = 'Net worth',
   onSelect,
   selectHint,
 }: {
-  points: { date: string; long: string; value: number }[];
-  color: string;
+  dates: { date: string; long: string }[];
+  /** `values[i]` is the value at `dates[i]` */
+  series: { name: string; color: string; values: number[] }[];
   format: (n: number) => string;
   label: string;
-  /** the series name in the tooltip */
-  name?: string;
   onSelect?: (date: string) => void;
   /** what clicking a point does, for the accessible name */
   selectHint?: string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [idx, setIdx] = useState<number | null>(null);
-  const values = points.map((p) => p.value);
-  const ticks = niceTicks(Math.min(0, ...values), Math.max(0, ...values));
+  const all = series.flatMap((s) => s.values);
+  const ticks = niceTicks(Math.min(0, ...all), Math.max(0, ...all));
   const lo = ticks[0];
   const hi = ticks[ticks.length - 1];
-  const endLabelW = 84;
+  const single = series.length === 1;
+  const endLabelW = single ? 84 : 16;
   const plotW = Math.max(0, width - AXIS_W - endLabelW);
-  const t0 = points.length ? Date.parse(points[0].date) : 0;
-  const t1 = points.length ? Date.parse(points[points.length - 1].date) : 1;
+  const t0 = dates.length ? Date.parse(dates[0].date) : 0;
+  const t1 = dates.length ? Date.parse(dates[dates.length - 1].date) : 1;
   const x = (d: string) => AXIS_W + (t1 === t0 ? plotW : ((Date.parse(d) - t0) / (t1 - t0)) * plotW);
   const y = (v: number) => PLOT_H - ((v - lo) / (hi - lo || 1)) * PLOT_H;
-  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.date)},${y(p.value)}`).join('');
-  const last = points[points.length - 1];
+  const lastIdx = dates.length - 1;
+  const last = dates[lastIdx];
 
   function nearest(px: number) {
     let best = 0;
-    points.forEach((p, i) => {
-      if (Math.abs(x(p.date) - px) < Math.abs(x(points[best].date) - px)) best = i;
+    dates.forEach((p, i) => {
+      if (Math.abs(x(p.date) - px) < Math.abs(x(dates[best].date) - px)) best = i;
     });
     return best;
   }
@@ -258,15 +258,17 @@ export function TimeLine({
     idx === null
       ? null
       : {
-          x: Math.min(Math.max(x(points[idx].date), 80), Math.max(width - 80, 80)),
+          x: Math.min(Math.max(x(dates[idx].date), 80), Math.max(width - 80, 80)),
           y: 0,
-          title: points[idx].long,
-          rows: [{ color, name, value: format(points[idx].value) }],
+          title: dates[idx].long,
+          rows: [...series]
+            .sort((a, b) => b.values[idx] - a.values[idx])
+            .map((s) => ({ color: s.color, name: s.name, value: format(s.values[idx]) })),
         };
 
   return (
     <div className="chart" ref={ref}>
-      {width > 0 && points.length > 0 && (
+      {width > 0 && dates.length > 0 && (
         <svg
           width={width}
           height={PLOT_H + X_BAND + 8}
@@ -274,17 +276,17 @@ export function TimeLine({
           aria-label={onSelect && selectHint ? `${label}. Arrow keys move between months; ${selectHint.toLowerCase()}` : label}
           tabIndex={0}
           className={onSelect ? 'clickable' : undefined}
-          onClick={(e) => onSelect?.(points[nearest(e.clientX - e.currentTarget.getBoundingClientRect().left)].date)}
+          onClick={(e) => onSelect?.(dates[nearest(e.clientX - e.currentTarget.getBoundingClientRect().left)].date)}
           onPointerMove={(e) => setIdx(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
           onPointerLeave={() => setIdx(null)}
-          onFocus={() => setIdx(points.length - 1)}
+          onFocus={() => setIdx(lastIdx)}
           onBlur={() => setIdx(null)}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowLeft') setIdx((i) => Math.max(0, (i ?? points.length - 1) - 1));
-            if (e.key === 'ArrowRight') setIdx((i) => Math.min(points.length - 1, (i ?? 0) + 1));
+            if (e.key === 'ArrowLeft') setIdx((i) => Math.max(0, (i ?? lastIdx) - 1));
+            if (e.key === 'ArrowRight') setIdx((i) => Math.min(lastIdx, (i ?? 0) + 1));
             if (onSelect && idx !== null && (e.key === 'Enter' || e.key === ' ')) {
               e.preventDefault();
-              onSelect(points[idx].date);
+              onSelect(dates[idx].date);
             }
           }}
         >
@@ -298,22 +300,34 @@ export function TimeLine({
               </g>
             ))}
             <text x={AXIS_W} y={PLOT_H + 18} className="chart-axis">
-              {points[0].long}
+              {dates[0].long}
             </text>
-            {points.length > 1 && (
+            {dates.length > 1 && (
               <text x={AXIS_W + plotW} y={PLOT_H + 18} textAnchor="end" className="chart-axis">
                 {last.long}
               </text>
             )}
-            {points.length > 1 && <path d={path} className="chart-line" style={{ stroke: color }} />}
-            {idx !== null && <line x1={x(points[idx].date)} x2={x(points[idx].date)} y1={0} y2={PLOT_H} className="chart-crosshair" />}
-            <circle cx={x(last.date)} cy={y(last.value)} r={4} className="chart-dot" style={{ fill: color }} />
-            {idx !== null && idx !== points.length - 1 && (
-              <circle cx={x(points[idx].date)} cy={y(points[idx].value)} r={4} className="chart-dot" style={{ fill: color }} />
+            {idx !== null && <line x1={x(dates[idx].date)} x2={x(dates[idx].date)} y1={0} y2={PLOT_H} className="chart-crosshair" />}
+            {series.map((s) => (
+              <g key={s.name}>
+                {dates.length > 1 && (
+                  <path
+                    d={dates.map((p, i) => `${i ? 'L' : 'M'}${x(p.date)},${y(s.values[i])}`).join('')}
+                    className="chart-line"
+                    style={{ stroke: s.color }}
+                  />
+                )}
+                <circle cx={x(last.date)} cy={y(s.values[lastIdx])} r={4} className="chart-dot" style={{ fill: s.color }} />
+                {idx !== null && idx !== lastIdx && (
+                  <circle cx={x(dates[idx].date)} cy={y(s.values[idx])} r={4} className="chart-dot" style={{ fill: s.color }} />
+                )}
+              </g>
+            ))}
+            {single && (
+              <text x={x(last.date) + 10} y={y(series[0].values[lastIdx])} dy="0.32em" className="chart-end-label">
+                {format(series[0].values[lastIdx])}
+              </text>
             )}
-            <text x={x(last.date) + 10} y={y(last.value)} dy="0.32em" className="chart-end-label">
-              {format(last.value)}
-            </text>
           </g>
         </svg>
       )}
