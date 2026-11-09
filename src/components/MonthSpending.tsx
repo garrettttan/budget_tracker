@@ -84,7 +84,7 @@ export default function MonthSpending({
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it
   const byCategory = useMemo(() => categoryTotals(spend ?? [], (m) => m === month), [spend, month]);
   const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
-  const pieRows = useMemo(() => (byGroup ? groupTotals(byCategory, groups.of) : byCategory), [byGroup, byCategory, groups.of]);
+  const byGroupRows = useMemo(() => groupTotals(byCategory, groups.of), [byCategory, groups.of]);
 
   // options run newest first, so "previous" is the next one down the list
   const at = options.indexOf(month);
@@ -148,7 +148,8 @@ export default function MonthSpending({
       {spend && byCategory.length === 0 && <p className="empty">No spending in {monthLong(month)}.</p>}
       {byCategory.length > 0 && (
         <CategoryPie
-          rows={pieRows}
+          rows={byGroup ? byGroupRows : byCategory}
+          reserveRows={byGroup ? byCategory : byGroupRows}
           format={money}
           total={visibleTotal}
           totalLabel={`spent in ${shortName}`}
