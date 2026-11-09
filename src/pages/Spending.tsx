@@ -17,6 +17,7 @@ import {
   UNTAGGED,
   fetchPending,
   fetchPresent,
+  typedFilters,
   fetchRows,
   fetchUnreviewedIncome,
   isLinked,
@@ -26,6 +27,7 @@ import AddTransaction, { type AccountOption } from '../components/AddTransaction
 import BulkBar from '../components/BulkBar';
 import Button from '../components/Button';
 import { type Category, TRANSFER, UNCATEGORIZED } from '../components/CategorySelect';
+import HeaderFields from '../components/HeaderFields';
 import HeaderFilter from '../components/HeaderFilter';
 import MonthSpending from '../components/MonthSpending';
 import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
@@ -34,7 +36,10 @@ import TransactionRow, { PendingRow } from '../components/TransactionRow';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
 
 /** The URL's filters (see Scope); `setFilters` changes any of them. */
-type Filters = Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag' | 'hideacct', string | null>>;
+type Filters = Partial<
+  Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag' | 'hideacct' | 'after' | 'before' | 'merchant' | 'min' | 'max', string | null>
+>;
+const TYPED = ['after', 'before', 'merchant', 'min', 'max'] as const;
 
 /** A database call as `act` runs it. */
 type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | null }>;
@@ -44,7 +49,8 @@ type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | n
  * transaction, which is also the review inbox.
  *
  * The list's column headers filter it (Approved → `?status=`, Category →
- * `?hidecat=`, Tags → `?hidetag=` or `?tag=`, Account → `?hideacct=`). All and
+ * `?hidecat=`, Tags → `?hidetag=` or `?tag=`, Account → `?hideacct=`, and typed:
+ * Date → `?after=&before=`, Merchant → `?merchant=`, Amount → `?min=&max=`). All and
  * Approved show the month picked above (`?month=`, or `all` for All time), and so
  * do the totals and pie, which follow the other filters too; To review isn't limited to it.
  * A link's `?category=` (Settings, Trends) becomes Only that category.
@@ -74,6 +80,8 @@ export default function Spending({
   const hidecat = params.get('hidecat') ?? '';
   const hidetag = params.get('hidetag') ?? '';
   const hideacct = params.get('hideacct') ?? '';
+  const typedKey = TYPED.map((k) => params.get(k) ?? '').join('|');
+  const typed = useMemo(() => typedFilters(params), [typedKey]);
   const scope: Scope = useMemo(
     () => ({
       status,
@@ -83,8 +91,9 @@ export default function Spending({
       hideCategories: hidecat.split(',').filter(Boolean),
       hideTags: hidetag.split(',').filter(Boolean),
       hideAccounts: hideacct.split(',').filter(Boolean),
+      ...typed,
     }),
-    [status, tagFilter, monthScoped, month, hidecat, hidetag, hideacct],
+    [status, tagFilter, monthScoped, month, hidecat, hidetag, hideacct, typed],
   );
   const { hideCategories, hideTags, hideAccounts } = scope;
 
@@ -99,6 +108,7 @@ export default function Spending({
       hidecat: hidecat || null,
       hidetag: hidetag || null,
       hideacct: hideacct || null,
+      ...Object.fromEntries(TYPED.map((k) => [k, params.get(k)])),
       ...next,
     };
     if (merged.status === 'all') merged.status = null; // the default
@@ -472,7 +482,12 @@ export default function Spending({
 
   // anything filtered: shows "Filters are on · Show all"
   const filtering =
-    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0 || Boolean(tagFilter) || status !== 'all';
+    hideCategories.length > 0 ||
+    hideTags.length > 0 ||
+    hideAccounts.length > 0 ||
+    TYPED.some((k) => params.get(k)) ||
+    Boolean(tagFilter) ||
+    status !== 'all';
 
   // Approved: both ticked = All (no `?status=`); one unticked = To review or Approved only
   const approvalItems = [
@@ -548,7 +563,7 @@ export default function Spending({
   );
 
   const emptyMessage =
-    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0
+    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0 || TYPED.some((k) => params.get(k))
       ? 'No transactions match.'
       : tagFilter
         ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'}${monthScoped ? ` in ${monthLong(month)}` : ''} carry this tag.`
@@ -582,6 +597,7 @@ export default function Spending({
         tag={tagFilter}
         hiddenTags={hideTags}
         hiddenAccounts={hideAccounts}
+        typed={typed}
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key === ALL_TIME ? ALL_TIME : key.slice(0, 7) })}
         onSelect={pickCategory}
@@ -633,7 +649,14 @@ export default function Spending({
             {filtering && (
               <p className="filters-on">
                 Filters are on.
-                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null, hideacct: null, tag: null })}>
+                <Button variant="link" onClick={() => setFilters({
+                      status: 'all',
+                      hidecat: null,
+                      hidetag: null,
+                      hideacct: null,
+                      tag: null,
+                      ...Object.fromEntries(TYPED.map((k) => [k, null])),
+                    })}>
                   Show all
                 </Button>
               </p>
@@ -672,8 +695,23 @@ export default function Spending({
                     onChange={toggleAll}
                   />
                 </th>
-                <th scope="col" className="date-col">Date</th>
-                <th scope="col">Merchant</th>
+                <th scope="col" className="date-col">
+                  <HeaderFields
+                    label="Date"
+                    fields={[
+                      { key: 'after', label: 'On or after', type: 'date', value: params.get('after') ?? '' },
+                      { key: 'before', label: 'On or before', type: 'date', value: params.get('before') ?? '' },
+                    ]}
+                    onApply={(v) => setFilters({ after: v.after || null, before: v.before || null })}
+                  />
+                </th>
+                <th scope="col">
+                  <HeaderFields
+                    label="Merchant"
+                    fields={[{ key: 'merchant', label: 'Name contains', type: 'text', value: params.get('merchant') ?? '' }]}
+                    onApply={(v) => setFilters({ merchant: v.merchant || null })}
+                  />
+                </th>
                 <th scope="col" className="account-col">
                   <HeaderFilter
                     label="Account"
@@ -702,7 +740,17 @@ export default function Spending({
                     onOnly={onlyTag}
                   />
                 </th>
-                <th scope="col" className="num">Amount</th>
+                <th scope="col" className="num">
+                  <HeaderFields
+                    label="Amount"
+                    align="end"
+                    fields={[
+                      { key: 'min', label: 'At least ($)', type: 'number', value: params.get('min') ?? '', placeholder: '0' },
+                      { key: 'max', label: 'At most ($)', type: 'number', value: params.get('max') ?? '', placeholder: 'Any' },
+                    ]}
+                    onApply={(v) => setFilters({ min: v.min || null, max: v.max || null })}
+                  />
+                </th>
                 <th scope="col" className="approved-col">
                   <HeaderFilter
                     label="Approved"

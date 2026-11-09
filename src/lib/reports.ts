@@ -59,24 +59,50 @@ export function groupTotals(totals: CategoryTotal[], groupOf: (key: string) => s
  * follow the list's category and tag filters: your share of spending (from
  * `spending_lines`) or income (approved money in an Income category).
  */
-export type SummaryLine = { key: string; name: string; tagIds: string[]; accountId: string; spent: number; income: number };
+export type SummaryLine = {
+  key: string;
+  name: string;
+  tagIds: string[];
+  accountId: string;
+  /** for the list's typed filters (lib/transactions matchesTyped) */
+  posted_date: string;
+  amount: string;
+  description: string;
+  merchant_id: string | null;
+  spent: number;
+  income: number;
+};
 
 /** Every summary line posted between `start` and `end` (null = no limit), a page of 1,000 at a time. */
 export async function fetchSummaryLines(start: string | null, end: string | null) {
   const lines: SummaryLine[] = [];
   for (let from = 0; from < 50_000; from += 1000) {
-    let q = db().from('spending_lines').select('transaction_id, category_id, category_name, spent, tag_ids, account_id');
+    let q = db().from('spending_lines').select('transaction_id, category_id, category_name, spent, tag_ids, account_id, posted_date, amount, description, merchant_id');
     if (start) q = q.gte('posted_date', start);
     if (end) q = q.lte('posted_date', end);
     const { data, error } = await q.order('transaction_id').range(from, from + 999);
     if (error) return { lines, error };
-    const page = (data ?? []) as { category_id: string | null; category_name: string | null; spent: string; tag_ids: string[]; account_id: string }[];
+    const page = (data ?? []) as {
+      category_id: string | null;
+      category_name: string | null;
+      spent: string;
+      tag_ids: string[];
+      account_id: string;
+      posted_date: string;
+      amount: string;
+      description: string;
+      merchant_id: string | null;
+    }[];
     for (const r of page) {
       lines.push({
         key: r.category_id ?? NO_CATEGORY,
         name: r.category_name ?? 'Uncategorized',
         tagIds: r.tag_ids,
         accountId: r.account_id,
+        posted_date: r.posted_date,
+        amount: r.amount,
+        description: r.description,
+        merchant_id: r.merchant_id,
         spent: Number(r.spent),
         income: 0,
       });
@@ -86,7 +112,7 @@ export async function fetchSummaryLines(start: string | null, end: string | null
   for (let from = 0; from < 50_000; from += 1000) {
     let q = db()
       .from('transactions')
-      .select('id, category_id, account_id, amount, categories!inner(name, is_income), transaction_tags(tag_id)')
+      .select('id, category_id, account_id, posted_date, amount, description, merchant_id, categories!inner(name, is_income), transaction_tags(tag_id)')
       .eq('categories.is_income', true)
       .eq('approved', true)
       .eq('is_transfer', false)
@@ -98,7 +124,10 @@ export async function fetchSummaryLines(start: string | null, end: string | null
     const page = (data ?? []) as unknown as {
       category_id: string;
       account_id: string;
+      posted_date: string;
       amount: string;
+      description: string;
+      merchant_id: string | null;
       categories: { name: string };
       transaction_tags: { tag_id: string }[];
     }[];
@@ -108,6 +137,10 @@ export async function fetchSummaryLines(start: string | null, end: string | null
         name: r.categories.name,
         tagIds: r.transaction_tags.map((t) => t.tag_id),
         accountId: r.account_id,
+        posted_date: r.posted_date,
+        amount: r.amount,
+        description: r.description,
+        merchant_id: r.merchant_id,
         spent: 0,
         income: Number(r.amount),
       });

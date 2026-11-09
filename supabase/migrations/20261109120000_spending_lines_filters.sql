@@ -1,6 +1,8 @@
--- spending_lines gains account_id (appended, so `create or replace` keeps every
--- other column as it was), so Spending's month totals can follow the list's
--- Account filter. Nothing else changes. Safe to re-run.
+-- spending_lines gains the columns Spending's list filters on (appended, so
+-- `create or replace` keeps every other column as it was), so the month's
+-- totals can follow the Account, Merchant and Amount filters: account_id, the
+-- transaction's own amount (signed, before reimbursements), the bank's
+-- description and merchant_id. Nothing else changes. Safe to re-run.
 
 create or replace view public.spending_lines
 with (security_invoker = true)
@@ -32,7 +34,10 @@ select
   c.group_name as category_group,
   (-t.amount - coalesce(r.amount, 0))::numeric(12,2) as spent,
   coalesce(tg.tag_ids, '{}') as tag_ids,
-  t.account_id
+  t.account_id,
+  t.amount,
+  t.description,
+  t.merchant_id
 from public.transactions t
 left join public.categories c on c.id = t.category_id
 left join reimbursed r        on r.transaction_id = t.id

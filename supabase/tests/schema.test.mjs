@@ -42,7 +42,7 @@ const check = (name, ok, detail = '') => {
 await db.exec(stub);
 const legacy = '33333333-3333-3333-3333-333333333333';
 let legacyUncatTxn, legacyMerchant;
-const RERUN = ['_account_classes.sql', '_reimbursements.sql', '_uncategorized_is_no_category.sql', '_spending_lines_account.sql'];
+const RERUN = ['_account_classes.sql', '_reimbursements.sql', '_uncategorized_is_no_category.sql', '_spending_lines_filters.sql'];
 const rerunsPassed = [];
 for (const file of migrations) {
   if (file.endsWith('_uncategorized_is_no_category.sql')) {
@@ -179,9 +179,10 @@ check('cashflow uses the same tag rule', cfNormal[0]?.spending === 120, JSON.str
 const trip = (await asUser(a, `select spent::float, transaction_count::int n from public.tag_spend where tag_id=$1`, [japan])).rows[0];
 check('tag_spend totals a trip', trip.spent === 1100 && trip.n === 2, JSON.stringify(trip));
 const wrongAccount = (await asUser(a, `select count(*)::int n from public.spending_lines l
-   join public.transactions t on t.id = l.transaction_id where l.account_id is distinct from t.account_id`)).rows[0].n;
+   join public.transactions t on t.id = l.transaction_id
+   where (l.account_id, l.amount, l.description, l.merchant_id) is distinct from (t.account_id, t.amount, t.description, t.merchant_id)`)).rows[0].n;
 const withAccount = (await asUser(a, `select count(*)::int n from public.spending_lines where account_id = $1`, [acct])).rows[0].n;
-check('spending_lines carries each line\'s account', wrongAccount === 0 && withAccount > 0, JSON.stringify({ wrongAccount, withAccount }));
+check('spending_lines carries each line\'s account, amount, description and merchant', wrongAccount === 0 && withAccount > 0, JSON.stringify({ wrongAccount, withAccount }));
 // Money in: a refund lowers its category; an uncategorized deposit isn't spending
 const aShopping = (await asUser(a, `select id from public.categories where name='Shopping'`)).rows[0].id;
 const ins = async (amount, category) => (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id, approved)

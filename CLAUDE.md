@@ -63,7 +63,11 @@ unticks what the search matches; Only per row). Category and Tags list only what
 and approval filter hold, with a count each (`fetchPresent`, three columns paged 1,000 at a time;
 the header filters themselves don't narrow it, and unticked items stay listed so they can come back). Category keys: category ids, `none` (Uncategorized),
 `transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only); account ids → `?hideacct=`
-(every account, hidden ones too; the Account column, so desktop only: it's hidden on phones). Hidden
+(every account, hidden ones too; the Account column, so desktop only: it's hidden on phones).
+**Typed filters** (`components/HeaderFields.tsx`: a small form, Apply / Clear) on Date (`?after=&before=`, inclusive,
+within the month; desktop only, like Account), Merchant (`?merchant=`: text in the merchant's name or the bank's) and
+Amount (`?min=&max=`, dollars either direction); `typedFilters` / `matchesTyped` / `matchingMerchants` in `lib/transactions.ts`.
+The list's `or=` filters (categories, min amount, merchant) are separate params, which PostgREST ANDs. Hidden
 categories leave the list and fade in the pie (its middle shows what's visible); Spent / Income / Saved always cover the whole month, whatever the filters; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
@@ -211,7 +215,7 @@ rate-limit warning.
 14 tables: connections, accounts, categories, merchants, merchant_aliases, import_batches,
 transactions, reimbursements, reimbursement_payments, tags, transaction_tags,
 dismissed_transfer_pairs, balance_snapshots, sync_runs.
-Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids` + `account_id`, appended Nov 9, so
+Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`; `account_id`, `amount`, `description`, `merchant_id` appended Nov 9, so
 older migrations that define it can't be re-run after it: the DB test re-runs those right after they apply; approved rows only,
 money in only with a non-income category), `tag_spend`
 (total per tag, e.g. a trip). Functions (call with `rpc`): `monthly_category_spend(include_tags)`,
