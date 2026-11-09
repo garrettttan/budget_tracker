@@ -3,7 +3,7 @@ import { round, sum } from '../lib/cents';
 import { money } from '../lib/format';
 import { ALL_TIME, addMonths, monthEnd, monthOrAll as monthLong } from '../lib/months';
 import { type CategoryTotal, type SummaryLine, fetchEarliestMonth, fetchSummaryLines, groupTotals } from '../lib/reports';
-import { UNTAGGED } from '../lib/transactions';
+import { type Scope, UNTAGGED, matchesTyped, matchingMerchants } from '../lib/transactions';
 import Button from './Button';
 import Segmented from './Segmented';
 import { CategoryPie } from './charts';
@@ -14,7 +14,7 @@ const BY_GROUP = 'spending-pie-by-group';
 /**
  * One month's approved spending (your share, no transfers): a month dropdown in
  * line with Spent / Income / Saved, and a category donut whose categories filter
- * the list below it. The numbers and the pie follow the list's tag filters; hidden
+ * the list below it. The numbers and the pie follow the list's tag, account and typed filters; hidden
  * categories fade in the pie (in place, so it never reshapes) and leave the numbers. The dropdown ends with All time (every
  * month added up). A Category | Group control above its
  * ranked list shows it by category group instead (remembered in this browser).
@@ -27,6 +27,8 @@ export default function MonthSpending({
   hidden,
   tag,
   hiddenTags,
+  hiddenAccounts,
+  typed,
   version,
   onMonth,
   onSelect,
@@ -45,6 +47,10 @@ export default function MonthSpending({
   tag: string | null;
   /** tag ids (or UNTAGGED) filtered out: transactions carrying any of them don't count */
   hiddenTags: string[];
+  /** account ids filtered out: their transactions don't count */
+  hiddenAccounts: string[];
+  /** the list's Date, Merchant and Amount filters */
+  typed: Pick<Scope, 'after' | 'before' | 'merchant' | 'minAmount' | 'maxAmount'>;
   version: number;
   onMonth: (key: string) => void;
   /** a slice was tapped */
@@ -76,6 +82,20 @@ export default function MonthSpending({
 
   const allTime = month === ALL_TIME;
 
+  // the Merchant filter matches merchant names too: which merchants, for the text typed
+  const [merchantIds, setMerchantIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!typed.merchant) return setMerchantIds([]);
+    let current = true;
+    matchingMerchants(typed.merchant).then(({ ids, error }) => {
+      if (error) onError(error.message);
+      if (current) setMerchantIds(ids);
+    });
+    return () => {
+      current = false;
+    };
+  }, [typed.merchant]);
+
   useEffect(() => {
     fetchEarliestMonth().then(({ month, error }) => {
       if (error) onError(error.message);
@@ -102,17 +122,20 @@ export default function MonthSpending({
     return [...list, ALL_TIME]; // All time last, past the oldest month
   }, [earliest, month, current, allTime]);
 
-  // the list's tag filters, as in lib/transactions fetchRows
+  // the list's tag and account filters, as in lib/transactions fetchRows
   const hiddenTagKey = hiddenTags.join();
+  const hiddenAccountKey = hiddenAccounts.join();
   const tagged = useMemo(
     () =>
       (lines ?? []).filter(
         (l) =>
           (!tag || l.tagIds.includes(tag)) &&
           !(hiddenTags.includes(UNTAGGED) && l.tagIds.length === 0) &&
-          !l.tagIds.some((t) => hiddenTags.includes(t)),
+          !l.tagIds.some((t) => hiddenTags.includes(t)) &&
+          !hiddenAccounts.includes(l.accountId) &&
+          matchesTyped(l, typed, merchantIds),
       ),
-    [lines, tag, hiddenTagKey],
+    [lines, tag, hiddenTagKey, hiddenAccountKey, typed, merchantIds],
   );
 
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it

@@ -5,8 +5,9 @@ import { useId, useState } from 'react';
 import { money, shortDate } from '../lib/format';
 import { type OpenItem, payers, reimbursementSummary, yourShare } from '../lib/reimbursements';
 import { type Row, expectedOn, isCharge, isLinked, rowName } from '../lib/transactions';
+import Combobox from './Combobox';
 import CategorySelect, { type Category, TRANSFER } from './CategorySelect';
-import MerchantCell from './MerchantCell';
+import MerchantCell, { rowToggle } from './MerchantCell';
 import Modal from './Modal';
 import { ExpectForm, LinkForm } from './ReimbursementForms';
 import RowMenu, { type MenuItem } from './RowMenu';
@@ -51,11 +52,13 @@ export default function TransactionRow({
   actions: RowActions;
 }) {
   const name = rowName(r);
+  const [details, setDetails] = useState(false);
+  const toggleDetails = () => setDetails((d) => !d);
   const rowTags = r.transaction_tags
     .map((x) => tags.find((t) => t.id === x.tag_id))
     .filter((t): t is Tag => Boolean(t))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const tagCell = (
+  const tagCell = (phone: boolean) => (
     <TagCell
       tags={rowTags}
       allTags={tags}
@@ -64,11 +67,15 @@ export default function TransactionRow({
       onCreate={actions.onCreateTag}
       onRemove={actions.onRemoveTag}
       onFilter={actions.onFilterTag}
+      noAddButton={phone}
     />
   );
 
   return (
-    <tr className={[r.approved ? '' : 'unreviewed', selected ? 'selected' : ''].join(' ').trim() || undefined}>
+    <tr
+      className={[r.approved ? '' : 'unreviewed', selected ? 'selected' : '', details ? 'open' : ''].join(' ').trim() || undefined}
+      onClick={rowToggle(toggleDetails)}
+    >
       <td className="select-col">
         <input type="checkbox" aria-label={`Select ${name}`} checked={selected} disabled={busy} onChange={actions.onSelect} />
       </td>
@@ -80,6 +87,8 @@ export default function TransactionRow({
           postedDate={r.posted_date}
           account={r.accounts?.name}
           note={r.note}
+          open={details}
+          onToggle={toggleDetails}
           summary={
             r.reimbursements.length > 0 ? (
               <div className="reimb-line">{reimbursementSummary(r.reimbursements)}</div>
@@ -89,7 +98,7 @@ export default function TransactionRow({
           }
         >
           {/* phones hide the Tags column, so tags live in the row's details there */}
-          <div className="phone-only-block">{tagCell}</div>
+          <div className="phone-only-block">{tagCell(true)}</div>
         </MerchantCell>
       </td>
       <td className="account-col">{r.accounts?.name}</td>
@@ -106,13 +115,8 @@ export default function TransactionRow({
           />
         )}
       </td>
-      <td className="tags-col">
-        <div className="tags-full">{tagCell}</div>
-        {/* phones: just how many; the tags themselves are in the row's details */}
-        <span className="tags-count" aria-label={`${r.transaction_tags.length} tags`}>
-          {r.transaction_tags.length || ''}
-        </span>
-      </td>
+      {/* hidden on phones, where tags live in the row's details (and the Filters sheet filters them) */}
+      <td className="tags-col">{tagCell(false)}</td>
       <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
         {money(r.amount)}
         {r.reimbursements.length > 0 && (
@@ -136,7 +140,7 @@ export default function TransactionRow({
         />
       </td>
       <td className="menu-col">
-        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} />
+        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} tags={tags} rowTags={rowTags} />
       </td>
     </tr>
   );
@@ -148,8 +152,10 @@ export default function TransactionRow({
  * along. The category the sync pre-filled shows as text.
  */
 export function PendingRow({ row: r, categories }: { row: Row; categories: Category[] }) {
+  const [details, setDetails] = useState(false);
+  const toggleDetails = () => setDetails((d) => !d);
   return (
-    <tr className="pending">
+    <tr className={details ? 'pending open' : 'pending'} onClick={rowToggle(toggleDetails)}>
       <td className="select-col" />
       <td className="date-col">{shortDate(r.posted_date)}</td>
       <td>
@@ -159,6 +165,8 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
           postedDate={r.posted_date}
           account={r.accounts?.name}
           summary={<div className="pending-line">Pending</div>}
+          open={details}
+          onToggle={toggleDetails}
         />
       </td>
       <td className="account-col">{r.accounts?.name}</td>
@@ -176,9 +184,11 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
 type Form = 'expect' | 'link';
 
 /**
- * A row's ⋯ menu: Expect reimbursement on a charge; on money in, Link to what
- * someone owes, or Unlink payment once linked; Delete transaction on one you
- * added by hand. Expect and Link open their form in a modal. No menu if none apply.
+ * A row's ⋯ menu: Add tag (phones only: wider screens have the Tags column);
+ * Expect reimbursement on a charge; on money in, Link to what someone owes, or
+ * Unlink payment once linked; Delete transaction on one you added by hand.
+ * Expect and Link open their form in a modal. No menu if none apply (on wider
+ * screens, none but Add tag).
  */
 function ActionsMenu({
   row: r,
@@ -186,12 +196,18 @@ function ActionsMenu({
   open,
   busy,
   actions,
+  tags,
+  rowTags,
 }: {
   row: Row;
   people: string[];
   open: OpenItem[];
   busy: boolean;
   actions: RowActions;
+  /** every tag, for Add tag's picker */
+  tags: Tag[];
+  /** the row's own, left out of it */
+  rowTags: Tag[];
 }) {
   const [form, setForm] = useState<Form | null>(null);
   const [failed, setFailed] = useState(false);
@@ -202,7 +218,36 @@ function ActionsMenu({
     setForm(f);
   };
 
-  const items: MenuItem[] = [];
+  // Add tag (phones): a picker in the menu's popover; picking or creating a tag adds it and closes
+  const items: MenuItem[] = [
+    {
+      label: 'Add tag',
+      phoneOnly: true,
+      panel: (close) => (
+        <div className="add-tag-panel">
+          <span className="add-tag-title" aria-hidden="true">
+            Add tag
+          </span>
+          <Combobox
+            options={tags.filter((t) => !rowTags.some((x) => x.id === t.id)).map((t) => ({ value: t.id, text: t.name }))}
+            value={null}
+            label={`Add a tag to ${name}`}
+            placeholder="Tag name"
+            autoFocus
+            onChange={(id) => {
+              actions.onAddTag(id);
+              close();
+            }}
+            onCreate={(text) => {
+              actions.onCreateTag(text);
+              close();
+            }}
+            createLabel={(text) => `New tag “${text}”`}
+          />
+        </div>
+      ),
+    },
+  ];
   if (isCharge(r)) {
     const full = expectedOn(r) >= -Number(r.amount);
     items.push({
@@ -226,7 +271,6 @@ function ActionsMenu({
       onSelect: actions.onDelete,
     });
   }
-  if (items.length === 0) return null;
 
   // the modal stays open if saving failed, so nothing typed is lost
   const saved = (ok: boolean, close: () => void) => (ok ? close() : setFailed(true));

@@ -42,6 +42,8 @@ const check = (name, ok, detail = '') => {
 await db.exec(stub);
 const legacy = '33333333-3333-3333-3333-333333333333';
 let legacyUncatTxn, legacyMerchant;
+const RERUN = ['_account_classes.sql', '_reimbursements.sql', '_uncategorized_is_no_category.sql', '_spending_lines_filters.sql'];
+const rerunsPassed = [];
 for (const file of migrations) {
   if (file.endsWith('_uncategorized_is_no_category.sql')) {
     // an approved row in the old Uncategorized category, remembered by its merchant
@@ -58,12 +60,18 @@ for (const file of migrations) {
       insert into public.accounts (user_id, name, type) values ('${legacy}', 'Old card', 'credit'), ('${legacy}', 'Old Venmo', 'manual');`);
   }
   await db.exec(readFileSync(join(dir, file), 'utf8'));
+  // re-run right away, while it's the latest: a later migration may append columns to a view
+  // it defines (spending_lines), and Postgres won't let the older definition drop them
+  const rerun = RERUN.find((r) => file.endsWith(r));
+  if (rerun) {
+    await db.exec(readFileSync(join(dir, file), 'utf8'));
+    rerunsPassed.push(rerun);
+  }
 }
 check(`migrations apply (${migrations.length})`, true);
+for (const r of RERUN) check(`${r} is safe to re-run`, rerunsPassed.includes(r));
 const backfilled = Object.fromEntries((await db.query(`select name, class from public.accounts where user_id = $1`, [legacy])).rows.map((r) => [r.name, r.class]));
 check('account classes backfilled from type (credit → liability, manual → cash)', backfilled['Old card'] === 'liability' && backfilled['Old Venmo'] === 'cash', JSON.stringify(backfilled));
-await db.exec(readFileSync(join(dir, migrations.find((f) => f.includes('account_classes'))), 'utf8'));
-check('account classes migration is safe to re-run', true);
 let badClass = false;
 try { await db.exec(`insert into public.accounts (user_id, name, class) values ('${legacy}', 'X', 'other')`); badClass = true; } catch {}
 check('account class must be cash, investment or liability', !badClass);
@@ -80,8 +88,6 @@ check('merchants forget Uncategorized',
   (await db.query(`select last_category_id from public.merchants where id = $1`, [legacyMerchant])).rows[0].last_category_id === null);
 check('the Uncategorized category is gone',
   (await db.query(`select count(*)::int n from public.categories where name = 'Uncategorized'`)).rows[0].n === 0);
-await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_uncategorized_is_no_category.sql'))), 'utf8'));
-check('uncategorized-is-no-category migration is safe to re-run', true);
 const gas = await db.query(`select count(*)::int n from public.categories where name ilike 'gas%'`);
 check('no Gas category', gas.rows[0].n === 0);
 
@@ -172,6 +178,11 @@ const cfNormal = (await asUser(a, `select spending::float from public.monthly_ca
 check('cashflow uses the same tag rule', cfNormal[0]?.spending === 120, JSON.stringify(cfNormal));
 const trip = (await asUser(a, `select spent::float, transaction_count::int n from public.tag_spend where tag_id=$1`, [japan])).rows[0];
 check('tag_spend totals a trip', trip.spent === 1100 && trip.n === 2, JSON.stringify(trip));
+const wrongAccount = (await asUser(a, `select count(*)::int n from public.spending_lines l
+   join public.transactions t on t.id = l.transaction_id
+   where (l.account_id, l.amount, l.description, l.merchant_id) is distinct from (t.account_id, t.amount, t.description, t.merchant_id)`)).rows[0].n;
+const withAccount = (await asUser(a, `select count(*)::int n from public.spending_lines where account_id = $1`, [acct])).rows[0].n;
+check('spending_lines carries each line\'s account, amount, description and merchant', wrongAccount === 0 && withAccount > 0, JSON.stringify({ wrongAccount, withAccount }));
 // Money in: a refund lowers its category; an uncategorized deposit isn't spending
 const aShopping = (await asUser(a, `select id from public.categories where name='Shopping'`)).rows[0].id;
 const ins = async (amount, category) => (await asUser(a, `insert into public.transactions (account_id, source, posted_date, amount, category_id, approved)
@@ -533,8 +544,6 @@ await one(`update public.transactions set category_id = $1 where id = $2`, [dInc
 let anonRpc5 = false;
 try { await db.exec(`set role anon;`); await db.query(`select public.unlink_reimbursement_payment(gen_random_uuid())`); anonRpc5 = true; } catch {} finally { await db.exec(`reset role;`); }
 check('signed-out visitors cannot call the reimbursement functions', !anonRpc5);
-await db.exec(readFileSync(join(dir, migrations.find((f) => f.endsWith('_reimbursements.sql'))), 'utf8'));
-check('reimbursements migration is safe to re-run', true);
 
 // ---- Delete a manually added transaction (as user D)
 const gone = async (id) => (await one(`select count(*)::int n from public.transactions where id = $1`, [id])).n === 0;

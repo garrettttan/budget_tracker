@@ -21,12 +21,15 @@ import {
   fetchUnreviewedIncome,
   isLinked,
   rowName,
+  typedFilters,
 } from '../lib/transactions';
 import AddTransaction, { type AccountOption } from '../components/AddTransaction';
 import BulkBar from '../components/BulkBar';
 import Button from '../components/Button';
 import { type Category, TRANSFER, UNCATEGORIZED } from '../components/CategorySelect';
-import HeaderFilter from '../components/HeaderFilter';
+import FiltersSheet, { type SheetFilter } from '../components/FiltersSheet';
+import HeaderFields, { type FieldsProps, fieldsOn } from '../components/HeaderFields';
+import HeaderFilter, { type ChecklistProps, checklistOn } from '../components/HeaderFilter';
 import MonthSpending from '../components/MonthSpending';
 import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } from '../components/ReimbursementSuggestions';
 import type { Tag } from '../components/TagCell';
@@ -34,7 +37,10 @@ import TransactionRow, { PendingRow } from '../components/TransactionRow';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
 
 /** The URL's filters (see Scope); `setFilters` changes any of them. */
-type Filters = Partial<Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag', string | null>>;
+type Filters = Partial<
+  Record<'status' | 'tag' | 'month' | 'hidecat' | 'hidetag' | 'hideacct' | 'after' | 'before' | 'merchant' | 'min' | 'max', string | null>
+>;
+const TYPED = ['after', 'before', 'merchant', 'min', 'max'] as const;
 
 /** A database call as `act` runs it. */
 type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | null }>;
@@ -44,9 +50,10 @@ type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | n
  * transaction, which is also the review inbox.
  *
  * The list's column headers filter it (Approved → `?status=`, Category →
- * `?hidecat=`, Tags → `?hidetag=` or `?tag=`). All and Approved show the month
- * picked above (`?month=`, or `all` for All time), and so do the totals and pie,
- * which follow the category and tag filters too; To review isn't limited to it.
+ * `?hidecat=`, Tags → `?hidetag=` or `?tag=`, Account → `?hideacct=`, and typed:
+ * Date → `?after=&before=`, Merchant → `?merchant=`, Amount → `?min=&max=`). All and
+ * Approved show the month picked above (`?month=`, or `all` for All time), and so
+ * do the totals and pie, which follow the other filters too; To review isn't limited to it.
  * A link's `?category=` (Settings, Trends) becomes Only that category.
  *
  * Each posted row can be categorized, tagged, approved or unapproved, and
@@ -73,6 +80,9 @@ export default function Spending({
   const monthScoped = status !== 'review' && month !== ALL_TIME;
   const hidecat = params.get('hidecat') ?? '';
   const hidetag = params.get('hidetag') ?? '';
+  const hideacct = params.get('hideacct') ?? '';
+  const typedKey = TYPED.map((k) => params.get(k) ?? '').join('|');
+  const typed = useMemo(() => typedFilters(params), [typedKey]);
   const scope: Scope = useMemo(
     () => ({
       status,
@@ -81,10 +91,12 @@ export default function Spending({
       end: monthScoped ? monthEnd(month) : null,
       hideCategories: hidecat.split(',').filter(Boolean),
       hideTags: hidetag.split(',').filter(Boolean),
+      hideAccounts: hideacct.split(',').filter(Boolean),
+      ...typed,
     }),
-    [status, tagFilter, monthScoped, month, hidecat, hidetag],
+    [status, tagFilter, monthScoped, month, hidecat, hidetag, hideacct, typed],
   );
-  const { hideCategories, hideTags } = scope;
+  const { hideCategories, hideTags, hideAccounts } = scope;
 
   /** Changes filters in the URL; one left out keeps its value, null clears it. */
   function setFilters(next: Filters) {
@@ -96,6 +108,8 @@ export default function Spending({
       month: params.get('month'),
       hidecat: hidecat || null,
       hidetag: hidetag || null,
+      hideacct: hideacct || null,
+      ...Object.fromEntries(TYPED.map((k) => [k, params.get(k)])),
       ...next,
     };
     if (merged.status === 'all') merged.status = null; // the default
@@ -467,8 +481,11 @@ export default function Spending({
 
   // ---- header filters ------------------------------------------------------------
 
+  // any column filter beyond Approved and ?tag=
+  const columnFiltered =
+    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0 || TYPED.some((k) => params.get(k));
   // anything filtered: shows "Filters are on · Show all"
-  const filtering = hideCategories.length > 0 || hideTags.length > 0 || Boolean(tagFilter) || status !== 'all';
+  const filtering = columnFiltered || Boolean(tagFilter) || status !== 'all';
 
   // Approved: both ticked = All (no `?status=`); one unticked = To review or Approved only
   const approvalItems = [
@@ -494,6 +511,12 @@ export default function Spending({
   // showing one tag (?tag=) reads as every other one unticked, so the header turns teal
   const tagHidden = tagFilter ? allTagItems.map((i) => i.id).filter((k) => k !== tagFilter) : hideTags;
   const tagItems = listed(allTagItems, present?.tags, tagHidden);
+  // every account, hidden ones too (their transactions still show)
+  const accountItems = listed(
+    [...accountNames].map(([id, name]) => ({ id, name })),
+    present?.accounts,
+    hideAccounts,
+  );
 
   /** Only one category: hide every other key (every key, so switching months keeps showing just this one). */
   const onlyCategory = (key: string) => setFilters({ hidecat: allCategoryItems.map((i) => i.id).filter((k) => k !== key).join(',') || null });
@@ -530,6 +553,93 @@ export default function Spending({
   const onlyTag = (id: string) =>
     id === UNTAGGED ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null }) : setFilters({ tag: id, hidetag: null });
 
+  /** Clears every filter: "Filters are on · Show all", and the phones' Filters sheet. */
+  const showAll = () =>
+    setFilters({ status: 'all', hidecat: null, hidetag: null, hideacct: null, tag: null, ...Object.fromEntries(TYPED.map((k) => [k, null])) });
+
+  // each column's filter, once: its header (popover) and the phones' Filters sheet (inline) share it
+  const dateFilter: FieldsProps = {
+    label: 'Date',
+    fields: [
+      { key: 'after', label: 'After', type: 'date', value: params.get('after') ?? '' },
+      { key: 'before', label: 'Before', type: 'date', value: params.get('before') ?? '' },
+    ],
+    onApply: (v) => setFilters({ after: v.after || null, before: v.before || null }),
+  };
+  const merchantFilter: FieldsProps = {
+    label: 'Merchant',
+    fields: [{ key: 'merchant', label: 'Name contains', type: 'text', value: params.get('merchant') ?? '' }],
+    onApply: (v) => setFilters({ merchant: v.merchant || null }),
+  };
+  const accountFilter: ChecklistProps = {
+    label: 'Account',
+    plural: 'accounts',
+    items: accountItems,
+    hidden: hideAccounts,
+    onChange: (next) => setFilters({ hideacct: next.join(',') || null }),
+    onOnly: (id) => setFilters({ hideacct: [...accountNames.keys()].filter((k) => k !== id).join(',') || null }),
+  };
+  const categoryFilter: ChecklistProps = {
+    label: 'Category',
+    plural: 'categories',
+    items: categoryItems,
+    hidden: hideCategories,
+    onChange: (next) => setFilters({ hidecat: next.join(',') || null }),
+    onOnly: onlyCategory,
+  };
+  const tagsFilter: ChecklistProps = {
+    label: 'Tags',
+    items: tagItems,
+    hidden: tagHidden,
+    onChange: (next) => setFilters({ tag: null, hidetag: next.join(',') || null }),
+    onOnly: onlyTag,
+  };
+  const amountFilter: FieldsProps = {
+    label: 'Amount',
+    fields: [
+      { key: 'min', label: 'Min', type: 'number', prefix: '$', value: params.get('min') ?? '', placeholder: '0' },
+      { key: 'max', label: 'Max', type: 'number', prefix: '$', value: params.get('max') ?? '', placeholder: 'Any' },
+    ],
+    onApply: (v) => setFilters({ min: v.min || null, max: v.max || null }),
+  };
+  const approvedFilter: ChecklistProps = {
+    label: 'Approved',
+    searchable: false,
+    keepOne: true,
+    items: approvalItems,
+    hidden: approvalHidden,
+    onChange: setApprovalHidden,
+    onOnly: (id) => setFilters({ status: id === 'review' ? 'review' : 'approved' }),
+  };
+
+  // the sheet's rows: each filter with its state in a few words ("2 of 3", "Oct 10 – Oct 25", "Min $5")
+  const checklistRow = (key: string, f: ChecklistProps): SheetFilter => {
+    const on = checklistOn(f.items, f.hidden);
+    const shown = f.items.filter((i) => !f.hidden.includes(i.id));
+    const summary = !on ? 'All' : shown.length === 1 ? shown[0].name : `${shown.length} of ${f.items.length}`;
+    return { key, kind: 'checklist', props: f, on, summary };
+  };
+  const fieldsRow = (key: string, f: FieldsProps, summary: string | null): SheetFilter => ({
+    key,
+    kind: 'fields',
+    props: f,
+    on: fieldsOn(f.fields),
+    summary: summary ?? 'Any',
+  });
+  const day = (d: string) => shortDate(d).replace(/, \d{4}$/, '');
+  const range = (low: string | null, high: string | null, lowWord: string, highWord: string) =>
+    low && high ? `${low} – ${high}` : low ? `${lowWord} ${low}` : high ? `${highWord} ${high}` : null;
+  const dollars = (n: number | null) => (n === null ? null : `$${n}`);
+  const sheetFilters: SheetFilter[] = [
+    fieldsRow('date', dateFilter, range(typed.after && day(typed.after), typed.before && day(typed.before), 'After', 'Before')),
+    fieldsRow('merchant', merchantFilter, typed.merchant && `“${typed.merchant}”`),
+    checklistRow('account', accountFilter),
+    checklistRow('category', categoryFilter),
+    checklistRow('tags', tagsFilter),
+    fieldsRow('amount', amountFilter, range(dollars(typed.minAmount), dollars(typed.maxAmount), 'Min', 'Max')),
+    checklistRow('approved', approvedFilter),
+  ];
+
   // ---- render --------------------------------------------------------------------
 
   // pending rows join the list by date (newest first; pending first on the same day)
@@ -538,7 +648,7 @@ export default function Spending({
   );
 
   const emptyMessage =
-    hideCategories.length > 0 || hideTags.length > 0
+    columnFiltered
       ? 'No transactions match.'
       : tagFilter
         ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'}${monthScoped ? ` in ${monthLong(month)}` : ''} carry this tag.`
@@ -571,6 +681,8 @@ export default function Spending({
         hidden={hideCategories}
         tag={tagFilter}
         hiddenTags={hideTags}
+        hiddenAccounts={hideAccounts}
+        typed={typed}
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key === ALL_TIME ? ALL_TIME : key.slice(0, 7) })}
         onSelect={pickCategory}
@@ -619,10 +731,11 @@ export default function Spending({
           {/* the filter note sits beside the heading, so turning a filter on doesn't push the list down */}
           <div className="list-head">
             <h2>Transactions</h2>
+            <FiltersSheet filters={sheetFilters} onShowAll={showAll} />
             {filtering && (
               <p className="filters-on">
                 Filters are on.
-                <Button variant="link" onClick={() => setFilters({ status: 'all', hidecat: null, hidetag: null, tag: null })}>
+                <Button variant="link" onClick={showAll}>
                   Show all
                 </Button>
               </p>
@@ -661,40 +774,26 @@ export default function Spending({
                     onChange={toggleAll}
                   />
                 </th>
-                <th scope="col" className="date-col">Date</th>
-                <th scope="col">Merchant</th>
-                <th scope="col" className="account-col">Account</th>
+                <th scope="col" className="date-col">
+                  <HeaderFields {...dateFilter} />
+                </th>
                 <th scope="col">
-                  <HeaderFilter
-                    label="Category"
-                    items={categoryItems}
-                    hidden={hideCategories}
-                    onChange={(next) => setFilters({ hidecat: next.join(',') || null })}
-                    onOnly={onlyCategory}
-                  />
+                  <HeaderFields {...merchantFilter} />
+                </th>
+                <th scope="col" className="account-col">
+                  <HeaderFilter {...accountFilter} />
+                </th>
+                <th scope="col">
+                  <HeaderFilter {...categoryFilter} />
                 </th>
                 <th scope="col" className="tags-col">
-                  <HeaderFilter
-                    label="Tags"
-                    align="end"
-                    items={tagItems}
-                    hidden={tagHidden}
-                    onChange={(next) => setFilters({ tag: null, hidetag: next.join(',') || null })}
-                    onOnly={onlyTag}
-                  />
+                  <HeaderFilter {...tagsFilter} align="end" />
                 </th>
-                <th scope="col" className="num">Amount</th>
+                <th scope="col" className="num">
+                  <HeaderFields {...amountFilter} align="end" />
+                </th>
                 <th scope="col" className="approved-col">
-                  <HeaderFilter
-                    label="Approved"
-                    align="end"
-                    searchable={false}
-                    keepOne
-                    items={approvalItems}
-                    hidden={approvalHidden}
-                    onChange={setApprovalHidden}
-                    onOnly={(id) => setFilters({ status: id === 'review' ? 'review' : 'approved' })}
-                  >
+                  <HeaderFilter {...approvedFilter} align="end">
                     {/* phones: just a check mark, to leave room for the other columns */}
                     <span className="label-long">Approved</span>
                     <span className="label-short" aria-hidden="true">

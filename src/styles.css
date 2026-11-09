@@ -12,6 +12,8 @@
   --rule: #d8dee2;
   --accent: #0e6e74;
   --accent-wash: #e1efef;
+  /* Spending: an open or hovered row; fainter than a selected row's --accent-wash (follows it into dark mode) */
+  --row-tint: color-mix(in srgb, var(--accent-wash) 55%, transparent);
   --accent-strong: #0a5458;
   --out: #9a3b2e;
   --in: #2d7550;
@@ -235,6 +237,14 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 /* merchant name in a transaction row: looks like text; click/tap shows the row's details */
 .btn-link.merchant-toggle { color: var(--ink); font-weight: inherit; text-align: left; }
+/* a whole row opens its details (MerchantCell rowToggle): it tints while open, and on hover */
+.register.txns td { transition: background-color 150ms; }
+.register.txns tbody tr.open td { background: var(--row-tint); }
+@media (hover: hover) {
+  .register.txns tbody tr { cursor: pointer; }
+  .register.txns tbody tr:hover td { background: var(--row-tint); }
+}
+@media (prefers-reduced-motion: reduce) { .register.txns td { transition: none; } }
 .row-details { color: var(--ink-soft); font-size: var(--step--1); margin-top: 0.2rem; overflow-wrap: anywhere; }
 .phone-only { display: none; }
 
@@ -312,6 +322,31 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .list-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1rem; margin: 2.5rem 0 0.75rem; }
 .list-head h2 { margin: 0; }
 .filters-on { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-size: var(--step--1); color: var(--ink-soft); }
+/* phones: every column's filter in one sheet (components/FiltersSheet.tsx) */
+.btn-link.filters-button { font-size: var(--step--1); }
+.modal.filters-sheet { max-height: calc(100dvh - 2rem); margin: 1rem auto auto; } /* pinned to the top: grows downward, never re-centers */
+.modal.filters-sheet[open] { display: flex; flex-direction: column; }
+/* edge to edge across the sheet (past the modal's 1.25rem padding), so rules and highlights span the full row */
+.sheet-filters { list-style: none; margin: 0.75rem -1.25rem 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--rule); }
+.sheet-filters > li { border-bottom: 1px solid var(--rule); }
+.btn-link.sheet-filter-row {
+  display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem 1.25rem; border-radius: 0;
+  color: var(--ink); font: inherit; text-align: left; text-decoration: none;
+}
+.btn-link.sheet-filter-row:hover:not(:disabled) { background: var(--accent-wash); text-decoration: none; }
+.sheet-filter-label { flex: 1; }
+.sheet-filter-summary { color: var(--ink-soft); font-size: var(--step--1); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-filter-summary.on { color: var(--accent); }
+.sheet-chevron { width: 6px; height: 10px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms ease; }
+.sheet-filter-row[aria-expanded='true'] .sheet-chevron { transform: rotate(90deg); }
+.sheet-filter-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.25rem 1.25rem 0.75rem; } /* room for focus rings inside the slide's overflow: hidden */
+.sheet-filter-body .header-filter-list { max-height: 40dvh; }
+.sheet-foot { display: flex; justify-content: flex-end; padding-top: 0.75rem; }
+/* components/Collapse.tsx: slides open and shut without measuring heights */
+.collapse { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 200ms ease, opacity 200ms ease; }
+.collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.collapse-inner { min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .sheet-chevron, .collapse { transition: none; } }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
 /* a list's search box and add form on one line (Settings → Categories) */
 .list-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
@@ -328,7 +363,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .register .select-col input { width: 1.05rem; height: 1.05rem; margin: 0.2rem 0 0; cursor: pointer; accent-color: var(--accent); }
 .register .select-col input:disabled { cursor: not-allowed; opacity: 0.45; }
-.register tr.selected td { background: var(--accent-wash); }
+.register tr.selected td, .register.txns tbody tr.selected td { background: var(--accent-wash); } /* over the open / hover tint */
 .bulk-bar {
   position: sticky;
   top: 0.5rem;
@@ -368,6 +403,8 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 /* Modal (native <dialog>, components/Modal.tsx) */
 .modal {
+  /* a row's modals (Expect reimbursement, Link) sit inside its ⋯ cell: don't take on the cell's alignment */
+  text-align: left; white-space: normal;
   width: min(26rem, calc(100vw - 2rem));
   padding: 1.25rem 1.25rem 1.25rem;
   background: var(--surface);
@@ -439,8 +476,14 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .header-filter-list li:hover .header-filter-only, .header-filter-list li:focus-within .header-filter-only { visibility: visible; }
 @media (hover: none) { .btn-link.header-filter-only { visibility: visible; } }
 .header-filter-foot { display: flex; justify-content: flex-end; border-top: 1px solid var(--rule); padding-top: 0.35rem; }
+.header-fields { display: flex; flex-direction: column; gap: 0.6rem; }
+.header-fields label { display: flex; flex-direction: column; gap: 0.2rem; font-size: var(--step--1); color: var(--ink-soft); }
+.header-fields input { width: 100%; padding: 0.4rem 0.5rem; font-size: var(--step-0); color: var(--ink); }
+.header-fields-box { position: relative; display: block; }
+.header-fields-prefix { position: absolute; left: 0.55rem; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-size: var(--step-0); pointer-events: none; }
+.header-fields-box.has-prefix input { padding-left: 1.3rem; }
+.header-fields-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; }
 /* tags column: full chips on wide screens, just a count on phones */
-.register.txns .tags-count { display: none; }
 
 /* Reimbursements: a charge's line, your share, row forms, Owed to me */
 .reimb-line { font-size: var(--step--1); color: var(--accent); margin-top: 0.15rem; }
@@ -449,6 +492,8 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register .menu-col { width: 2rem; padding-left: 0.25rem; padding-right: 0; text-align: right; }
 .register td.menu-col { padding-top: 0.45rem; }
 .btn-icon.row-menu-button { font-size: var(--step-1); padding: 0.1rem 0.35rem; border-radius: 4px; }
+/* RowMenu: phone-only items (Add tag), and the ⋯ of a menu that has nothing else */
+@media (min-width: 721px) { .menu-phone-only { display: none !important; } }
 .btn-icon.row-menu-button[aria-expanded='true'] { color: var(--ink); background: var(--accent-wash); }
 .row-menu {
   position: fixed; z-index: 30;
@@ -459,6 +504,13 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
   overflow-y: auto;
 }
 .row-menu [role='menu'] { display: flex; flex-direction: column; }
+/* ⋯ → Add tag: a picker in the same popover; its list of matching tags drops down inside it, not floating */
+.row-menu-panel { padding: 0.6rem; text-align: left; } /* not the ⋯ column's right alignment */
+.add-tag-panel { display: flex; flex-direction: column; gap: 0.4rem; }
+.add-tag-title { font-size: var(--step--1); color: var(--ink-soft); }
+.add-tag-panel .combobox { display: block; width: 100%; }
+.row-menu.row-menu-panel .add-tag-panel .combobox input { width: 100%; padding: 0.4rem 0.5rem; font-size: var(--step-0); }
+.add-tag-panel .combobox ul { position: static; margin-top: 0.35rem; max-height: 14rem; box-shadow: none; }
 .row-menu .btn-link { text-align: left; padding: 0.45rem 0.6rem; border-radius: 4px; text-decoration: none; }
 .row-menu .btn-link:hover:not(:disabled), .row-menu .btn-link:focus-visible { background: var(--accent-wash); text-decoration: none; }
 /* in a modal, the reimbursement forms drop their inline box */
@@ -761,7 +813,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   html { scroll-padding-top: calc(var(--topbar-h) + 0.5rem); }
 
   /* transactions: hide date and account columns (they're in the row's details) */
-  .register.txns .date-col, .register.txns .account-col { display: none; }
+  .register.txns .date-col, .register.txns .account-col, .register.txns .tags-col { display: none; }
   .register .approved-col { width: auto; font-size: var(--step--1); }
   .page-head .btn:not(.btn-link) { padding: 0.4rem 0.75rem; font-size: var(--step--1); }
   .bulk-bar { top: var(--topbar-h); } /* sticks just under the pinned top bar */
@@ -799,7 +851,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
   .phone-only-block { display: block; }
-  .register.txns .tags-col { min-width: 0; width: 2.75rem; text-align: center; }
   /* five columns plus tags at 390px: tighter gaps, a narrower picker, ✓ for Approved */
   .register.txns th, .register.txns td { padding-right: 0.4rem; }
   .register.txns .select-col { width: 1.5rem; }
@@ -810,8 +861,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.txns .label-short { display: inline; }
   .register.txns .btn-link.th-filter { gap: 0.15rem; padding: 0.1rem 0; margin: -0.1rem 0; }
   .register.txns .th-caret { width: 8px; height: 5px; }
-  .register.txns .tags-full { display: none; }
-  .register.txns .tags-count { display: inline; color: var(--ink-soft); font-size: var(--step--1); }
   .register.txns td, .register.txns th,
   .register.merchants td, .register.merchants th,
   .register.transfers td, .register.transfers th,

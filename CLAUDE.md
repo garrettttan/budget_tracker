@@ -57,12 +57,24 @@ with the summary numbers (no "Spending in" prefix; its own line on phones), `?mo
 Spent / Income / Saved and a category donut with a ranked list (six colored slices, the rest fold
 into gray "Other"). Tapping a category is Only in the Category header (tap again
 to clear). All (the default) and Approved show the picked month; To review and `?tag=` aren't
-limited to it. The list's **Approved**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
+limited to it. The list's **Approved**, **Account**, **Category** and **Tags** column headers filter (`components/HeaderFilter.tsx`):
 tap one for a searchable checklist, spreadsheet style (all ticked; untick to hide; Select all ticks or
 unticks what the search matches; Only per row). Category and Tags list only what the list's range
 and approval filter hold, with a count each (`fetchPresent`, three columns paged 1,000 at a time;
 the header filters themselves don't narrow it, and unticked items stay listed so they can come back). Category keys: category ids, `none` (Uncategorized),
-`transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only). Hidden
+`transfer` → `?hidecat=`; tag keys: tag ids, `untagged` ("No tags") → `?hidetag=` (URL only); account ids → `?hideacct=`
+(every account, hidden ones too; on phones, in the Filters sheet).
+**Typed filters** (`components/HeaderFields.tsx`: a small form, Apply / Clear) on Date ("After" / "Before", `?after=&before=`, both inclusive,
+within the month; on phones, in the Filters sheet), Merchant (`?merchant=`: text in the merchant's name or the bank's) and
+Amount ("Min" / "Max" with a $ in the box, `?min=&max=`, dollars either direction); `typedFilters` / `matchesTyped` / `matchingMerchants` in `lib/transactions.ts`.
+The list's `or=` filters (categories, min amount, merchant) are separate params, which PostgREST ANDs.
+**Phones: Filters sheet** (`components/FiltersSheet.tsx`, Nov 9): Date and Account columns are hidden under 720px, so a
+"Filters (n)" link beside the Transactions heading opens a modal listing every column filter with its state ("2 of 3",
+"Oct 10 – Oct 25", "Min $5"); a row slides open in place (`components/Collapse.tsx`, ~200ms, off under reduced motion) to the same body its header uses;
+one section open at a time; the sheet is pinned to the top, so it never re-centers (a section closing above the tapped row
+moves it in one glide). `HeaderFilter` / `HeaderFields`
+are a trigger + popover around `FilterChecklist` / `FieldsForm`; Spending defines each filter once (`dateFilter`,
+`accountFilter`, …) and spreads it into both. Checklists have no "Show all" footer (only `reset`, for Trends). Hidden
 categories leave the list and fade in the pie (its middle shows what's visible); Spent / Income / Saved always cover the whole month, whatever the filters; hidden tags leave the list (an anti-join:
 `hidden_tags:transaction_tags!left(tag_id)` + `.is('hidden_tags', null)`; hiding `untagged` adds an
 inner join). Only on a category hides every other key; Only on a tag uses `?tag=` (rows can carry
@@ -71,8 +83,8 @@ To review or Approved; the last ticked can't be unticked) and replaced the To re
 buttons; the table and its headers always render, even for an empty month. Every filter shows the same way (teal header + "Filters are on · Show all", which clears them all); there are no other
 filter banners. A link's `?category=` (Settings → Categories, Trends) is rewritten on arrival to Only that category; `?tag=`
 (one tag, from a row's tag, Only in the Tags header, or a tag link) shows in the Tags header as every other tag unticked. `?from=&to=` is gone. On phones the Tags
-column shows just a count (tags are edited in the row's details) and Approved's header is ✓, so the
-table fits at 390px. **Pending transactions** sit in the list by date (All and To review, not Approved),
+column is hidden too (tags are edited in the row's details; filtered from the Filters sheet) and Approved's header is ✓, so the
+table fits at 390px (Nov 9: the count column overflowed by ~40px on All time; a Date column would need ~50px more). **Pending transactions** sit in the list by date (All and To review, not Approved),
 following the date range and category filters, **read-only**: when a charge posts, the bank usually
 sends it under a new id and the sync deletes the pending row, so a category, tags or a note set on it
 would be lost. No select box, picker or Approved box; the pre-filled category shows as text. Tapping a
@@ -210,7 +222,8 @@ rate-limit warning.
 14 tables: connections, accounts, categories, merchants, merchant_aliases, import_batches,
 transactions, reimbursements, reimbursement_payments, tags, transaction_tags,
 dismissed_transfer_pairs, balance_snapshots, sync_runs.
-Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`; approved rows only,
+Views (`security_invoker`): `spending_lines` (per-transaction share + `tag_ids`; `account_id`, `amount`, `description`, `merchant_id` appended Nov 9, so
+older migrations that define it can't be re-run after it: the DB test re-runs those right after they apply; approved rows only,
 money in only with a non-income category), `tag_spend`
 (total per tag, e.g. a trip). Functions (call with `rpc`): `monthly_category_spend(include_tags)`,
 `monthly_cashflow(include_tags)`.
@@ -281,6 +294,14 @@ from any Pages subpath. Pages: Spending (`src/pages/Spending.tsx`; the month sum
 every row has a category picker and an Approved checkbox; `/transactions` and `/review` redirect
 here keeping their query), Trends, Owed to me, Accounts, Settings, SignIn.
 Email + password auth (single user).
+
+**Row details** (Nov 9): a row's details (phones: date · account, tags; everywhere: bank text, note) open from a tap
+anywhere on the row that isn't a control, or its merchant name; the row tints while open and on hover (no chevron);
+`rowToggle` in `components/MerchantCell.tsx` skips controls and the select / Approved / ⋯ cells. The row holds the open
+state (`MerchantCell` is controlled); details slide via `Collapse`. On phones, tags show in the details without "+ Tag": the ⋯ menu's
+**Add tag** (a `phoneOnly` `MenuItem`; hidden ≥ 721px, as is a ⋯ holding nothing else) swaps the menu for a picker in
+the same popover (`MenuItem.panel`): a tag-name box whose matching tags drop down inline (Combobox, `New tag "…"` to
+create); picking or creating adds it and closes.
 
 Code map (cleanup, Nov 7): Spending's list lives in `lib/transactions.ts` (row type, `Scope`, filter
 keys, `fetchRows` / `fetchPending` / `fetchPresent`) and `components/TransactionRow.tsx` (a posted row,

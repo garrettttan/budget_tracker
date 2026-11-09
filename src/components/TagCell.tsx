@@ -7,6 +7,7 @@ export type Tag = { id: string; name: string };
 /**
  * A transaction's tags: each one links to the transactions carrying it and has
  * an × to take it off; "+ Tag" opens a picker that can also create a new tag.
+ * On phones the row's ⋯ menu has Add tag instead (`noAddButton`).
  */
 export default function TagCell({
   tags,
@@ -17,6 +18,7 @@ export default function TagCell({
   onCreate,
   onRemove,
   onFilter,
+  noAddButton = false,
 }: {
   tags: Tag[];
   allTags: Tag[];
@@ -26,8 +28,12 @@ export default function TagCell({
   onCreate: (name: string) => void;
   onRemove: (tagId: string) => void;
   onFilter: (tagId: string) => void;
+  /** leave out "+ Tag" (phones: Add tag is in the ⋯ menu) */
+  noAddButton?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
+  // nothing to show (phones' row details, no tags): no empty line holding the place of "+ Tag"
+  if (noAddButton && tags.length === 0 && !adding) return null;
   const on = new Set(tags.map((t) => t.id));
 
   return (
@@ -62,7 +68,7 @@ export default function TagCell({
           createLabel={(text) => `New tag “${text}”`}
           onClose={() => setAdding(false)}
         />
-      ) : (
+      ) : noAddButton ? null : (
         <Button
           variant="link"
           size="small"

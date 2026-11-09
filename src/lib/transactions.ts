@@ -13,7 +13,10 @@ export const STATUSES: Status[] = ['review', 'approved', 'all'];
 
 // Filter keys beyond ids. Categories (`?hidecat=`) are keyed by id, plus
 // NO_CATEGORY (Uncategorized) and TRANSFER_KEY; tags (`?hidetag=`) by id, plus
-// UNTAGGED ("No tags").
+// UNTAGGED ("No tags"); accounts (`?hideacct=`) by id. Typed filters: Date
+// (`?after=`, `?before=`, both inclusive), Merchant (`?merchant=`: text in the
+// merchant's name or the bank's) and Amount (`?min=`, `?max=`, in dollars either
+// way, so a $60 refund matches like a $60 charge).
 export { NO_CATEGORY };
 export const TRANSFER_KEY = 'transfer';
 export const UNTAGGED = 'untagged';
@@ -28,10 +31,12 @@ export type Row = {
   is_transfer: boolean;
   transfer_pair_id: string | null;
   category_id: string | null;
+  account_id: string;
   note: string | null;
   /** 'manual' = entered with Add transaction (only those can be deleted) */
   source: string;
   accounts: { name: string } | null;
+  merchant_id: string | null;
   merchants: { name: string } | null;
   transaction_tags: { tag_id: string }[];
   /** what people owe you on this charge */
@@ -41,7 +46,7 @@ export type Row = {
 };
 
 const COLUMNS =
-  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, note, source, ' +
+  'id, posted_date, amount, description, pending, approved, is_transfer, transfer_pair_id, category_id, account_id, merchant_id, note, source, ' +
   'accounts(name), merchants(name), transaction_tags(tag_id), ' +
   // both tables reach transactions more than one way, so name the foreign key
   'reimbursements!reimbursements_transaction_id_fkey(id, who, amount, status), ' +
@@ -56,7 +61,61 @@ export type Scope = {
   end: string | null;
   hideCategories: string[];
   hideTags: string[];
+  /** account ids filtered out */
+  hideAccounts: string[];
+  /** YYYY-MM-DD, inclusive; within the month, when there is one */
+  after: string | null;
+  before: string | null;
+  merchant: string | null;
+  /** dollars, either direction */
+  minAmount: number | null;
+  maxAmount: number | null;
 };
+
+/** The typed filters as the URL holds them, read back into a Scope's fields. */
+export function typedFilters(params: URLSearchParams) {
+  const date = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(params.get(k) ?? '') ? params.get(k) : null);
+  const dollars = (k: string) => {
+    const n = Number(params.get(k));
+    return params.get(k) && Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  return {
+    after: date('after'),
+    before: date('before'),
+    merchant: params.get('merchant')?.trim() || null,
+    minAmount: dollars('min'),
+    maxAmount: dollars('max'),
+  };
+}
+
+/** Escapes LIKE's own wildcards, so typed text matches literally. */
+const likeText = (text: string) => text.replace(/[\\%_]/g, '\\$&');
+
+/** Merchants whose name contains `text` (any case), for the Merchant filter. */
+export async function matchingMerchants(text: string) {
+  const { data, error } = await db().from('merchants').select('id').ilike('name', `%${likeText(text)}%`).limit(1000);
+  return { ids: ((data ?? []) as { id: string }[]).map((m) => m.id), error };
+}
+
+/** What the typed filters need from a row or a totals line. */
+type Typed = { posted_date: string; amount: string | number; description: string; merchant_id: string | null };
+
+/**
+ * The typed filters, checked here rather than in a query (pending rows, the
+ * month's totals). `merchantIds`: matchingMerchants for `scope.merchant`.
+ */
+export function matchesTyped(r: Typed, scope: Pick<Scope, 'after' | 'before' | 'merchant' | 'minAmount' | 'maxAmount'>, merchantIds: string[]) {
+  const size = Math.abs(Number(r.amount));
+  return (
+    (!scope.after || r.posted_date >= scope.after) &&
+    (!scope.before || r.posted_date <= scope.before) &&
+    (scope.minAmount === null || size >= scope.minAmount) &&
+    (scope.maxAmount === null || size <= scope.maxAmount) &&
+    (!scope.merchant ||
+      r.description.toLowerCase().includes(scope.merchant.toLowerCase()) ||
+      (r.merchant_id !== null && merchantIds.includes(r.merchant_id)))
+  );
+}
 
 // ---- row helpers -------------------------------------------------------------
 
@@ -102,7 +161,9 @@ function keepCategories(hidden: string[]): string | null {
  * anti-join (rows whose `hidden_tags` embed comes back empty carry none of
  * them); hiding "No tags" adds an inner join on any tag.
  */
-export function fetchRows(scope: Scope, from: number, to: number) {
+export async function fetchRows(scope: Scope, from: number, to: number) {
+  const merchants = scope.merchant ? await matchingMerchants(scope.merchant) : null;
+  if (merchants?.error) return { data: null, error: merchants.error };
   const hiddenTagIds = scope.hideTags.filter((t) => t !== UNTAGGED);
   const hideUntagged = scope.hideTags.includes(UNTAGGED);
   const embeds = [
@@ -119,6 +180,16 @@ export function fetchRows(scope: Scope, from: number, to: number) {
   if (hiddenTagIds.length) q = q.in('hidden_tags.tag_id', hiddenTagIds).is('hidden_tags', null);
   const keep = keepCategories(scope.hideCategories);
   if (keep) q = q.or(keep);
+  if (scope.hideAccounts.length) q = q.not('account_id', 'in', `(${scope.hideAccounts.join(',')})`);
+  if (scope.after) q = q.gte('posted_date', scope.after);
+  if (scope.before) q = q.lte('posted_date', scope.before);
+  if (scope.maxAmount !== null) q = q.gte('amount', -scope.maxAmount).lte('amount', scope.maxAmount);
+  if (scope.minAmount !== null) q = q.or(`amount.gte.${scope.minAmount},amount.lte.${-scope.minAmount}`);
+  if (scope.merchant && merchants) {
+    // quoted, since the text can hold commas or parentheses; * is the wildcard here
+    const text = `"*${likeText(scope.merchant).replace(/["\\]/g, '\\$&')}*"`;
+    q = q.or([`description.ilike.${text}`, merchants.ids.length ? `merchant_id.in.(${merchants.ids.join(',')})` : null].filter(Boolean).join(','));
+  }
   if (scope.start) q = q.gte('posted_date', scope.start);
   if (scope.end) q = q.lte('posted_date', scope.end);
   if (scope.status !== 'all') q = q.eq('approved', scope.status === 'approved');
@@ -127,10 +198,12 @@ export function fetchRows(scope: Scope, from: number, to: number) {
 
 /**
  * Every pending row (there are only ever a few), filtered here rather than in
- * the query. They carry no tags, so only hidden categories and the date range
- * apply, and hiding "No tags" hides them all.
+ * the query. They carry no tags, so only hidden categories and accounts, the
+ * date range and the typed filters apply, and hiding "No tags" hides them all.
  */
 export async function fetchPending(scope: Scope) {
+  const merchants = scope.merchant ? await matchingMerchants(scope.merchant) : null;
+  if (merchants?.error) return { rows: [], error: merchants.error };
   const { data, error } = await db()
     .from('transactions')
     .select(COLUMNS)
@@ -139,25 +212,27 @@ export async function fetchPending(scope: Scope) {
     .order('id', { ascending: false });
   const shown = (r: Row) =>
     !scope.hideCategories.includes(categoryKey(r)) &&
+    !scope.hideAccounts.includes(r.account_id) &&
+    matchesTyped(r, scope, merchants?.ids ?? []) &&
     (!scope.start || r.posted_date >= scope.start) &&
     (!scope.end || r.posted_date <= scope.end);
   const rows = scope.hideTags.includes(UNTAGGED) ? [] : ((data ?? []) as unknown as Row[]).filter(shown);
   return { rows, error };
 }
 
-/** How many transactions in range have each category key and each tag (`UNTAGGED` = none). */
-export type Present = { categories: Map<string, number>; tags: Map<string, number> };
+/** How many transactions in range have each category key, each tag (`UNTAGGED` = none) and each account. */
+export type Present = { categories: Map<string, number>; tags: Map<string, number>; accounts: Map<string, number> };
 
 /**
  * What the header filters list: what the list's range, approval filter and
  * `?tag=` hold, ignoring the header filters themselves (so an unticked item
- * stays listed and can be ticked again). Only three small columns, a page of
+ * stays listed and can be ticked again). Only four small columns, a page of
  * 1,000 at a time.
  */
 export async function fetchPresent({ status, tag, start, end }: Scope) {
-  const present: Present = { categories: new Map(), tags: new Map() };
+  const present: Present = { categories: new Map(), tags: new Map(), accounts: new Map() };
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-  const columns = 'category_id, is_transfer, transaction_tags(tag_id)';
+  const columns = 'category_id, is_transfer, account_id, transaction_tags(tag_id)';
   for (let from = 0; from < 50_000; from += 1000) {
     let q = db()
       .from('transactions')
@@ -169,9 +244,10 @@ export async function fetchPresent({ status, tag, start, end }: Scope) {
     if (status !== 'all') q = q.eq('approved', status === 'approved');
     const { data, error } = await q.order('id').range(from, from + 999);
     if (error) return { present, error };
-    const page = (data ?? []) as unknown as Pick<Row, 'category_id' | 'is_transfer' | 'transaction_tags'>[];
+    const page = (data ?? []) as unknown as Pick<Row, 'category_id' | 'is_transfer' | 'account_id' | 'transaction_tags'>[];
     for (const r of page) {
       bump(present.categories, categoryKey(r));
+      bump(present.accounts, r.account_id);
       if (r.transaction_tags.length === 0) bump(present.tags, UNTAGGED);
       for (const t of r.transaction_tags) bump(present.tags, t.tag_id);
     }
