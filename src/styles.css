@@ -611,7 +611,6 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 .pie-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pie-share { color: var(--ink-soft); font-size: var(--step--1); font-variant-numeric: tabular-nums; text-align: right; padding-left: 1rem; }
 .pie-value { font-variant-numeric: tabular-nums; text-align: right; padding-left: 0.6rem; }
-.register.tag-totals { max-width: 44rem; }
 
 /* Settings → Merchants */
 /* sortable column headers: like the filter headers (tinted on hover), with an up/down icon */
@@ -794,7 +793,6 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   /* phones: the month on its own line, the three numbers together under it */
   .stat-row { gap: 0.75rem 1.5rem; }
   .stat-month { flex-basis: 100%; }
-  .register.tag-totals th:nth-child(2), .register.tag-totals td:nth-child(2) { display: none; }
   /* narrower category box, no raw bank text, tighter cells */
   .phone-only { display: inline; }
   .phone-only-block { display: block; }
