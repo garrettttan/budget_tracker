@@ -4,7 +4,6 @@ import { money } from '../lib/format';
 import { addMonths, monthLong } from '../lib/months';
 import { type FlowRow, type SpendRow, categoryTotals, fetchReports, groupTotals } from '../lib/reports';
 import Button from './Button';
-import Switch from './Switch';
 import { CategoryPie } from './charts';
 
 /** localStorage key: the pie shows category groups */
@@ -13,9 +12,9 @@ const BY_GROUP = 'spending-pie-by-group';
 /**
  * One month's normal spending (untagged, your share, no transfers): a month
  * dropdown in line with Spent / Income / Saved, and a category donut whose
- * categories filter the list below it. A switch shows the donut by category
- * group instead (remembered in this browser). `version` changes after edits so
- * the numbers follow them.
+ * categories filter the list below it. A Category | Group toggle above its
+ * ranked list shows it by category group instead (remembered in this browser).
+ * `version` changes after edits so the numbers follow them.
  */
 export default function MonthSpending({
   month,
@@ -54,7 +53,7 @@ export default function MonthSpending({
       return false;
     }
   });
-  function toggleByGroup(on: boolean) {
+  function showByGroup(on: boolean) {
     setByGroup(on);
     try {
       if (on) localStorage.setItem(BY_GROUP, '1');
@@ -148,24 +147,27 @@ export default function MonthSpending({
       </dl>
       {spend && byCategory.length === 0 && <p className="empty">No spending in {monthLong(month)}.</p>}
       {byCategory.length > 0 && (
-        <>
-          <div className="pie-controls">
-            <Switch checked={byGroup} onChange={toggleByGroup}>
-              By group
-            </Switch>
-          </div>
-          <CategoryPie
-            rows={pieRows}
-            format={money}
-            total={visibleTotal}
-            totalLabel={`spent in ${shortName}`}
-            label={`Spending by ${byGroup ? 'category group' : 'category'}, ${monthLong(month)}`}
-            selected={byGroup ? groups.selected : selected}
-            hidden={byGroup ? groups.hidden : hidden}
-            selectHint="Shows its transactions"
-            onSelect={byGroup ? groups.onSelect : onSelect}
-          />
-        </>
+        <CategoryPie
+          rows={pieRows}
+          format={money}
+          total={visibleTotal}
+          totalLabel={`spent in ${shortName}`}
+          label={`Spending by ${byGroup ? 'category group' : 'category'}, ${monthLong(month)}`}
+          selected={byGroup ? groups.selected : selected}
+          hidden={byGroup ? groups.hidden : hidden}
+          selectHint="Shows its transactions"
+          onSelect={byGroup ? groups.onSelect : onSelect}
+          listHeader={
+            <div className="filter" role="group" aria-label="Show the pie by">
+              <Button size="small" aria-pressed={!byGroup} onClick={() => showByGroup(false)}>
+                Category
+              </Button>
+              <Button size="small" aria-pressed={byGroup} onClick={() => showByGroup(true)}>
+                Group
+              </Button>
+            </div>
+          }
+        />
       )}
     </div>
   );

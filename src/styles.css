@@ -555,7 +555,8 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 }
 .heading-select:hover { border-color: var(--accent); }
 .heading-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.pie-controls { display: flex; justify-content: flex-end; margin: 1rem 0 -1rem; }
+.pie-side { min-width: 0; }
+.pie-side .filter { margin: 0 0 0.75rem; }
 .pie-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem 2rem; margin: 1.5rem 0 0.5rem; }
 .chart.pie { margin: 0 auto; width: 100%; max-width: 440px; }
 .chart.pie svg { width: 100%; height: auto; }
