@@ -94,6 +94,8 @@ export function Legend({ items, shape }: { items: { name: string; color: string;
 const PLOT_H = 200;
 const AXIS_W = 52;
 const X_BAND = 26;
+/** room right of every plot for a line's end label; the same on every chart so their plots line up */
+const END_W = 84;
 
 /**
  * Monthly columns: one series, or two side by side (2px apart). Each month's
@@ -125,7 +127,7 @@ export function MonthColumns({
   const max = Math.max(0, ...series.flatMap((s) => s.values));
   const ticks = niceTicks(0, max || 100);
   const top = ticks[ticks.length - 1];
-  const plotW = Math.max(0, width - AXIS_W);
+  const plotW = Math.max(0, width - AXIS_W - END_W);
   const slot = months.length ? plotW / months.length : 0;
   const colW = Math.max(2, Math.min(24, (slot * 0.7 - 2 * (series.length - 1)) / series.length));
   const groupW = colW * series.length + 2 * (series.length - 1);
@@ -154,7 +156,7 @@ export function MonthColumns({
           <g transform="translate(0,8)">
             {ticks.map((t) => (
               <g key={t}>
-                <line x1={AXIS_W} x2={width} y1={y(t)} y2={y(t)} className="chart-grid" />
+                <line x1={AXIS_W} x2={AXIS_W + plotW} y1={y(t)} y2={y(t)} className="chart-grid" />
                 <text x={AXIS_W - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
                   {axisMoney(t)}
                 </text>
@@ -198,7 +200,7 @@ export function MonthColumns({
                 </g>
               );
             })}
-            <line x1={AXIS_W} x2={width} y1={PLOT_H} y2={PLOT_H} className="chart-baseline" />
+            <line x1={AXIS_W} x2={AXIS_W + plotW} y1={PLOT_H} y2={PLOT_H} className="chart-baseline" />
           </g>
         </svg>
       )}
@@ -237,8 +239,7 @@ export function TimeLine({
   const lo = ticks[0];
   const hi = ticks[ticks.length - 1];
   const single = series.length === 1;
-  const endLabelW = single ? 84 : 16;
-  const plotW = Math.max(0, width - AXIS_W - endLabelW);
+  const plotW = Math.max(0, width - AXIS_W - END_W);
   const t0 = dates.length ? Date.parse(dates[0].date) : 0;
   const t1 = dates.length ? Date.parse(dates[dates.length - 1].date) : 1;
   const x = (d: string) => AXIS_W + (t1 === t0 ? plotW : ((Date.parse(d) - t0) / (t1 - t0)) * plotW);
@@ -364,8 +365,7 @@ export function PaceLines({
   const ticks = niceTicks(Math.min(0, ...all), Math.max(0, ...all));
   const lo = ticks[0];
   const hi = ticks[ticks.length - 1];
-  const endLabelW = 84;
-  const plotW = Math.max(0, width - AXIS_W - endLabelW);
+  const plotW = Math.max(0, width - AXIS_W - END_W);
   const x = (i: number) => AXIS_W + (days > 1 ? (i / (days - 1)) * plotW : plotW);
   const y = (v: number) => PLOT_H - ((v - lo) / (hi - lo || 1)) * PLOT_H;
   const path = (values: (number | null)[]) =>
