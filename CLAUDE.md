@@ -22,7 +22,9 @@ Merchants (rename, merge; Settings shows Categories, Merchants and Tags as one f
 creates one, × removes it, clicking it filters Transactions via `?tag=`; Settings → Tags adds,
 renames, deletes); renaming accounts on the Accounts page (the sync sets an account's
 name only when it first creates it, so your name sticks); a select column on Transactions
-whose bar approves, adds a tag to (or creates one), or removes a tag from every selected row;
+whose bar approves, sets a category on (Set category: approved rows are recategorized, To review
+rows just get it as a pre-fill; linked paybacks are skipped), adds a tag to (or creates one), or
+removes a tag from every selected row;
 manual accounts (Accounts → Add manual account: name, class, balance; Edit sets name and
 balance, Delete removes it and its transactions); Add transaction on Transactions (account,
 date, amount out/in, description, category or Transfer, note), saved with `source = 'manual'`
