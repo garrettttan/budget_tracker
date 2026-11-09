@@ -8,7 +8,6 @@ import { addMonths, iso, monthEnd, thisMonth, today } from '../lib/months';
 import { type FlowRow, NO_CATEGORY, type SpendRow, categoryTotals, fetchReports } from '../lib/reports';
 import { TRANSFER_KEY } from '../lib/transactions';
 import Button from '../components/Button';
-import Combobox from '../components/Combobox';
 import HeaderFilter from '../components/HeaderFilter';
 import Switch from '../components/Switch';
 import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
@@ -17,6 +16,17 @@ import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../c
 const INCOME = 'var(--viz-income)';
 const SPENDING = 'var(--viz-spending)';
 const EARLIER = 'var(--viz-cat-other)';
+/** The over-time charts' lines: one is the spending orange; several take the category palette in order. */
+const MAX_LINES = 6;
+const lineColor = (i: number, count: number) => (count === 1 ? SPENDING : `var(--viz-cat-${i + 1})`);
+
+/** A comma list in the URL; group names are free text, so an item's own commas (and %) are escaped. */
+const readList = (value: string | null) =>
+  (value ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map((v) => v.replace(/%2C/gi, ',').replace(/%25/g, '%'));
+const writeList = (keys: string[]) => keys.map((k) => k.replace(/%/g, '%25').replace(/,/g, '%2C')).join(',') || null;
 
 const RANGES = [
   { key: '12m', label: 'Last 12 months', months: 12 },
@@ -171,11 +181,9 @@ export default function Trends() {
     const listed = new Set(options.map((o) => o.key));
     return [...options, ...byCategory.filter((c) => !listed.has(c.key)).map(({ key, name }) => ({ key, name }))];
   }, [categories, byCategory]);
-  // ?cat= picks it; otherwise the range's biggest category
-  const chartCategory =
-    categoryOptions.find((o) => o.key === params.get('cat')) ??
-    categoryOptions.find((o) => o.key === byCategory[0]?.key) ??
-    categoryOptions[0];
+  // ?cat= picks them, in the order ticked (so a line keeps its color); otherwise the range's biggest category
+  const defaultCategory = (categoryOptions.find((o) => o.key === byCategory[0]?.key) ?? categoryOptions[0])?.key;
+  const pickedCategories = pickFrom(categoryOptions, readList(params.get('cat')), defaultCategory);
 
   // the group chart's picker: groups by spending in the range, biggest first, then the
   // spending categories' other groups A–Z; ?group= picks it, else the biggest
@@ -194,17 +202,7 @@ export default function Trends() {
       .sort((a, b) => a.localeCompare(b));
     return [...new Set([...ranked, ...rest])].map((g) => ({ key: g, name: g }));
   }, [spend, start, categories]);
-  const chartGroup = groupOptions.find((o) => o.key === params.get('group')) ?? groupOptions[0];
-
-  // averages divide by months that have any data, not every month in the range: before tracking
-  // started (or a month with nothing yet), there's nothing to average over
-  const activeMonths = useMemo(() => {
-    const has = new Set([
-      ...(spend ?? []).filter((r) => Number(r.spent) !== 0).map((r) => r.month),
-      ...flow.filter((f) => Number(f.income) !== 0 || Number(f.spending) !== 0).map((f) => f.month),
-    ]);
-    return Math.max(1, months.filter((m) => has.has(m.key)).length);
-  }, [spend, flow, months]);
+  const pickedGroups = pickFrom(groupOptions, readList(params.get('group')), groupOptions[0]?.key);
 
   const flowFor = (key: string) => flow.find((f) => f.month === key);
   const income = months.map((m) => Number(flowFor(m.key)?.income ?? 0));
@@ -259,7 +257,7 @@ export default function Trends() {
   const withHousing = params.get('housing') === '1';
   // the group chart has its own Housing switch (?grouphousing=1), off by default like the pace's
   const groupHousing = params.get('grouphousing') === '1';
-  const groupHasHousing = !!chartGroup && categories.some((c) => c.id === housing && groupName(c.id, c.group_name) === chartGroup.key);
+  const groupHasHousing = categories.some((c) => c.id === housing && pickedGroups.some((g) => g.key === groupName(c.id, c.group_name)));
   const groupLeavesOutHousing = groupHasHousing && !groupHousing;
   const pace = useMemo(() => {
     if (!lines) return null;
@@ -287,18 +285,20 @@ export default function Trends() {
   const dayLabel = (day: number) =>
     new Date(`${current.slice(0, 8)}${String(day).padStart(2, '0')}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  /** Opens Spending on a month's rows (`YYYY-MM-01`), optionally one category. */
-  const openMonth = (key: string, category?: string) =>
-    navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7), ...(category ? { category } : {}) })}`);
-  /** Opens Spending on a month's rows in one group: every other category key hidden, as its pie does. */
-  const openGroupMonth = (key: string, group: string) => {
-    const hidecat = [
-      ...categories.filter((c) => groupName(c.id, c.group_name) !== group || (groupLeavesOutHousing && c.id === housing)).map((c) => c.id),
-      ...(group === 'Uncategorized' ? [] : [NO_CATEGORY]),
-      TRANSFER_KEY,
-    ];
+  /** Opens Spending on a month's rows (`YYYY-MM-01`). */
+  const openMonth = (key: string) => navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7) })}`);
+  /** Opens Spending on a month's rows (`YYYY-MM-01`) in just these category keys: every other key hidden. */
+  const openShowing = (key: string, shown: string[]) => {
+    const hidecat = [...categories.map((c) => c.id), NO_CATEGORY, TRANSFER_KEY].filter((k) => !shown.includes(k));
     navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7), hidecat: hidecat.join(',') })}`);
   };
+  const groupNames = pickedGroups.map((g) => g.key);
+  const inPickedGroup = (categoryId: string | null, group: string | null | undefined) =>
+    groupNames.includes(groupName(categoryId, group)) && !(groupLeavesOutHousing && categoryId === housing);
+  const groupCategoryKeys = [
+    ...categories.filter((c) => inPickedGroup(c.id, c.group_name)).map((c) => c.id),
+    ...(groupNames.includes('Uncategorized') ? [NO_CATEGORY] : []),
+  ];
 
   return (
     <section>
@@ -368,35 +368,43 @@ export default function Trends() {
           onSelect={(key) => openMonth(key)}
         />
 
-        {chartCategory && (
+        {pickedCategories.length > 0 && (
           <PickedOverTime
             title="Categories over time"
-            pickLabel="Category"
-            picked={chartCategory}
+            pickLabel="Categories"
             options={categoryOptions}
+            picked={pickedCategories}
+            isDefault={!params.get('cat')}
+            onPick={(keys) => set({ cat: writeList(keys) })}
             months={months}
-            activeMonths={activeMonths}
-            values={monthValues(spend ?? [], months, (r) => (r.category_id ?? NO_CATEGORY) === chartCategory.key)}
-            onPick={(key) => set({ cat: key })}
-            onOpenMonth={(key) => openMonth(key, chartCategory.key)}
+            series={pickedCategories.map((c, i) => ({
+              name: c.name,
+              color: lineColor(i, pickedCategories.length),
+              values: monthValues(spend ?? [], months, (r) => (r.category_id ?? NO_CATEGORY) === c.key),
+            }))}
+            onOpenMonth={(key) => openShowing(key, pickedCategories.map((c) => c.key))}
           />
         )}
 
-        {chartGroup && (
+        {pickedGroups.length > 0 && (
           <PickedOverTime
             title="Category groups over time"
-            pickLabel="Group"
-            picked={chartGroup}
+            pickLabel="Groups"
             options={groupOptions}
+            picked={pickedGroups}
+            isDefault={!params.get('group')}
+            onPick={(keys) => set({ group: writeList(keys) })}
             months={months}
-            activeMonths={activeMonths}
-            values={monthValues(
-              spend ?? [],
-              months,
-              (r) => groupName(r.category_id, r.category_group) === chartGroup.key && !(groupLeavesOutHousing && r.category_id === housing),
-            )}
-            onPick={(key) => set({ group: key })}
-            onOpenMonth={(key) => openGroupMonth(key, chartGroup.key)}
+            series={pickedGroups.map((g, i) => ({
+              name: g.name,
+              color: lineColor(i, pickedGroups.length),
+              values: monthValues(
+                spend ?? [],
+                months,
+                (r) => groupName(r.category_id, r.category_group) === g.key && !(groupLeavesOutHousing && r.category_id === housing),
+              ),
+            }))}
+            onOpenMonth={(key) => openShowing(key, groupCategoryKeys)}
             extra={
               groupHasHousing && (
                 <Switch checked={groupHousing} onChange={(on) => set({ grouphousing: on ? '1' : null })}>
@@ -409,7 +417,12 @@ export default function Trends() {
 
         <h2>Net worth</h2>
         {netWorth.length > 0 ? (
-          <TimeLine points={netWorth} color={INCOME} format={money} label="Net worth by month" />
+          <TimeLine
+            dates={netWorth}
+            series={[{ name: 'Net worth', color: INCOME, values: netWorth.map((p) => p.value) }]}
+            format={money}
+            label="Net worth by month"
+          />
         ) : (
           <p className="empty">No balances yet. They appear after the first sync.</p>
         )}
@@ -446,56 +459,85 @@ export default function Trends() {
   );
 }
 
-/** One category's (or group's) spending month by month, with a dropdown that picks it. */
+/** The picked options, in `keys` order (unknown keys dropped, at most MAX_LINES); else just `fallback`. */
+function pickFrom<T extends { key: string }>(options: T[], keys: string[], fallback: string | undefined): T[] {
+  const picked = keys.map((k) => options.find((o) => o.key === k)).filter((o): o is T => !!o);
+  const unique = [...new Map(picked.map((o) => [o.key, o])).values()].slice(0, MAX_LINES);
+  if (unique.length) return unique;
+  const first = options.find((o) => o.key === fallback);
+  return first ? [first] : [];
+}
+
+/**
+ * Categories (or groups) month by month, one line each, with a checklist that
+ * picks up to MAX_LINES of them. Reset goes back to the default (the biggest).
+ */
 function PickedOverTime({
   title,
   pickLabel,
-  picked: category,
   options,
-  months,
-  activeMonths,
-  values,
+  picked,
+  isDefault,
   onPick,
+  months,
+  series,
   onOpenMonth,
   extra,
 }: {
   title: string;
-  /** the dropdown's label: Category or Group */
+  /** the checklist's name: Categories or Groups */
   pickLabel: string;
-  picked: { key: string; name: string };
   options: { key: string; name: string }[];
+  /** what's showing, in the order ticked (their lines' colors follow it) */
+  picked: { key: string; name: string }[];
+  /** nothing picked in the URL: Reset has nothing to do */
+  isDefault: boolean;
+  /** the new picks, in order; [] goes back to the default */
+  onPick: (keys: string[]) => void;
   months: MonthKey[];
-  /** months in the range with any data: the divisor for averages */
-  activeMonths: number;
-  /** its spending in each of `months` */
-  values: number[];
-  onPick: (key: string) => void;
+  /** one line per pick, values per month */
+  series: { name: string; color: string; values: number[] }[];
   onOpenMonth: (monthKey: string) => void;
   /** a control at the end of the picker's row (the group chart's Include Housing) */
   extra?: ReactNode;
 }) {
-  const total = sum(values);
+  const keys = picked.map((p) => p.key);
+  const names = picked.map((p) => p.name);
   return (
     <>
       <h2>{title}</h2>
       <div className="category-picker">
-        <Combobox
-          label={pickLabel}
-          options={options.map((o) => ({ value: o.key, text: o.name }))}
-          value={category.key}
-          onChange={onPick}
-        />
-        <span className="muted small">
-          {money(total)} total · {money(total / activeMonths)} avg / month
+        <span className="series-pick">
+          <HeaderFilter
+            label={pickLabel}
+            items={options.map((o) => ({ id: o.key, name: o.name }))}
+            hidden={options.map((o) => o.key).filter((k) => !keys.includes(k))}
+            // keep the ticked order, newly ticked ones at the end
+            onChange={(hidden) => {
+              const ticked = options.map((o) => o.key).filter((k) => !hidden.includes(k));
+              onPick([...keys.filter((k) => ticked.includes(k)), ...ticked.filter((k) => !keys.includes(k))]);
+            }}
+            onOnly={(id) => onPick([id])}
+            keepOne
+            max={MAX_LINES}
+            active={false}
+            reset={{ label: 'Reset', onClick: () => onPick([]), disabled: isDefault, title: isDefault ? 'Showing the biggest already' : undefined }}
+          >
+            {names[0] + (names.length > 1 ? ` +${names.length - 1}` : '')}
+          </HeaderFilter>
         </span>
         {extra && <span className="picker-extra">{extra}</span>}
       </div>
+      {series.length > 1 && (
+        <div className="series-legend">
+          <Legend shape="line" items={series} />
+        </div>
+      )}
       <TimeLine
-        points={months.map((m, i) => ({ date: m.key, long: m.long, value: values[i] }))}
-        color={SPENDING}
-        name={category.name}
+        dates={months.map((m) => ({ date: m.key, long: m.long }))}
+        series={series}
         format={money}
-        label={`${category.name} spending by month`}
+        label={`${names.join(', ')} spending by month`}
         selectHint="Enter opens that month's transactions"
         onSelect={onOpenMonth}
       />
