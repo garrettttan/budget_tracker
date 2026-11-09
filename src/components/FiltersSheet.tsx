@@ -17,26 +17,22 @@ export type SheetFilter = { key: string; label: string; on: boolean; summary: st
  * filter with its state; tapping one opens the same checklist or form as its
  * column header, in place. Changes apply as they're made.
  *
- * Opening one leaves the others as they are (closing one above would pull the
- * tapped row up mid-slide), and the sheet sits at the top of the screen, so it
- * grows downward instead of re-centering. A section opening below the fold is
- * scrolled into view once it has slid open.
+ * One section is open at a time: opening another slides the first shut as it
+ * slides open. The sheet sits at the top of the screen, so it grows and shrinks
+ * downward instead of re-centering (only a section closing above the tapped
+ * row moves it, in one glide). A section opening below the fold is scrolled
+ * into view once it has slid open.
  */
 export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFilter[]; onShowAll: () => void }) {
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<string | null>(null);
   const items = useRef(new Map<string, HTMLLIElement>());
   const titleId = useId();
 
-  const shut = (key: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
+  const shut = (key: string) => setExpanded((prev) => (prev === key ? null : prev));
   function toggle(key: string) {
-    if (expanded.has(key)) return shut(key);
-    setExpanded((prev) => new Set(prev).add(key));
+    if (expanded === key) return setExpanded(null);
+    setExpanded(key);
     window.setTimeout(() => {
       const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       items.current.get(key)?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
@@ -55,7 +51,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
           className="filters-sheet"
           onClose={() => {
             setOpen(false);
-            setExpanded(new Set());
+            setExpanded(null);
           }}
         >
           {(close) => (
@@ -68,7 +64,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
               </div>
               <ul className="sheet-filters">
                 {filters.map((f) => {
-                  const isOpen = expanded.has(f.key);
+                  const isOpen = expanded === f.key;
                   return (
                     <li
                       key={f.key}
