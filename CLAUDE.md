@@ -87,7 +87,7 @@ unless the "Include Housing" switch (`components/Switch.tsx`) is on, `?housing=1
 the range doesn't); then, scoped by both, cash flow (income vs spending columns),
 Categories over time (one category; a searchable picker (`Combobox`) under the heading picks it, `?cat=`), net worth (one
 point per month: synced accounts' latest `balance_snapshots` on or before month end + manual accounts
-at their current balance); then tag totals (`tag_spend`, all time). Clicking a month opens Spending
+at their current balance). No tag totals section (removed Nov 9; search Spending by tag). Clicking a month opens Spending
 with `?status=all&month=` (+ `category=` from the category chart). Charts
 are hand-rolled SVG in `src/components/charts.tsx` (no chart library): hover and keyboard focus show a
 tooltip. Garrett removed the explanatory text and "Show as table" views on purpose; don't add them back.

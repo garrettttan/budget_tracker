@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { byUse } from '../lib/categoryOrder';
 import { round, sum } from '../lib/cents';
-import { money, shortDate } from '../lib/format';
+import { money } from '../lib/format';
 import { addMonths, iso, monthEnd, thisMonth, today } from '../lib/months';
 import { type FlowRow, NO_CATEGORY, type SpendRow, categoryTotals, fetchReports } from '../lib/reports';
 import Button from '../components/Button';
@@ -25,7 +25,7 @@ const RANGES = [
 ] as const;
 type RangeKey = (typeof RANGES)[number]['key'];
 
-type TagTotal = { tag_id: string; name: string; spent: string; transaction_count: number; first_date: string | null; last_date: string | null };
+type TagTotal = { tag_id: string; name: string; transaction_count: number };
 type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
 type Category = { id: string; name: string };
@@ -95,7 +95,7 @@ function monthsFor(range: RangeKey) {
 /**
  * Trends: where the money went over a range of months (one month's category
  * split is on Spending). From the top: this month's pace against earlier
- * months, cash flow, one category over time, net worth, and tag totals.
+ * months, cash flow, one category over time, and net worth.
  *
  * Spending is your share (net of reimbursements), excludes transfers, and
  * leaves out tagged spending unless "Include tagged" picks its tag (`?tags=`).
@@ -117,10 +117,10 @@ export default function Trends() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // tag totals and balances don't depend on the toggles
+  // the tag list (for Include tagged) and balances don't depend on the toggles
   useEffect(() => {
     Promise.all([
-      db().from('tag_spend').select('tag_id, name, spent, transaction_count, first_date, last_date').order('name'),
+      db().from('tag_spend').select('tag_id, name, transaction_count').order('name'),
       db().from('balance_snapshots').select('account_id, date, balance').order('date'),
       db().from('accounts').select('id, connection_id, balance, hidden'),
       // most-used first, like every category picker (lib/categoryOrder)
@@ -347,34 +347,6 @@ export default function Trends() {
           <TimeLine points={netWorth} color={INCOME} format={money} label="Net worth by month" />
         ) : (
           <p className="empty">No balances yet. They appear after the first sync.</p>
-        )}
-
-        {tags.length > 0 && (
-          <>
-            <h2>Tags</h2>
-            <table className="register tag-totals">
-              <thead>
-                <tr>
-                  <th scope="col">Tag</th>
-                  <th scope="col">Dates</th>
-                  <th scope="col" className="num">Transactions</th>
-                  <th scope="col" className="num">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tags.map((t) => (
-                  <tr key={t.tag_id}>
-                    <td>
-                      <Link to={`/spending?status=all&tag=${t.tag_id}`}>{t.name}</Link>
-                    </td>
-                    <td>{t.first_date ? `${shortDate(t.first_date)} – ${shortDate(t.last_date)}` : '—'}</td>
-                    <td className="num">{t.transaction_count}</td>
-                    <td className="num">{money(t.spent)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
         )}
       </div>
     </section>
