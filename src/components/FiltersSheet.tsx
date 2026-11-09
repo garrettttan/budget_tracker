@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import Button from './Button';
+import Collapse from './Collapse';
 import { type ChecklistProps, FilterChecklist } from './HeaderFilter';
 import { type FieldsProps, FieldsForm } from './HeaderFields';
 import Modal from './Modal';
@@ -61,7 +62,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
                           <path d="M1 1l4 4-4 4" />
                         </svg>
                       </Button>
-                      {isOpen && (
+                      <Collapse open={isOpen}>
                         <div className="sheet-filter-body">
                           {f.kind === 'checklist' ? (
                             <FilterChecklist {...f.props} onDone={() => setExpanded(null)} />
@@ -69,7 +70,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
                             <FieldsForm {...f.props} onDone={() => setExpanded(null)} />
                           )}
                         </div>
-                      )}
+                      </Collapse>
                     </li>
                   );
                 })}

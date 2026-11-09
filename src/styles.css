@@ -326,12 +326,16 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .sheet-filter-label { flex: 1; }
 .sheet-filter-summary { color: var(--ink-soft); font-size: var(--step--1); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-filter-summary.on { color: var(--accent); }
-.sheet-chevron { width: 6px; height: 10px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms; }
+.sheet-chevron { width: 6px; height: 10px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms ease; }
 .sheet-filter-row[aria-expanded='true'] .sheet-chevron { transform: rotate(90deg); }
 .sheet-filter-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0 0 0.75rem; }
 .sheet-filter-body .header-filter-list { max-height: 40dvh; }
 .sheet-foot { display: flex; justify-content: flex-end; padding-top: 0.75rem; }
-@media (prefers-reduced-motion: reduce) { .sheet-chevron { transition: none; } }
+/* components/Collapse.tsx: slides open and shut without measuring heights */
+.collapse { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 200ms ease, opacity 200ms ease; }
+.collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.collapse-inner { min-height: 0; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .sheet-chevron, .collapse { transition: none; } }
 .tag-new { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
 /* a list's search box and add form on one line (Settings → Categories) */
 .list-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
