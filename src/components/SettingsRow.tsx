@@ -1,7 +1,7 @@
 import Button from './Button';
 
 /**
- * A Settings section reduced to one full-width row that opens its modal:
+ * A Settings section reduced to one full-width row that opens its page:
  * "Merchants ……… 265 ›". Rows placed next to each other share their rules.
  */
 export default function SettingsRow({ label, detail, onOpen }: { label: string; detail?: string; onOpen: () => void }) {

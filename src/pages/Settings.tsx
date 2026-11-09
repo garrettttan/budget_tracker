@@ -6,10 +6,7 @@ import Button from '../components/Button';
 import ConnectSimplefin from '../components/ConnectSimplefin';
 import ReconnectSimplefin from '../components/ReconnectSimplefin';
 import SyncLog, { type SyncRun } from '../components/SyncLog';
-import SettingsModal from '../components/SettingsModal';
-import MerchantList from '../components/MerchantList';
 import SettingsRow from '../components/SettingsRow';
-import TagList from '../components/TagList';
 
 /** What the sync-now edge function returns (SyncResult in supabase/functions/_shared/run-sync.ts). */
 type SyncNowResponse = {
@@ -30,8 +27,7 @@ type Section = (typeof SECTIONS)[number];
 
 /**
  * Settings: the bank connection (status, Sync now, Sync log, Reconnect),
- * Categories / Merchants / Tags (one row each: Categories opens its own page,
- * the others a modal), and the
+ * Categories / Merchants / Tags (one row each, opening its own page), and the
  * signed-in account. `onSynced` refreshes the nav's to-review count.
  */
 export default function Settings({ email, onSynced }: { email: string; onSynced: () => void }) {
@@ -44,7 +40,6 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
   const [syncNote, setSyncNote] = useState<{ text: string; error: boolean } | null>(null);
   // Categories, Merchants and Tags are one row each
   const [counts, setCounts] = useState<Record<Section, number> | null>(null);
-  const [showing, setShowing] = useState<Exclude<Section, 'Categories'> | null>(null);
   const navigate = useNavigate();
 
   const loadCounts = useCallback(async () => {
@@ -157,21 +152,9 @@ export default function Settings({ email, onSynced }: { email: string; onSynced:
           key={section}
           label={section}
           detail={counts ? (counts[section] ? String(counts[section]) : 'None yet') : undefined}
-          onOpen={() => (section === 'Categories' ? navigate('/settings/categories') : setShowing(section))}
+          onOpen={() => navigate(`/settings/${section.toLowerCase()}`)}
         />
       ))}
-      {showing && (
-        <SettingsModal
-          title={showing}
-          onClose={() => {
-            setShowing(null);
-            loadCounts(); // adds, deletes and merges change them
-          }}
-        >
-          {showing === 'Merchants' && <MerchantList />}
-          {showing === 'Tags' && <TagList />}
-        </SettingsModal>
-      )}
 
       {/* laid out like Bank connection: a status line, then a compact action */}
       <h2>Account</h2>
