@@ -137,14 +137,14 @@ export default function Spending({
   useEffect(() => {
     Promise.all([
       // most-used first in every picker (lib/categoryOrder)
-      db().from('categories').select('id, name, is_income, transactions(count)').eq('archived', false),
+      db().from('categories').select('id, name, is_income, group_name, transactions(count)').eq('archived', false),
       db().from('accounts').select('id, name, class, connection_id, hidden').order('sort_order').order('name'),
       db().from('tags').select('id, name').order('name'),
     ]).then(([c, a, t]) => {
       const failed = c.error ?? a.error ?? t.error;
       if (failed) setError(failed.message);
       const counted = (c.data ?? []) as unknown as (Category & { transactions: { count: number }[] })[];
-      setCategories(byUse(counted).map(({ id, name, is_income }) => ({ id, name, is_income })));
+      setCategories(byUse(counted).map(({ id, name, is_income, group_name }) => ({ id, name, is_income, group_name })));
       const all = (a.data ?? []) as { id: string; name: string; class: string; connection_id: string | null; hidden: boolean }[];
       setAccountNames(new Map(all.map((x) => [x.id, x.name])));
       // Add transaction's accounts: no investments (balance-only) or hidden ones; manual accounts first
@@ -501,6 +501,30 @@ export default function Spending({
   const onlyKey = hideCategories.length > 0 && visibleCategories.length === 1 ? visibleCategories[0].id : null;
   /** A pie slice: the same as Only in the Category header; tapping it again shows every category. */
   const pickCategory = (key: string) => (onlyKey === key ? setFilters({ hidecat: null }) : onlyCategory(key));
+
+  // the pie by group: a group is a set of category keys, so its filters are hidecat too
+  const groupOf = (key: string) =>
+    key === NO_CATEGORY
+      ? 'Uncategorized'
+      : key === TRANSFER_KEY
+        ? 'Transfer'
+        : categories?.find((c) => c.id === key)?.group_name?.trim() || 'No group';
+  const groupKeys = (name: string) => allCategoryItems.map((i) => i.id).filter((k) => groupOf(k) === name);
+  const groupNames = [...new Set(allCategoryItems.map((i) => groupOf(i.id)))];
+  // faded when every category in it is hidden
+  const hiddenGroups = groupNames.filter((g) => groupKeys(g).every((k) => hideCategories.includes(k))).map((g) => `group:${g}`);
+  // highlighted when exactly its categories are showing
+  const visibleGroups = [...new Set(visibleCategories.map((i) => groupOf(i.id)))];
+  const onlyGroup =
+    hideCategories.length > 0 && visibleGroups.length === 1 && groupKeys(visibleGroups[0]).every((k) => !hideCategories.includes(k))
+      ? `group:${visibleGroups[0]}`
+      : null;
+  /** A group slice: only that group's categories; tapping it again shows every category. */
+  const pickGroup = (key: string) => {
+    if (onlyGroup === key) return setFilters({ hidecat: null });
+    const name = key.slice('group:'.length);
+    setFilters({ hidecat: allCategoryItems.map((i) => i.id).filter((k) => groupOf(k) !== name).join(',') || null });
+  };
   /** Only one tag: the `?tag=` filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
     id === UNTAGGED ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null }) : setFilters({ tag: id, hidetag: null });
@@ -547,6 +571,7 @@ export default function Spending({
         version={version}
         onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7) })}
         onSelect={pickCategory}
+        groups={{ of: groupOf, selected: onlyGroup, hidden: hiddenGroups, onSelect: pickGroup }}
         onError={setError}
       />
 

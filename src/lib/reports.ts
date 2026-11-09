@@ -41,3 +41,15 @@ export function categoryTotals(rows: SpendRow[], keep: (month: string) => boolea
   }
   return [...totals.values()].filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
 }
+
+/** Category totals summed by group (`groupOf` names a category key's group), largest first; keys are `group:<name>`. */
+export function groupTotals(totals: CategoryTotal[], groupOf: (key: string) => string): CategoryTotal[] {
+  const groups = new Map<string, CategoryTotal>();
+  for (const t of totals) {
+    const name = groupOf(t.key);
+    const g = groups.get(name) ?? { key: `group:${name}`, name, value: 0 };
+    g.value = round(g.value + t.value);
+    groups.set(name, g);
+  }
+  return [...groups.values()].sort((a, b) => b.value - a.value);
+}
