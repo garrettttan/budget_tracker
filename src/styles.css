@@ -316,10 +316,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .btn-link.filters-button { font-size: var(--step--1); }
 .modal.filters-sheet { max-height: calc(100dvh - 2rem); margin: 1rem auto auto; } /* pinned to the top: grows downward, never re-centers */
 .modal.filters-sheet[open] { display: flex; flex-direction: column; }
-.sheet-filters { list-style: none; margin: 0.75rem 0 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--rule); }
+/* edge to edge across the sheet (past the modal's 1.25rem padding), so rules and highlights span the full row */
+.sheet-filters { list-style: none; margin: 0.75rem -1.25rem 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--rule); }
 .sheet-filters > li { border-bottom: 1px solid var(--rule); }
 .btn-link.sheet-filter-row {
-  display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem 0; border-radius: 0;
+  display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem 1.25rem; border-radius: 0;
   color: var(--ink); font: inherit; text-align: left; text-decoration: none;
 }
 .btn-link.sheet-filter-row:hover:not(:disabled) { background: var(--accent-wash); text-decoration: none; }
@@ -328,7 +329,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .sheet-filter-summary.on { color: var(--accent); }
 .sheet-chevron { width: 6px; height: 10px; flex: none; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms ease; }
 .sheet-filter-row[aria-expanded='true'] .sheet-chevron { transform: rotate(90deg); }
-.sheet-filter-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0 0 0.75rem; }
+.sheet-filter-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.25rem 1.25rem 0.75rem; } /* room for focus rings inside the slide's overflow: hidden */
 .sheet-filter-body .header-filter-list { max-height: 40dvh; }
 .sheet-foot { display: flex; justify-content: flex-end; padding-top: 0.75rem; }
 /* components/Collapse.tsx: slides open and shut without measuring heights */
