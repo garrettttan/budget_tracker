@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { byUse } from '../lib/categoryOrder';
@@ -6,6 +6,7 @@ import { round, sum } from '../lib/cents';
 import { money, shortDate } from '../lib/format';
 import { addMonths, iso, monthEnd, thisMonth, today } from '../lib/months';
 import { type FlowRow, NO_CATEGORY, type SpendRow, categoryTotals, fetchReports } from '../lib/reports';
+import { TRANSFER_KEY } from '../lib/transactions';
 import Button from '../components/Button';
 import Combobox from '../components/Combobox';
 import HeaderFilter from '../components/HeaderFilter';
@@ -28,7 +29,7 @@ type RangeKey = (typeof RANGES)[number]['key'];
 type TagTotal = { tag_id: string; name: string; spent: string; transaction_count: number; first_date: string | null; last_date: string | null };
 type Snapshot = { account_id: string; date: string; balance: string };
 type Account = { id: string; connection_id: string | null; balance: string | null; hidden: boolean };
-type Category = { id: string; name: string };
+type Category = { id: string; name: string; group_name: string | null; is_income: boolean };
 /** A month on a chart's axis: its YYYY-MM-01 key, "Mar" (or "Jan '26"), and "March 2026". */
 type MonthKey = { key: string; short: string; long: string };
 /** A row of the `spending_lines` view: one approved transaction's share of spending. */
@@ -70,12 +71,14 @@ function runningTotals(lines: Line[], month: string, days: number, upTo = days) 
   });
 }
 
-/** A category's spending (NO_CATEGORY = Uncategorized) for each of `months`. */
-function monthValues(spend: SpendRow[], months: MonthKey[], category: string) {
-  return months.map((m) =>
-    sum(spend.filter((r) => r.month === m.key && (r.category_id ?? NO_CATEGORY) === category).map((r) => Number(r.spent))),
-  );
+/** The spending rows that `keep` accepts, summed for each of `months`. */
+function monthValues(spend: SpendRow[], months: MonthKey[], keep: (r: SpendRow) => boolean) {
+  return months.map((m) => sum(spend.filter((r) => r.month === m.key && keep(r)).map((r) => Number(r.spent))));
 }
+
+/** A category's group, named as Spending's pie names it: Uncategorized, its group, or No group. */
+const groupName = (categoryId: string | null, group: string | null | undefined) =>
+  categoryId === null ? 'Uncategorized' : group?.trim() || 'No group';
 
 /** The months a range covers, oldest first, as YYYY-MM-01 keys (the current month included). */
 function monthsFor(range: RangeKey) {
@@ -95,7 +98,8 @@ function monthsFor(range: RangeKey) {
 /**
  * Trends: where the money went over a range of months (one month's category
  * split is on Spending). From the top: this month's pace against earlier
- * months, cash flow, one category over time, net worth, and tag totals.
+ * months, cash flow, one category over time, one category group over time,
+ * net worth, and tag totals.
  *
  * Spending is your share (net of reimbursements), excludes transfers, and
  * leaves out tagged spending unless "Include tagged" picks its tag (`?tags=`).
@@ -124,7 +128,7 @@ export default function Trends() {
       db().from('balance_snapshots').select('account_id, date, balance').order('date'),
       db().from('accounts').select('id, connection_id, balance, hidden'),
       // most-used first, like every category picker (lib/categoryOrder)
-      db().from('categories').select('id, name, transactions(count)').eq('archived', false).eq('is_income', false),
+      db().from('categories').select('id, name, group_name, is_income, transactions(count)').eq('archived', false),
     ]).then(([t, b, a, c]) => {
       const failed = t.error ?? b.error ?? a.error ?? c.error;
       if (failed) setError(failed.message);
@@ -132,7 +136,7 @@ export default function Trends() {
       setSnapshots((b.data ?? []) as Snapshot[]);
       setAccounts((a.data ?? []) as Account[]);
       const counted = (c.data ?? []) as unknown as (Category & { transactions: { count: number }[] })[];
-      setCategories(byUse(counted).map(({ id, name }) => ({ id, name })));
+      setCategories(byUse(counted).map(({ id, name, group_name, is_income }) => ({ id, name, group_name, is_income })));
     });
   }, []);
 
@@ -163,7 +167,7 @@ export default function Trends() {
   // the category-over-time chart's picker: every spending category in picker
   // order, then any others with spending in the range (archived, Uncategorized)
   const categoryOptions = useMemo(() => {
-    const options = categories.map((c) => ({ key: c.id, name: c.name }));
+    const options = categories.filter((c) => !c.is_income).map((c) => ({ key: c.id, name: c.name }));
     const listed = new Set(options.map((o) => o.key));
     return [...options, ...byCategory.filter((c) => !listed.has(c.key)).map(({ key, name }) => ({ key, name }))];
   }, [categories, byCategory]);
@@ -172,6 +176,25 @@ export default function Trends() {
     categoryOptions.find((o) => o.key === params.get('cat')) ??
     categoryOptions.find((o) => o.key === byCategory[0]?.key) ??
     categoryOptions[0];
+
+  // the group chart's picker: groups by spending in the range, biggest first, then the
+  // spending categories' other groups A–Z; ?group= picks it, else the biggest
+  const groupOptions = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const r of spend ?? []) {
+      if (r.month < start) continue;
+      const g = groupName(r.category_id, r.category_group);
+      totals.set(g, (totals.get(g) ?? 0) + Number(r.spent));
+    }
+    const ranked = [...totals].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([g]) => g);
+    const rest = categories
+      .filter((c) => !c.is_income)
+      .map((c) => groupName(c.id, c.group_name))
+      .filter((g) => !ranked.includes(g))
+      .sort((a, b) => a.localeCompare(b));
+    return [...new Set([...ranked, ...rest])].map((g) => ({ key: g, name: g }));
+  }, [spend, start, categories]);
+  const chartGroup = groupOptions.find((o) => o.key === params.get('group')) ?? groupOptions[0];
 
   // averages divide by months that have any data, not every month in the range: before tracking
   // started (or a month with nothing yet), there's nothing to average over
@@ -217,7 +240,9 @@ export default function Trends() {
       range: range === '12m' ? null : range,
       tags: included.join(',') || null,
       cat: params.get('cat'),
+      group: params.get('group'),
       housing: params.get('housing'),
+      grouphousing: params.get('grouphousing'),
       ...next,
     };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
@@ -232,6 +257,10 @@ export default function Trends() {
   // lines; Housing is left out unless its toggle (?housing=1) is on
   const housing = categories.find((c) => c.name === 'Housing')?.id ?? null;
   const withHousing = params.get('housing') === '1';
+  // the group chart has its own Housing switch (?grouphousing=1), off by default like the pace's
+  const groupHousing = params.get('grouphousing') === '1';
+  const groupHasHousing = !!chartGroup && categories.some((c) => c.id === housing && groupName(c.id, c.group_name) === chartGroup.key);
+  const groupLeavesOutHousing = groupHasHousing && !groupHousing;
   const pace = useMemo(() => {
     if (!lines) return null;
     const days = Number(monthEnd(current).slice(8, 10));
@@ -261,6 +290,15 @@ export default function Trends() {
   /** Opens Spending on a month's rows (`YYYY-MM-01`), optionally one category. */
   const openMonth = (key: string, category?: string) =>
     navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7), ...(category ? { category } : {}) })}`);
+  /** Opens Spending on a month's rows in one group: every other category key hidden, as its pie does. */
+  const openGroupMonth = (key: string, group: string) => {
+    const hidecat = [
+      ...categories.filter((c) => groupName(c.id, c.group_name) !== group || (groupLeavesOutHousing && c.id === housing)).map((c) => c.id),
+      ...(group === 'Uncategorized' ? [] : [NO_CATEGORY]),
+      TRANSFER_KEY,
+    ];
+    navigate(`/spending?${new URLSearchParams({ status: 'all', month: key.slice(0, 7), hidecat: hidecat.join(',') })}`);
+  };
 
   return (
     <section>
@@ -331,14 +369,41 @@ export default function Trends() {
         />
 
         {chartCategory && (
-          <CategoryOverTime
-            category={chartCategory}
+          <PickedOverTime
+            title="Categories over time"
+            pickLabel="Category"
+            picked={chartCategory}
             options={categoryOptions}
             months={months}
             activeMonths={activeMonths}
-            spend={spend ?? []}
+            values={monthValues(spend ?? [], months, (r) => (r.category_id ?? NO_CATEGORY) === chartCategory.key)}
             onPick={(key) => set({ cat: key })}
             onOpenMonth={(key) => openMonth(key, chartCategory.key)}
+          />
+        )}
+
+        {chartGroup && (
+          <PickedOverTime
+            title="Category groups over time"
+            pickLabel="Group"
+            picked={chartGroup}
+            options={groupOptions}
+            months={months}
+            activeMonths={activeMonths}
+            values={monthValues(
+              spend ?? [],
+              months,
+              (r) => groupName(r.category_id, r.category_group) === chartGroup.key && !(groupLeavesOutHousing && r.category_id === housing),
+            )}
+            onPick={(key) => set({ group: key })}
+            onOpenMonth={(key) => openGroupMonth(key, chartGroup.key)}
+            extra={
+              groupHasHousing && (
+                <Switch checked={groupHousing} onChange={(on) => set({ grouphousing: on ? '1' : null })}>
+                  Include Housing
+                </Switch>
+              )
+            }
           />
         )}
 
@@ -381,33 +446,41 @@ export default function Trends() {
   );
 }
 
-/** One category's spending month by month, with a dropdown that picks the category. */
-function CategoryOverTime({
-  category,
+/** One category's (or group's) spending month by month, with a dropdown that picks it. */
+function PickedOverTime({
+  title,
+  pickLabel,
+  picked: category,
   options,
   months,
   activeMonths,
-  spend,
+  values,
   onPick,
   onOpenMonth,
+  extra,
 }: {
-  category: { key: string; name: string };
+  title: string;
+  /** the dropdown's label: Category or Group */
+  pickLabel: string;
+  picked: { key: string; name: string };
   options: { key: string; name: string }[];
   months: MonthKey[];
   /** months in the range with any data: the divisor for averages */
   activeMonths: number;
-  spend: SpendRow[];
+  /** its spending in each of `months` */
+  values: number[];
   onPick: (key: string) => void;
   onOpenMonth: (monthKey: string) => void;
+  /** a control at the end of the picker's row (the group chart's Include Housing) */
+  extra?: ReactNode;
 }) {
-  const values = monthValues(spend, months, category.key);
   const total = sum(values);
   return (
     <>
-      <h2>Categories over time</h2>
+      <h2>{title}</h2>
       <div className="category-picker">
         <Combobox
-          label="Category"
+          label={pickLabel}
           options={options.map((o) => ({ value: o.key, text: o.name }))}
           value={category.key}
           onChange={onPick}
@@ -415,6 +488,7 @@ function CategoryOverTime({
         <span className="muted small">
           {money(total)} total · {money(total / activeMonths)} avg / month
         </span>
+        {extra && <span className="picker-extra">{extra}</span>}
       </div>
       <TimeLine
         points={months.map((m, i) => ({ date: m.key, long: m.long, value: values[i] }))}

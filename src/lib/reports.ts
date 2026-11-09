@@ -6,7 +6,7 @@ import { db } from './supabase';
 import { round } from './cents';
 
 /** One category's spending in one month. `category_id` null = Uncategorized. */
-export type SpendRow = { month: string; category_id: string | null; category_name: string | null; spent: string };
+export type SpendRow = { month: string; category_id: string | null; category_name: string | null; category_group: string | null; spent: string };
 
 /** One month's income and spending. */
 export type FlowRow = { month: string; income: string; spending: string; net: string };
