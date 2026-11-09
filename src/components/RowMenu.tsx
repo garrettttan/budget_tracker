@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useId, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import Button from './Button';
 import { usePopover } from './usePopover';
 
@@ -9,6 +9,8 @@ export type MenuItem = {
   /** why it's disabled, or what it does */
   title?: string;
   danger?: boolean;
+  /** shown on phones only (Add tag: wider screens have a Tags column) */
+  phoneOnly?: boolean;
 };
 
 const WIDTH = 224; // 14rem
@@ -29,9 +31,19 @@ export default function RowMenu({ label, items, disabled }: { label: string; ite
 
   const { trigger, pop, style } = usePopover({ open, width: WIDTH, align: 'end', roomBelow: 160, onDismiss: close });
 
+  /** the items on screen and usable (phone-only ones are hidden on wider screens) */
+  const usable = () =>
+    [...(list.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])].filter((b) => b.offsetParent !== null);
+  // focus the first item that can be used, once the menu is placed (it's invisible until then,
+  // and an invisible button can't take focus)
+  const placed = open && !('visibility' in style);
+  useEffect(() => {
+    if (placed) usable()[0]?.focus();
+  }, [placed]);
+
   /** Up/Down/Home/End move focus between the enabled items */
   function onKeyDown(e: KeyboardEvent) {
-    const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
+    const buttons = usable();
     if (buttons.length === 0) return;
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
     const next =
@@ -51,7 +63,7 @@ export default function RowMenu({ label, items, disabled }: { label: string; ite
         ref={trigger}
         variant="icon"
         size="small"
-        className="row-menu-button"
+        className={items.every((i) => i.phoneOnly) ? 'row-menu-button menu-phone-only' : 'row-menu-button'}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -64,16 +76,14 @@ export default function RowMenu({ label, items, disabled }: { label: string; ite
       {open && (
         <div ref={pop} className="row-menu" style={style}>
           <div ref={list} id={menuId} role="menu" aria-label={label} onKeyDown={onKeyDown}>
-            {items.map((item, i) => (
+            {items.map((item) => (
               <Button
                 key={item.label}
                 variant="link"
                 role="menuitem"
-                className={item.danger ? 'danger' : undefined}
+                className={[item.danger ? 'danger' : '', item.phoneOnly ? 'menu-phone-only' : ''].join(' ').trim() || undefined}
                 disabled={item.disabled}
                 title={item.title}
-                // focus the first item that can be used
-                autoFocus={i === items.findIndex((x) => !x.disabled)}
                 onClick={() => {
                   close(false);
                   item.onSelect();

@@ -298,7 +298,8 @@ Email + password auth (single user).
 **Row details** (Nov 9): a row's details (phones: date · account, tags; everywhere: bank text, note) open from a tap
 anywhere on the row that isn't a control, or its merchant name, which ends in a chevron (› turning ⌄);
 `rowToggle` in `components/MerchantCell.tsx` skips controls and the select / Approved / ⋯ cells. The row holds the open
-state (`MerchantCell` is controlled); details slide via `Collapse`.
+state (`MerchantCell` is controlled); details slide via `Collapse`. On phones, tags show in the details without "+ Tag": the ⋯ menu's
+**Add tag** (a `phoneOnly` `MenuItem`; hidden ≥ 721px, as is a ⋯ holding nothing else) opens the details with the picker.
 
 Code map (cleanup, Nov 7): Spending's list lives in `lib/transactions.ts` (row type, `Scope`, filter
 keys, `fetchRows` / `fetchPending` / `fetchPresent`) and `components/TransactionRow.tsx` (a posted row,

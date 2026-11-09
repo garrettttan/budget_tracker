@@ -53,11 +53,17 @@ export default function TransactionRow({
   const name = rowName(r);
   const [details, setDetails] = useState(false);
   const toggleDetails = () => setDetails((d) => !d);
+  // the tag picker: "+ Tag" in the Tags column (wider screens), or ⋯ → Add tag (phones), which opens the details
+  const [addingTag, setAddingTag] = useState(false);
+  const addTagFromMenu = () => {
+    setDetails(true);
+    setAddingTag(true);
+  };
   const rowTags = r.transaction_tags
     .map((x) => tags.find((t) => t.id === x.tag_id))
     .filter((t): t is Tag => Boolean(t))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const tagCell = (
+  const tagCell = (phone: boolean) => (
     <TagCell
       tags={rowTags}
       allTags={tags}
@@ -66,6 +72,9 @@ export default function TransactionRow({
       onCreate={actions.onCreateTag}
       onRemove={actions.onRemoveTag}
       onFilter={actions.onFilterTag}
+      adding={addingTag}
+      onAddingChange={setAddingTag}
+      noAddButton={phone}
     />
   );
 
@@ -96,7 +105,7 @@ export default function TransactionRow({
           }
         >
           {/* phones hide the Tags column, so tags live in the row's details there */}
-          <div className="phone-only-block">{tagCell}</div>
+          <div className="phone-only-block">{tagCell(true)}</div>
         </MerchantCell>
       </td>
       <td className="account-col">{r.accounts?.name}</td>
@@ -114,7 +123,7 @@ export default function TransactionRow({
         )}
       </td>
       {/* hidden on phones, where tags live in the row's details (and the Filters sheet filters them) */}
-      <td className="tags-col">{tagCell}</td>
+      <td className="tags-col">{tagCell(false)}</td>
       <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
         {money(r.amount)}
         {r.reimbursements.length > 0 && (
@@ -138,7 +147,7 @@ export default function TransactionRow({
         />
       </td>
       <td className="menu-col">
-        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} />
+        <ActionsMenu row={r} people={people} open={open} busy={busy} actions={actions} onAddTag={addTagFromMenu} />
       </td>
     </tr>
   );
@@ -182,9 +191,11 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
 type Form = 'expect' | 'link';
 
 /**
- * A row's ⋯ menu: Expect reimbursement on a charge; on money in, Link to what
- * someone owes, or Unlink payment once linked; Delete transaction on one you
- * added by hand. Expect and Link open their form in a modal. No menu if none apply.
+ * A row's ⋯ menu: Add tag (phones only: wider screens have the Tags column);
+ * Expect reimbursement on a charge; on money in, Link to what someone owes, or
+ * Unlink payment once linked; Delete transaction on one you added by hand.
+ * Expect and Link open their form in a modal. No menu if none apply (on wider
+ * screens, none but Add tag).
  */
 function ActionsMenu({
   row: r,
@@ -192,12 +203,15 @@ function ActionsMenu({
   open,
   busy,
   actions,
+  onAddTag,
 }: {
   row: Row;
   people: string[];
   open: OpenItem[];
   busy: boolean;
   actions: RowActions;
+  /** opens the row's details with the tag picker */
+  onAddTag: () => void;
 }) {
   const [form, setForm] = useState<Form | null>(null);
   const [failed, setFailed] = useState(false);
@@ -208,7 +222,7 @@ function ActionsMenu({
     setForm(f);
   };
 
-  const items: MenuItem[] = [];
+  const items: MenuItem[] = [{ label: 'Add tag', phoneOnly: true, onSelect: onAddTag }];
   if (isCharge(r)) {
     const full = expectedOn(r) >= -Number(r.amount);
     items.push({
@@ -232,7 +246,6 @@ function ActionsMenu({
       onSelect: actions.onDelete,
     });
   }
-  if (items.length === 0) return null;
 
   // the modal stays open if saving failed, so nothing typed is lost
   const saved = (ok: boolean, close: () => void) => (ok ? close() : setFailed(true));
