@@ -6,7 +6,7 @@ import { money, shortDate } from '../lib/format';
 import { type OpenItem, payers, reimbursementSummary, yourShare } from '../lib/reimbursements';
 import { type Row, expectedOn, isCharge, isLinked, rowName } from '../lib/transactions';
 import CategorySelect, { type Category, TRANSFER } from './CategorySelect';
-import MerchantCell from './MerchantCell';
+import MerchantCell, { rowToggle } from './MerchantCell';
 import Modal from './Modal';
 import { ExpectForm, LinkForm } from './ReimbursementForms';
 import RowMenu, { type MenuItem } from './RowMenu';
@@ -51,6 +51,8 @@ export default function TransactionRow({
   actions: RowActions;
 }) {
   const name = rowName(r);
+  const [details, setDetails] = useState(false);
+  const toggleDetails = () => setDetails((d) => !d);
   const rowTags = r.transaction_tags
     .map((x) => tags.find((t) => t.id === x.tag_id))
     .filter((t): t is Tag => Boolean(t))
@@ -68,7 +70,10 @@ export default function TransactionRow({
   );
 
   return (
-    <tr className={[r.approved ? '' : 'unreviewed', selected ? 'selected' : ''].join(' ').trim() || undefined}>
+    <tr
+      className={[r.approved ? '' : 'unreviewed', selected ? 'selected' : ''].join(' ').trim() || undefined}
+      onClick={rowToggle(toggleDetails)}
+    >
       <td className="select-col">
         <input type="checkbox" aria-label={`Select ${name}`} checked={selected} disabled={busy} onChange={actions.onSelect} />
       </td>
@@ -80,6 +85,8 @@ export default function TransactionRow({
           postedDate={r.posted_date}
           account={r.accounts?.name}
           note={r.note}
+          open={details}
+          onToggle={toggleDetails}
           summary={
             r.reimbursements.length > 0 ? (
               <div className="reimb-line">{reimbursementSummary(r.reimbursements)}</div>
@@ -143,8 +150,10 @@ export default function TransactionRow({
  * along. The category the sync pre-filled shows as text.
  */
 export function PendingRow({ row: r, categories }: { row: Row; categories: Category[] }) {
+  const [details, setDetails] = useState(false);
+  const toggleDetails = () => setDetails((d) => !d);
   return (
-    <tr className="pending">
+    <tr className="pending" onClick={rowToggle(toggleDetails)}>
       <td className="select-col" />
       <td className="date-col">{shortDate(r.posted_date)}</td>
       <td>
@@ -154,6 +163,8 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
           postedDate={r.posted_date}
           account={r.accounts?.name}
           summary={<div className="pending-line">Pending</div>}
+          open={details}
+          onToggle={toggleDetails}
         />
       </td>
       <td className="account-col">{r.accounts?.name}</td>

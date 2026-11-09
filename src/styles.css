@@ -235,6 +235,12 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 /* merchant name in a transaction row: looks like text; click/tap shows the row's details */
 .btn-link.merchant-toggle { color: var(--ink); font-weight: inherit; text-align: left; }
+/* the chevron says the name (and the row) opens details; it stays on the name's last word */
+.merchant-last { white-space: nowrap; }
+.merchant-chevron { display: inline-block; width: 6px; height: 10px; margin-left: 0.35rem; vertical-align: -0.05em; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms ease; }
+.merchant-toggle[aria-expanded='true'] .merchant-chevron { transform: rotate(90deg); }
+@media (hover: hover) { .register.txns tbody tr { cursor: pointer; } }
+@media (prefers-reduced-motion: reduce) { .merchant-chevron { transition: none; } }
 .row-details { color: var(--ink-soft); font-size: var(--step--1); margin-top: 0.2rem; overflow-wrap: anywhere; }
 .phone-only { display: none; }
 
