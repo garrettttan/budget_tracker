@@ -93,7 +93,7 @@ pie category is the same as Only in the Category header. Filtering is meant to f
 the list keeps its rows (pending too) until new ones arrive and fades only if that takes over 100ms; the
 "Filters are on · Show all" note sits beside the Transactions heading so it doesn't push the list. All
 motion is off under prefers-reduced-motion. `/trends`, top to bottom: range buttons (Last 12 months / This year / 6 / 3 months,
-`?range=`) and an "Include tagged: None ▾" dropdown (`HeaderFilter` with `active`/`reset`: a searchable checklist, ticked = included, Clear; `?tags=`); This month (`PaceLines`: spending so far, day by day, from
+`?range=`) and an "Include tagged: All ▾" dropdown (`HeaderFilter` with `active`/`reset`: a searchable checklist, ticked = included, Reset; every tag is included by default, new ones too (Nov 9); `?hidetag=` lists the unticked ones); This month (`PaceLines`: spending so far, day by day, from
 `spending_lines`, against last month and, dashed, the average of the 3 months before with data; Housing (rent) is left out
 unless the "Include Housing" switch (`components/Switch.tsx`) is on, `?housing=1`; tags apply,
 the range doesn't); then, scoped by both, cash flow (income vs spending columns),

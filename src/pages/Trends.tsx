@@ -112,18 +112,25 @@ function monthsFor(range: RangeKey) {
  * and net worth.
  *
  * Spending is your share (net of reimbursements), excludes transfers, and
- * leaves out tagged spending unless "Include tagged" picks its tag (`?tags=`).
+ * and includes tagged spending unless "Include tagged" unticks its tag (`?hidetag=`;
+ * every tag is included by default, new ones too).
  * The range buttons (`?range=`) set the months for every chart but the pace.
  */
 export default function Trends() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const range: RangeKey = RANGES.find((r) => r.key === params.get('range'))?.key ?? '12m';
-  const included = useMemo(() => (params.get('tags') ?? '').split(',').filter(Boolean), [params]);
+  const hiddenTags = useMemo(() => (params.get('hidetag') ?? '').split(',').filter(Boolean), [params]);
 
   const [spend, setSpend] = useState<SpendRow[] | null>(null);
   const [flow, setFlow] = useState<FlowRow[]>([]);
-  const [tags, setTags] = useState<TagTotal[]>([]);
+  // null until loaded: the reports wait for it, since "every tag" needs the list
+  const [tags, setTags] = useState<TagTotal[] | null>(null);
+  const tagList = tags ?? [];
+  const included = useMemo(
+    () => (tags ?? []).map((t) => t.tag_id).filter((id) => !hiddenTags.includes(id)),
+    [tags, hiddenTags],
+  );
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -160,6 +167,7 @@ export default function Trends() {
   }, [current]);
 
   useEffect(() => {
+    if (!tags) return;
     setLoading(true); // the charts keep their last render, faded, until this returns
     fetchReports(included).then(({ spend, flow, error }) => {
       if (error) setError(error.message);
@@ -236,7 +244,7 @@ export default function Trends() {
   function set(next: Record<string, string | null>) {
     const merged = {
       range: range === '12m' ? null : range,
-      tags: included.join(',') || null,
+      hidetag: hiddenTags.join(',') || null,
       cat: params.get('cat'),
       group: params.get('group'),
       housing: params.get('housing'),
@@ -246,8 +254,9 @@ export default function Trends() {
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)) as Record<string, string>);
   }
 
-  // the included tags that still exist, in the list's order, for the dropdown's label
-  const includedNames = tags.filter((t) => included.includes(t.tag_id)).map((t) => t.name);
+  // the included tags, in the list's order, for the dropdown's label
+  const includedNames = tagList.filter((t) => included.includes(t.tag_id)).map((t) => t.name);
+  const allTags = includedNames.length === tagList.length;
 
   // this month's spending so far, day by day, against last month and an average month (the
   // earlier three that have any spending; shown when two or more do, else it's just last month)
@@ -315,24 +324,28 @@ export default function Trends() {
             </Button>
           ))}
         </div>
-        {tags.length > 0 && (
+        {tagList.length > 0 && (
           <div className="tag-include">
             <HeaderFilter
               label="Tags"
-              items={tags.map((t) => ({ id: t.tag_id, name: t.name, count: t.transaction_count }))}
-              hidden={tags.map((t) => t.tag_id).filter((id) => !included.includes(id))}
-              onChange={(hidden) => set({ tags: tags.map((t) => t.tag_id).filter((id) => !hidden.includes(id)).join(',') || null })}
-              onOnly={(id) => set({ tags: id })}
-              active={includedNames.length > 0}
+              items={tagList.map((t) => ({ id: t.tag_id, name: t.name, count: t.transaction_count }))}
+              hidden={tagList.map((t) => t.tag_id).filter((id) => !included.includes(id))}
+              onChange={(hidden) => set({ hidetag: hidden.join(',') || null })}
+              onOnly={(id) => set({ hidetag: tagList.map((t) => t.tag_id).filter((t) => t !== id).join(',') || null })}
+              active={!allTags}
               reset={{
-                label: 'Clear',
-                onClick: () => set({ tags: null }),
-                disabled: includedNames.length === 0,
-                title: includedNames.length ? undefined : 'No tags are included',
+                label: 'Reset',
+                onClick: () => set({ hidetag: null }),
+                disabled: allTags,
+                title: allTags ? 'Every tag is included' : undefined,
               }}
             >
               Include tagged:{' '}
-              {includedNames.length === 0 ? 'None' : includedNames[0] + (includedNames.length > 1 ? ` +${includedNames.length - 1}` : '')}
+              {allTags
+                ? 'All'
+                : includedNames.length === 0
+                  ? 'None'
+                  : includedNames[0] + (includedNames.length > 1 ? ` +${includedNames.length - 1}` : '')}
             </HeaderFilter>
           </div>
         )}
