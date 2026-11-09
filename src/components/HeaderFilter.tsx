@@ -10,6 +10,8 @@ const WIDTH = 288; // 18rem
 /** What decides a checklist's ticks; shared by the header popover and the phones' Filters sheet. */
 export type ChecklistProps = {
   label: string;
+  /** what the search box looks through ("Search accounts"); defaults to the label */
+  plural?: string;
   items: Item[];
   /** ids unticked */
   hidden: string[];
@@ -94,6 +96,7 @@ export default function HeaderFilter({
  */
 export function FilterChecklist({
   label,
+  plural = label.toLowerCase(),
   items,
   hidden,
   onChange,
@@ -129,8 +132,8 @@ export function FilterChecklist({
         <input
           type="search"
           className="header-filter-search"
-          placeholder={`Search ${label.toLowerCase()}`}
-          aria-label={`Search ${label.toLowerCase()}`}
+          placeholder={`Search ${plural}`}
+          aria-label={`Search ${plural}`}
           value={query}
           autoFocus
           onChange={(e) => setQuery(e.target.value)}

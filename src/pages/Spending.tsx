@@ -576,6 +576,7 @@ export default function Spending({
   };
   const accountFilter: ChecklistProps = {
     label: 'Account',
+    plural: 'accounts',
     items: accountItems,
     hidden: hideAccounts,
     onChange: (next) => setFilters({ hideacct: next.join(',') || null }),
@@ -583,6 +584,7 @@ export default function Spending({
   };
   const categoryFilter: ChecklistProps = {
     label: 'Category',
+    plural: 'categories',
     items: categoryItems,
     hidden: hideCategories,
     onChange: (next) => setFilters({ hidecat: next.join(',') || null }),
