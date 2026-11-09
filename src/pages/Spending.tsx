@@ -699,8 +699,8 @@ export default function Spending({
                   <HeaderFields
                     label="Date"
                     fields={[
-                      { key: 'after', label: 'On or after', type: 'date', value: params.get('after') ?? '' },
-                      { key: 'before', label: 'On or before', type: 'date', value: params.get('before') ?? '' },
+                      { key: 'after', label: 'After', type: 'date', value: params.get('after') ?? '' },
+                      { key: 'before', label: 'Before', type: 'date', value: params.get('before') ?? '' },
                     ]}
                     onApply={(v) => setFilters({ after: v.after || null, before: v.before || null })}
                   />
@@ -745,8 +745,8 @@ export default function Spending({
                     label="Amount"
                     align="end"
                     fields={[
-                      { key: 'min', label: 'At least ($)', type: 'number', value: params.get('min') ?? '', placeholder: '0' },
-                      { key: 'max', label: 'At most ($)', type: 'number', value: params.get('max') ?? '', placeholder: 'Any' },
+                      { key: 'min', label: 'Min', type: 'number', prefix: '$', value: params.get('min') ?? '', placeholder: '0' },
+                      { key: 'max', label: 'Max', type: 'number', prefix: '$', value: params.get('max') ?? '', placeholder: 'Any' },
                     ]}
                     onApply={(v) => setFilters({ min: v.min || null, max: v.max || null })}
                   />

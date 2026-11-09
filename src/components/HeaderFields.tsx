@@ -9,6 +9,8 @@ export type Field = {
   /** the applied value ('' = not set) */
   value: string;
   placeholder?: string;
+  /** shown inside the box, before what's typed (Amount's $) */
+  prefix?: string;
 };
 
 const WIDTH = 256; // 16rem
@@ -81,16 +83,23 @@ export default function HeaderFields({
             {fields.map((f, i) => (
               <label key={f.key}>
                 <span>{f.label}</span>
-                <input
-                  type={f.type}
-                  inputMode={f.type === 'number' ? 'decimal' : undefined}
-                  min={f.type === 'number' ? 0 : undefined}
-                  step={f.type === 'number' ? 'any' : undefined}
-                  placeholder={f.placeholder}
-                  value={draft[f.key] ?? ''}
-                  autoFocus={i === 0}
-                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                />
+                <span className={f.prefix ? 'header-fields-box has-prefix' : 'header-fields-box'}>
+                  {f.prefix && (
+                    <span className="header-fields-prefix" aria-hidden="true">
+                      {f.prefix}
+                    </span>
+                  )}
+                  <input
+                    type={f.type}
+                    inputMode={f.type === 'number' ? 'decimal' : undefined}
+                    min={f.type === 'number' ? 0 : undefined}
+                    step={f.type === 'number' ? 'any' : undefined}
+                    placeholder={f.placeholder}
+                    value={draft[f.key] ?? ''}
+                    autoFocus={i === 0}
+                    onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                  />
+                </span>
               </label>
             ))}
             <div className="header-fields-actions">
