@@ -12,3 +12,4 @@ export default function Switch({ checked, onChange, children }: { checked: boole
     </label>
   );
 }
+

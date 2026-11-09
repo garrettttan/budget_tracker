@@ -265,6 +265,21 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 .register td.approved-col input { width: 1.1rem; height: 1.1rem; cursor: pointer; accent-color: var(--accent); }
 .register td.approved-col input:disabled { cursor: not-allowed; opacity: 0.45; }
 
+/* Segmented (components/Segmented.tsx): options in one outline, a filled highlight sliding to the picked one */
+.segmented {
+  position: relative; display: inline-grid; grid-template-columns: repeat(var(--n), 1fr);
+  padding: 2px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface);
+}
+.segmented-thumb {
+  position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / var(--n));
+  border-radius: 6px; background: var(--accent);
+  transform: translateX(calc(var(--at) * 100%)); transition: transform 200ms ease;
+}
+.segmented .btn { position: relative; border: none; background: none; color: var(--ink-soft); }
+.segmented .btn:hover:not(:disabled) { background: none; color: var(--ink); }
+.segmented .btn[aria-pressed='true'], .segmented .btn[aria-pressed='true']:hover:not(:disabled) { color: var(--surface); }
+@media (prefers-reduced-motion: reduce) { .segmented-thumb { transition: none; } }
+
 /* button groups (Out / In, Trends' ranges): the pressed one is filled */
 .filter { display: flex; gap: 0.5rem; margin: 0 0 1rem; }
 .filter .btn[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
@@ -555,6 +570,12 @@ h2 .owes { font-size: var(--step-0); font-weight: 400; margin-left: 0.4rem; }
 }
 .heading-select:hover { border-color: var(--accent); }
 .heading-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pie-side { min-width: 0; }
+.pie-side > .segmented { margin: 0 0 0.75rem; }
+/* both lists share one cell, the other view's invisibly, so the toggle above stays put */
+.pie-lists { display: grid; }
+.pie-lists > .pie-list { grid-area: 1 / 1; align-self: start; }
+.pie-reserve { visibility: hidden; }
 .pie-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem 2rem; margin: 1.5rem 0 0.5rem; }
 .chart.pie { margin: 0 auto; width: 100%; max-width: 440px; }
 .chart.pie svg { width: 100%; height: auto; }
@@ -773,6 +794,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); ou
   .register.paybacks td, .register.paybacks th, .register.owed td, .register.owed th { padding-right: 0.5rem; }
   .register.owed td.action .btn + .btn { margin-left: 0.25rem; }
   .pie-layout { grid-template-columns: 1fr; }
+  .pie-reserve { display: none; } /* stacked on phones: the toggle sits above the list either way */
   .pie-list { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .stat-row dd { font-size: var(--step-1); }
   .stat-month .heading-select { font-size: var(--step-1); }

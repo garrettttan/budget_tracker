@@ -2,15 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { sum } from '../lib/cents';
 import { money } from '../lib/format';
 import { addMonths, monthLong } from '../lib/months';
-import { type FlowRow, type SpendRow, categoryTotals, fetchReports } from '../lib/reports';
+import { type FlowRow, type SpendRow, categoryTotals, fetchReports, groupTotals } from '../lib/reports';
 import Button from './Button';
+import Segmented from './Segmented';
 import { CategoryPie } from './charts';
+
+/** localStorage key: the pie shows category groups */
+const BY_GROUP = 'spending-pie-by-group';
 
 /**
  * One month's normal spending (untagged, your share, no transfers): a month
  * dropdown in line with Spent / Income / Saved, and a category donut whose
- * categories filter the list below it. `version` changes after edits so the
- * numbers follow them.
+ * categories filter the list below it. A Category | Group control above its
+ * ranked list shows it by category group instead (remembered in this browser).
+ * `version` changes after edits so the numbers follow them.
  */
 export default function MonthSpending({
   month,
@@ -20,6 +25,7 @@ export default function MonthSpending({
   version,
   onMonth,
   onSelect,
+  groups,
   onError,
 }: {
   /** YYYY-MM-01 */
@@ -34,11 +40,29 @@ export default function MonthSpending({
   onMonth: (key: string) => void;
   /** a slice was tapped */
   onSelect: (key: string) => void;
+  /** the pie by group: each category key's group, and the group-level filter state (keys `group:<name>`) */
+  groups: { of: (key: string) => string; selected: string | null; hidden: string[]; onSelect: (key: string) => void };
   onError: (message: string) => void;
 }) {
   const [spend, setSpend] = useState<SpendRow[] | null>(null);
   const [flow, setFlow] = useState<FlowRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [byGroup, setByGroup] = useState(() => {
+    try {
+      return localStorage.getItem(BY_GROUP) === '1';
+    } catch {
+      return false;
+    }
+  });
+  function showByGroup(on: boolean) {
+    setByGroup(on);
+    try {
+      if (on) localStorage.setItem(BY_GROUP, '1');
+      else localStorage.removeItem(BY_GROUP);
+    } catch {
+      // storage blocked: the switch still works for this visit
+    }
+  }
 
   useEffect(() => {
     setLoading(true); // the pie keeps its last render, faded, until this returns
@@ -61,6 +85,7 @@ export default function MonthSpending({
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it
   const byCategory = useMemo(() => categoryTotals(spend ?? [], (m) => m === month), [spend, month]);
   const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
+  const byGroupRows = useMemo(() => groupTotals(byCategory, groups.of), [byCategory, groups.of]);
 
   // options run newest first, so "previous" is the next one down the list
   const at = options.indexOf(month);
@@ -124,15 +149,27 @@ export default function MonthSpending({
       {spend && byCategory.length === 0 && <p className="empty">No spending in {monthLong(month)}.</p>}
       {byCategory.length > 0 && (
         <CategoryPie
-          rows={byCategory}
+          rows={byGroup ? byGroupRows : byCategory}
+          reserveRows={byGroup ? byCategory : byGroupRows}
           format={money}
           total={visibleTotal}
           totalLabel={`spent in ${shortName}`}
-          label={`Spending by category, ${monthLong(month)}`}
-          selected={selected}
-          hidden={hidden}
+          label={`Spending by ${byGroup ? 'category group' : 'category'}, ${monthLong(month)}`}
+          selected={byGroup ? groups.selected : selected}
+          hidden={byGroup ? groups.hidden : hidden}
           selectHint="Shows its transactions"
-          onSelect={onSelect}
+          onSelect={byGroup ? groups.onSelect : onSelect}
+          listHeader={
+            <Segmented
+              label="Show the pie by"
+              options={[
+                { value: 'category', label: 'Category' },
+                { value: 'group', label: 'Group' },
+              ]}
+              value={byGroup ? 'group' : 'category'}
+              onChange={(v) => showByGroup(v === 'group')}
+            />
+          }
         />
       )}
     </div>

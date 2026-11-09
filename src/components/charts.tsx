@@ -514,6 +514,8 @@ export function CategoryPie({
   onSelect,
   selectHint,
   label,
+  listHeader,
+  reserveRows,
 }: {
   rows: { key: string; name: string; value: number }[];
   format: (n: number) => string;
@@ -525,6 +527,10 @@ export function CategoryPie({
   onSelect: (key: string) => void;
   selectHint: string;
   label: string;
+  /** controls above the ranked list (e.g. what the slices are) */
+  listHeader?: React.ReactNode;
+  /** another set of rows the list keeps room for (drawn invisibly behind it), so switching to it never moves the list's header */
+  reserveRows?: { key: string; name: string; value: number }[];
 }) {
   const [hover, setHover] = useState<string | null>(null);
   // more than six categories: the sixth slot onward folds into Other
@@ -591,31 +597,50 @@ export function CategoryPie({
           </div>
         )}
       </div>
-      <ul className="pie-list">
-        {rows.map((r) => {
-          const color = slices.find((s) => s.key === sliceOf(r.key))!.color;
-          return (
-            <li key={r.key}>
-              <Button
-                variant="link"
-                className={`pie-row${selected === r.key ? ' selected' : ''}${hidden.includes(r.key) ? ' faded' : ''}${hot && hot !== sliceOf(r.key) ? ' dim' : ''}`}
-                aria-pressed={selected === r.key}
-                aria-label={`${r.name}: ${format(r.value)}, ${share(r.value)}. ${selectHint}`}
-                onPointerEnter={() => setHover(r.key)}
-                onPointerLeave={() => setHover(null)}
-                onFocus={() => setHover(r.key)}
-                onBlur={() => setHover(null)}
-                onClick={() => onSelect(r.key)}
-              >
-                <span className="chart-key-rect" style={{ background: color }} />
-                <span className="pie-name">{r.name}</span>
-                <span className="pie-share">{share(r.value)}</span>
-                <span className="pie-value">{format(r.value)}</span>
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="pie-side">
+        {listHeader}
+        <div className="pie-lists">
+          {reserveRows && (
+            <ul className="pie-list pie-reserve" aria-hidden="true">
+              {reserveRows.map((r) => (
+                <li key={r.key}>
+                  <span className="btn btn-link pie-row">
+                    <span className="chart-key-rect" />
+                    <span className="pie-name">{r.name}</span>
+                    <span className="pie-share">{share(r.value)}</span>
+                    <span className="pie-value">{format(r.value)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul className="pie-list">
+            {rows.map((r) => {
+              const color = slices.find((s) => s.key === sliceOf(r.key))!.color;
+              return (
+                <li key={r.key}>
+                  <Button
+                    variant="link"
+                    className={`pie-row${selected === r.key ? ' selected' : ''}${hidden.includes(r.key) ? ' faded' : ''}${hot && hot !== sliceOf(r.key) ? ' dim' : ''}`}
+                    aria-pressed={selected === r.key}
+                    aria-label={`${r.name}: ${format(r.value)}, ${share(r.value)}. ${selectHint}`}
+                    onPointerEnter={() => setHover(r.key)}
+                    onPointerLeave={() => setHover(null)}
+                    onFocus={() => setHover(r.key)}
+                    onBlur={() => setHover(null)}
+                    onClick={() => onSelect(r.key)}
+                  >
+                    <span className="chart-key-rect" style={{ background: color }} />
+                    <span className="pie-name">{r.name}</span>
+                    <span className="pie-share">{share(r.value)}</span>
+                    <span className="pie-value">{format(r.value)}</span>
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }

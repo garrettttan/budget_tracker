@@ -1,6 +1,6 @@
 import Combobox from './Combobox';
 
-export type Category = { id: string; name: string; is_income: boolean };
+export type Category = { id: string; name: string; is_income: boolean; group_name?: string | null };
 
 export const TRANSFER = 'transfer';
 /** No category at all, shown as "Uncategorized". */
