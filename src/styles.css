@@ -399,6 +399,8 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 /* Modal (native <dialog>, components/Modal.tsx) */
 .modal {
+  /* a row's modals (Expect reimbursement, Link) sit inside its ⋯ cell: don't take on the cell's alignment */
+  text-align: left; white-space: normal;
   width: min(26rem, calc(100vw - 2rem));
   padding: 1.25rem 1.25rem 1.25rem;
   background: var(--surface);
