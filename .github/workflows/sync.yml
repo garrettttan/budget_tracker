@@ -1,10 +1,10 @@
 name: Daily SimpleFIN sync
 
-# 10:17 UTC = 6:17 a.m. New York in daylight time, 5:17 a.m. in standard time.
+# 7:21 UTC = 2:21 a.m. New York in daylight time, 5:17 a.m. in standard time.
 # Off the top of the hour, when GitHub and SimpleFIN are busiest.
 on:
   schedule:
-    - cron: '17 10 * * *'
+    - cron: '21 07 * * *'
   workflow_dispatch: # "Run workflow" button for an extra sync
 
 permissions:
