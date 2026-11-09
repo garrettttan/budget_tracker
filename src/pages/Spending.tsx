@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { byUse } from '../lib/categoryOrder';
 import { money, plural, shortDate } from '../lib/format';
-import { monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
+import { ALL_TIME, monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
 import { type OpenItem, fetchOpen, payers, personKey, suggestFor } from '../lib/reimbursements';
 import {
   NO_CATEGORY,
@@ -45,7 +45,8 @@ type Action = () => PromiseLike<{ data?: unknown; error: { message: string } | n
  *
  * The list's column headers filter it (Approved → `?status=`, Category →
  * `?hidecat=`, Tags → `?hidetag=` or `?tag=`). All and Approved show the month
- * picked above (`?month=`); To review and a single tag aren't limited to it.
+ * picked above (`?month=`, or `all` for All time); To review and a single tag
+ * aren't limited to it.
  * A link's `?category=` (Settings, Trends) becomes Only that category.
  *
  * Each posted row can be categorized, tagged, approved or unapproved, and
@@ -68,8 +69,8 @@ export default function Spending({
   const categoryLink = params.get('category');
   const current = thisMonth();
   const asked = parseMonth(params.get('month'));
-  const month = asked && asked <= current ? asked : current;
-  const monthScoped = status !== 'review' && !tagFilter;
+  const month = params.get('month') === ALL_TIME ? ALL_TIME : asked && asked <= current ? asked : current;
+  const monthScoped = status !== 'review' && !tagFilter && month !== ALL_TIME;
   const hidecat = params.get('hidecat') ?? '';
   const hidetag = params.get('hidetag') ?? '';
   const scope: Scope = useMemo(
@@ -569,7 +570,7 @@ export default function Spending({
         selected={onlyKey}
         hidden={hideCategories}
         version={version}
-        onMonth={(key) => setFilters({ month: key === current ? null : key.slice(0, 7) })}
+        onMonth={(key) => setFilters({ month: key === current ? null : key === ALL_TIME ? ALL_TIME : key.slice(0, 7) })}
         onSelect={pickCategory}
         groups={{ of: groupOf, selected: onlyGroup, hidden: hiddenGroups, onSelect: pickGroup }}
         onError={setError}

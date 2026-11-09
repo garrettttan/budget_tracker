@@ -208,7 +208,7 @@ export default function CategoryList() {
                 </td>
                 <td className="num">
                   {count(c) > 0 ? (
-                    <Link to={`/spending?status=all&category=${c.id}`} title={`Show ${c.name} transactions`}>
+                    <Link to={`/spending?month=all&category=${c.id}`} title={`Show every ${c.name} transaction`}>
                       {count(c)}
                     </Link>
                   ) : (
