@@ -1,18 +1,22 @@
 import Button from './Button';
+import { type Category, UNCATEGORIZED } from './CategorySelect';
 import Combobox from './Combobox';
 import type { Tag } from './TagCell';
 
 /**
- * Actions for the selected rows: approve them, add a tag to all of them (or
- * create one), or take a tag off all of them.
+ * Actions for the selected rows: approve them, give them all one category,
+ * add a tag to all of them (or create one), or take a tag off all of them.
  */
 export default function BulkBar({
   count,
   approvable,
+  categories,
+  categorizable,
   allTags,
   tagsOnSelected,
   busy,
   onApprove,
+  onSetCategory,
   onAddTag,
   onCreateTag,
   onRemoveTag,
@@ -21,11 +25,16 @@ export default function BulkBar({
   count: number;
   /** selected rows still waiting for review */
   approvable: number;
+  categories: Category[];
+  /** selected rows that take a category (a linked payback doesn't) */
+  categorizable: number;
   allTags: Tag[];
   /** tags at least one selected row carries */
   tagsOnSelected: Tag[];
   busy: boolean;
   onApprove: () => void;
+  /** a category id or UNCATEGORIZED */
+  onSetCategory: (value: string) => void;
   onAddTag: (tagId: string) => void;
   onCreateTag: (name: string) => void;
   onRemoveTag: (tagId: string) => void;
@@ -44,6 +53,14 @@ export default function BulkBar({
       >
         Approve{approvable ? ` ${approvable}` : ''}
       </Button>
+      <Combobox
+        options={[...categories.map((c) => ({ value: c.id, text: c.name })), { value: UNCATEGORIZED, text: 'Uncategorized' }]}
+        value={null}
+        label="Set the category of the selected transactions"
+        placeholder="Set category"
+        disabled={busy || categorizable === 0}
+        onChange={onSetCategory}
+      />
       <Combobox
         options={options(allTags)}
         value={null}

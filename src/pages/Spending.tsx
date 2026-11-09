@@ -395,6 +395,8 @@ export default function Spending({
   // no category is fine: it's approved as Uncategorized
   const approvable = selectedRows.filter((r) => !r.approved);
   const allSelected = Boolean(rows?.length) && rows!.every((r) => selected.has(r.id));
+  // a linked payback has no category ("Payback, not income")
+  const categorizable = selectedRows.filter((r) => !isLinked(r));
   const tagsOnSelected = tags.filter((t) => selectedRows.some((r) => tagIds(r).includes(t.id)));
 
   function toggleSelected(id: string) {
@@ -406,6 +408,32 @@ export default function Spending({
   }
 
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set((rows ?? []).map((r) => r.id)));
+
+  /**
+   * Gives every selected row one category. Approved rows are recategorized
+   * (which teaches merchant memory and un-pairs transfers); rows in To review
+   * just get it as a pre-fill and stay unapproved, as with a single row.
+   */
+  function categorizeSelected(value: string) {
+    const id = value === UNCATEGORIZED ? null : value; // Uncategorized = no category
+    const name = id ? categories?.find((c) => c.id === id)?.name : 'Uncategorized';
+    const approvedIds = categorizable.filter((r) => r.approved).map((r) => r.id);
+    const reviewIds = categorizable.filter((r) => !r.approved).map((r) => r.id);
+    const pairs = categorizable.some((r) => r.approved && r.transfer_pair_id);
+    return act(
+      async () => {
+        if (approvedIds.length) {
+          const res = await db().rpc('recategorize_transactions', { p_ids: approvedIds, p_category: id });
+          if (res.error) return res;
+        }
+        if (reviewIds.length) return db().from('transactions').update({ category_id: id }).in('id', reviewIds);
+        return { error: null };
+      },
+      () =>
+        `${plural(categorizable.length, 'transaction')} ${categorizable.length === 1 ? 'is' : 'are'} now ${name}.` +
+        (pairs ? ' The other sides of their transfers are back in To review.' : ''),
+    );
+  }
 
   /** Adds the tag to every selected row that doesn't have it yet. */
   function tagSelected(tagId: string, name = tagName(tagId)) {
@@ -576,10 +604,13 @@ export default function Spending({
             <BulkBar
               count={selected.size}
               approvable={approvable.length}
+              categories={categories ?? []}
+              categorizable={categorizable.length}
               allTags={tags}
               tagsOnSelected={tagsOnSelected}
               busy={busy}
               onApprove={() => approve(approvable.map((r) => r.id))}
+              onSetCategory={categorizeSelected}
               onAddTag={(id) => tagSelected(id)}
               onCreateTag={createTagForSelected}
               onRemoveTag={untagSelected}
