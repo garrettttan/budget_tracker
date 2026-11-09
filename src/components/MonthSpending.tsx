@@ -141,11 +141,6 @@ export default function MonthSpending({
   const prev = at >= 0 ? months[at + 1] : undefined;
   const next = at > 0 ? months[at - 1] : undefined;
 
-  const date = new Date((allTime ? current : month) + 'T12:00:00');
-  const shortName = date.toLocaleDateString('en-US', {
-    month: 'long',
-    ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
-  });
 
   return (
     <div className={loading && lines ? 'trends refetching' : 'trends'}>
@@ -198,7 +193,6 @@ export default function MonthSpending({
           reserveRows={byGroup ? byCategory : byGroupRows}
           format={money}
           total={visibleTotal}
-          totalLabel={allTime ? 'spent, all time' : `spent in ${shortName}`}
           label={`Spending by ${byGroup ? 'category group' : 'category'}, ${monthLong(month)}`}
           selected={byGroup ? groups.selected : selected}
           hidden={byGroup ? groups.hidden : hidden}
