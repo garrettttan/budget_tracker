@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { sum } from '../lib/cents';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { round, sum } from '../lib/cents';
 import { money } from '../lib/format';
-import { ALL_TIME, addMonths, monthOrAll as monthLong } from '../lib/months';
-import { type FlowRow, type SpendRow, categoryTotals, fetchReports, groupTotals } from '../lib/reports';
+import { ALL_TIME, addMonths, monthEnd, monthOrAll as monthLong } from '../lib/months';
+import { type CategoryTotal, type SummaryLine, fetchEarliestMonth, fetchSummaryLines, groupTotals } from '../lib/reports';
+import { UNTAGGED } from '../lib/transactions';
 import Button from './Button';
 import Segmented from './Segmented';
 import { CategoryPie } from './charts';
@@ -11,9 +12,10 @@ import { CategoryPie } from './charts';
 const BY_GROUP = 'spending-pie-by-group';
 
 /**
- * One month's normal spending (untagged, your share, no transfers): a month
- * dropdown in line with Spent / Income / Saved, and a category donut whose
- * categories filter the list below it. The dropdown ends with All time (every
+ * One month's approved spending (your share, no transfers): a month dropdown in
+ * line with Spent / Income / Saved, and a category donut whose categories filter
+ * the list below it. The numbers and the pie follow the list's tag filters; hidden
+ * categories fade in the pie (in place, so it never reshapes) and leave the numbers. The dropdown ends with All time (every
  * month added up). A Category | Group control above its
  * ranked list shows it by category group instead (remembered in this browser).
  * `version` changes after edits so the numbers follow them.
@@ -23,6 +25,8 @@ export default function MonthSpending({
   current,
   selected,
   hidden,
+  tag,
+  hiddenTags,
   version,
   onMonth,
   onSelect,
@@ -35,8 +39,12 @@ export default function MonthSpending({
   current: string;
   /** the category key shown alone (highlighted in the pie), if any */
   selected: string | null;
-  /** category keys filtered out: faded in the pie (the summary numbers ignore them) */
+  /** category keys filtered out: faded in the pie and left out of the numbers */
   hidden: string[];
+  /** `?tag=`: only transactions carrying it count */
+  tag: string | null;
+  /** tag ids (or UNTAGGED) filtered out: transactions carrying any of them don't count */
+  hiddenTags: string[];
   version: number;
   onMonth: (key: string) => void;
   /** a slice was tapped */
@@ -45,9 +53,10 @@ export default function MonthSpending({
   groups: { of: (key: string) => string; selected: string | null; hidden: string[]; onSelect: (key: string) => void };
   onError: (message: string) => void;
 }) {
-  const [spend, setSpend] = useState<SpendRow[] | null>(null);
-  const [flow, setFlow] = useState<FlowRow[]>([]);
+  const [lines, setLines] = useState<SummaryLine[] | null>(null);
+  const [earliest, setEarliest] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const latest = useRef(0);
   const [byGroup, setByGroup] = useState(() => {
     try {
       return localStorage.getItem(BY_GROUP) === '1';
@@ -65,29 +74,65 @@ export default function MonthSpending({
     }
   }
 
+  const allTime = month === ALL_TIME;
+
   useEffect(() => {
-    setLoading(true); // the pie keeps its last render, faded, until this returns
-    fetchReports([]).then(({ spend, flow, error }) => {
+    fetchEarliestMonth().then(({ month, error }) => {
       if (error) onError(error.message);
-      setSpend(spend);
-      setFlow(flow);
-      setLoading(false);
+      setEarliest(month);
     });
   }, [version]);
 
-  // every month back to the earliest with spending, newest first, for the dropdown
+  useEffect(() => {
+    setLoading(true); // the pie keeps its last render, faded, until this returns
+    const call = ++latest.current;
+    fetchSummaryLines(allTime ? null : month, allTime ? null : monthEnd(month)).then(({ lines, error }) => {
+      if (call !== latest.current) return; // a later month was picked meanwhile
+      if (error) onError(error.message);
+      setLines(lines);
+      setLoading(false);
+    });
+  }, [month, version]);
+
+  // every month back to the earliest with transactions, newest first, then All time
   const options = useMemo(() => {
-    const earliest = (spend ?? []).reduce((a, r) => (r.month < a ? r.month : a), month !== ALL_TIME && month < current ? month : current);
+    const first = [earliest ?? current, allTime ? current : month].reduce((a, b) => (b < a ? b : a), current);
     const list: string[] = [];
-    for (let key = current; key >= earliest; key = addMonths(key, -1)) list.push(key);
+    for (let key = current; key >= first; key = addMonths(key, -1)) list.push(key);
     return [...list, ALL_TIME]; // All time last, past the oldest month
-  }, [spend, month, current]);
+  }, [earliest, month, current, allTime]);
+
+  // the list's tag filters, as in lib/transactions fetchRows
+  const hiddenTagKey = hiddenTags.join();
+  const tagged = useMemo(
+    () =>
+      (lines ?? []).filter(
+        (l) =>
+          (!tag || l.tagIds.includes(tag)) &&
+          !(hiddenTags.includes(UNTAGGED) && l.tagIds.length === 0) &&
+          !l.tagIds.some((t) => hiddenTags.includes(t)),
+      ),
+    [lines, tag, hiddenTagKey],
+  );
 
   // the pie keeps every category (hidden ones faded, in place), so filtering doesn't reshape it
-  const allTime = month === ALL_TIME;
-  const byCategory = useMemo(() => categoryTotals(spend ?? [], (m) => allTime || m === month), [spend, month, allTime]);
+  const byCategory = useMemo(() => {
+    const totals = new Map<string, CategoryTotal>();
+    for (const l of tagged) {
+      if (!l.spent) continue;
+      const t = totals.get(l.key) ?? { key: l.key, name: l.name, value: 0 };
+      t.value = round(t.value + l.spent);
+      totals.set(l.key, t);
+    }
+    return [...totals.values()].filter((t) => t.value > 0).sort((a, b) => b.value - a.value);
+  }, [tagged]);
   const visibleTotal = sum(byCategory.filter((t) => !hidden.includes(t.key)).map((t) => t.value));
   const byGroupRows = useMemo(() => groupTotals(byCategory, groups.of), [byCategory, groups.of]);
+
+  // Spent / Income / Saved: what the filters leave showing
+  const shown = tagged.filter((l) => !hidden.includes(l.key));
+  const spending = sum(shown.map((l) => l.spent));
+  const income = sum(shown.map((l) => l.income));
 
   // options run newest first, so "previous" is the next one down the list; the arrows step
   // through months only, so All time has neither
@@ -96,10 +141,6 @@ export default function MonthSpending({
   const prev = at >= 0 ? months[at + 1] : undefined;
   const next = at > 0 ? months[at - 1] : undefined;
 
-  // Spent / Income / Saved are the whole month (or every month), whatever the filters hide
-  const flowRows = flow.filter((f) => allTime || f.month === month);
-  const income = sum(flowRows.map((f) => Number(f.income)));
-  const spending = sum(flowRows.map((f) => Number(f.spending)));
   const date = new Date((allTime ? current : month) + 'T12:00:00');
   const shortName = date.toLocaleDateString('en-US', {
     month: 'long',
@@ -107,7 +148,7 @@ export default function MonthSpending({
   });
 
   return (
-    <div className={loading && spend ? 'trends refetching' : 'trends'}>
+    <div className={loading && lines ? 'trends refetching' : 'trends'}>
       <dl className="stat-row">
         {/* the month sits in line with its numbers; the page title already says "Spending" */}
         <div className="stat-month">
@@ -150,7 +191,7 @@ export default function MonthSpending({
           <dd>{money(Math.abs(income - spending))}</dd>
         </div>
       </dl>
-      {spend && byCategory.length === 0 && <p className="empty">{allTime ? 'No spending yet.' : `No spending in ${monthLong(month)}.`}</p>}
+      {lines && !loading && byCategory.length === 0 && <p className="empty">{allTime ? 'No spending yet.' : `No spending in ${monthLong(month)}.`}</p>}
       {byCategory.length > 0 && (
         <CategoryPie
           rows={byGroup ? byGroupRows : byCategory}
