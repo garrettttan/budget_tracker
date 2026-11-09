@@ -77,7 +77,9 @@ export type SummaryLine = {
 export async function fetchSummaryLines(start: string | null, end: string | null) {
   const lines: SummaryLine[] = [];
   for (let from = 0; from < 50_000; from += 1000) {
-    let q = db().from('spending_lines').select('transaction_id, category_id, category_name, spent, tag_ids, account_id, posted_date, amount, description, merchant_id');
+    let q = db()
+      .from('spending_lines')
+      .select('transaction_id, category_id, category_name, spent, tag_ids, account_id, posted_date, amount, description, merchant_id');
     if (start) q = q.gte('posted_date', start);
     if (end) q = q.lte('posted_date', end);
     const { data, error } = await q.order('transaction_id').range(from, from + 999);

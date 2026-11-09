@@ -2,7 +2,7 @@ import { type ReactNode, type FormEvent, useId, useState } from 'react';
 import Button from './Button';
 import { usePopover } from './usePopover';
 
-export type Field = {
+type Field = {
   key: string;
   label: string;
   type: 'text' | 'date' | 'number';

@@ -17,11 +17,11 @@ import {
   UNTAGGED,
   fetchPending,
   fetchPresent,
-  typedFilters,
   fetchRows,
   fetchUnreviewedIncome,
   isLinked,
   rowName,
+  typedFilters,
 } from '../lib/transactions';
 import AddTransaction, { type AccountOption } from '../components/AddTransaction';
 import BulkBar from '../components/BulkBar';
@@ -481,14 +481,11 @@ export default function Spending({
 
   // ---- header filters ------------------------------------------------------------
 
+  // any column filter beyond Approved and ?tag=
+  const columnFiltered =
+    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0 || TYPED.some((k) => params.get(k));
   // anything filtered: shows "Filters are on · Show all"
-  const filtering =
-    hideCategories.length > 0 ||
-    hideTags.length > 0 ||
-    hideAccounts.length > 0 ||
-    TYPED.some((k) => params.get(k)) ||
-    Boolean(tagFilter) ||
-    status !== 'all';
+  const filtering = columnFiltered || Boolean(tagFilter) || status !== 'all';
 
   // Approved: both ticked = All (no `?status=`); one unticked = To review or Approved only
   const approvalItems = [
@@ -615,47 +612,32 @@ export default function Spending({
     onOnly: (id) => setFilters({ status: id === 'review' ? 'review' : 'approved' }),
   };
 
-  // the sheet's rows: each filter's state in a few words
-  const checklistSummary = (f: ChecklistProps) => {
+  // the sheet's rows: each filter with its state in a few words ("2 of 3", "Oct 10 – Oct 25", "Min $5")
+  const checklistRow = (key: string, f: ChecklistProps): SheetFilter => {
+    const on = checklistOn(f.items, f.hidden);
     const shown = f.items.filter((i) => !f.hidden.includes(i.id));
-    if (!checklistOn(f.items, f.hidden)) return 'All';
-    if (shown.length === 1) return shown[0].name;
-    return `${shown.length} of ${f.items.length}`;
+    const summary = !on ? 'All' : shown.length === 1 ? shown[0].name : `${shown.length} of ${f.items.length}`;
+    return { key, kind: 'checklist', props: f, on, summary };
   };
+  const fieldsRow = (key: string, f: FieldsProps, summary: string | null): SheetFilter => ({
+    key,
+    kind: 'fields',
+    props: f,
+    on: fieldsOn(f.fields),
+    summary: summary ?? 'Any',
+  });
   const day = (d: string) => shortDate(d).replace(/, \d{4}$/, '');
-  const after = params.get('after');
-  const before = params.get('before');
-  const min = params.get('min');
-  const max = params.get('max');
+  const range = (low: string | null, high: string | null, lowWord: string, highWord: string) =>
+    low && high ? `${low} – ${high}` : low ? `${lowWord} ${low}` : high ? `${highWord} ${high}` : null;
+  const dollars = (n: number | null) => (n === null ? null : `$${n}`);
   const sheetFilters: SheetFilter[] = [
-    {
-      key: 'date',
-      label: 'Date',
-      kind: 'fields',
-      props: dateFilter,
-      on: fieldsOn(dateFilter.fields),
-      summary: after && before ? `${day(after)} – ${day(before)}` : after ? `After ${day(after)}` : before ? `Before ${day(before)}` : 'Any',
-    },
-    {
-      key: 'merchant',
-      label: 'Merchant',
-      kind: 'fields',
-      props: merchantFilter,
-      on: fieldsOn(merchantFilter.fields),
-      summary: params.get('merchant') ? `“${params.get('merchant')}”` : 'Any',
-    },
-    { key: 'account', label: 'Account', kind: 'checklist', props: accountFilter, on: checklistOn(accountItems, hideAccounts), summary: checklistSummary(accountFilter) },
-    { key: 'category', label: 'Category', kind: 'checklist', props: categoryFilter, on: checklistOn(categoryItems, hideCategories), summary: checklistSummary(categoryFilter) },
-    { key: 'tags', label: 'Tags', kind: 'checklist', props: tagsFilter, on: checklistOn(tagItems, tagHidden), summary: checklistSummary(tagsFilter) },
-    {
-      key: 'amount',
-      label: 'Amount',
-      kind: 'fields',
-      props: amountFilter,
-      on: fieldsOn(amountFilter.fields),
-      summary: min && max ? `$${min} – $${max}` : min ? `Min $${min}` : max ? `Max $${max}` : 'Any',
-    },
-    { key: 'approved', label: 'Approved', kind: 'checklist', props: approvedFilter, on: status !== 'all', summary: checklistSummary(approvedFilter) },
+    fieldsRow('date', dateFilter, range(typed.after && day(typed.after), typed.before && day(typed.before), 'After', 'Before')),
+    fieldsRow('merchant', merchantFilter, typed.merchant && `“${typed.merchant}”`),
+    checklistRow('account', accountFilter),
+    checklistRow('category', categoryFilter),
+    checklistRow('tags', tagsFilter),
+    fieldsRow('amount', amountFilter, range(dollars(typed.minAmount), dollars(typed.maxAmount), 'Min', 'Max')),
+    checklistRow('approved', approvedFilter),
   ];
 
   // ---- render --------------------------------------------------------------------
@@ -666,7 +648,7 @@ export default function Spending({
   );
 
   const emptyMessage =
-    hideCategories.length > 0 || hideTags.length > 0 || hideAccounts.length > 0 || TYPED.some((k) => params.get(k))
+    columnFiltered
       ? 'No transactions match.'
       : tagFilter
         ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'}${monthScoped ? ` in ${monthLong(month)}` : ''} carry this tag.`

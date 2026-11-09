@@ -5,8 +5,8 @@ import { type ChecklistProps, FilterChecklist } from './HeaderFilter';
 import { type FieldsProps, FieldsForm } from './HeaderFields';
 import Modal from './Modal';
 
-/** One column's filter, as Spending's headers have it, plus a short state for the sheet's row. */
-export type SheetFilter = { key: string; label: string; on: boolean; summary: string } & (
+/** One column's filter, as Spending's headers have it (its label names the row), plus a short state for the sheet's row. */
+export type SheetFilter = { key: string; on: boolean; summary: string } & (
   | { kind: 'checklist'; props: ChecklistProps }
   | { kind: 'fields'; props: FieldsProps }
 );
@@ -79,7 +79,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
                         aria-expanded={isOpen}
                         onClick={() => toggle(f.key)}
                       >
-                        <span className="sheet-filter-label">{f.label}</span>
+                        <span className="sheet-filter-label">{f.props.label}</span>
                         <span className={f.on ? 'sheet-filter-summary on' : 'sheet-filter-summary'}>{f.summary}</span>
                         <svg className="sheet-chevron" viewBox="0 0 6 10" aria-hidden="true">
                           <path d="M1 1l4 4-4 4" />

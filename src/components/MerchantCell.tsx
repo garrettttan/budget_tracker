@@ -4,10 +4,11 @@ import Button from './Button';
 import Collapse from './Collapse';
 
 /**
- * A transaction's merchant name, with a chevron: it opens the row's details
- * (date and account, which phones hide; the bank's text, your note, and
- * anything passed as children), as does a tap anywhere else on the row that
- * isn't a control (rowToggle). Hover (desktop) shows the bank's text.
+ * A transaction's merchant name. It opens the row's details (date and account,
+ * which phones hide; the bank's text, your note, and anything passed as
+ * children), as does a tap anywhere else on the row that isn't a control
+ * (rowToggle); the row tints while they're open, and on hover. The name is the
+ * keyboard's way in. Hover (desktop) shows the bank's text.
  */
 export default function MerchantCell({
   name,
@@ -33,19 +34,17 @@ export default function MerchantCell({
   children?: ReactNode;
 }) {
   const id = useId();
-  const text = name ?? description;
-  // the chevron stays on the same line as the name's last word
-  const split = text.lastIndexOf(' ');
   return (
     <>
-      <Button variant="link" className="merchant-toggle" title={description} aria-expanded={open} aria-controls={id} onClick={onToggle}>
-        {split > 0 ? text.slice(0, split + 1) : ''}
-        <span className="merchant-last">
-          {split > 0 ? text.slice(split + 1) : text}
-          <svg className="merchant-chevron" viewBox="0 0 6 10" aria-hidden="true">
-            <path d="M1 1l4 4-4 4" />
-          </svg>
-        </span>
+      <Button
+        variant="link"
+        className="merchant-toggle"
+        title={description}
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={onToggle}
+      >
+        {name ?? description}
       </Button>
       {summary}
       <Collapse open={open}>

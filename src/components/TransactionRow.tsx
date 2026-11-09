@@ -73,7 +73,7 @@ export default function TransactionRow({
 
   return (
     <tr
-      className={[r.approved ? '' : 'unreviewed', selected ? 'selected' : ''].join(' ').trim() || undefined}
+      className={[r.approved ? '' : 'unreviewed', selected ? 'selected' : '', details ? 'open' : ''].join(' ').trim() || undefined}
       onClick={rowToggle(toggleDetails)}
     >
       <td className="select-col">
@@ -155,7 +155,7 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
   const [details, setDetails] = useState(false);
   const toggleDetails = () => setDetails((d) => !d);
   return (
-    <tr className="pending" onClick={rowToggle(toggleDetails)}>
+    <tr className={details ? 'pending open' : 'pending'} onClick={rowToggle(toggleDetails)}>
       <td className="select-col" />
       <td className="date-col">{shortDate(r.posted_date)}</td>
       <td>

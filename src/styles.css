@@ -12,6 +12,8 @@
   --rule: #d8dee2;
   --accent: #0e6e74;
   --accent-wash: #e1efef;
+  /* Spending: an open or hovered row; fainter than a selected row's --accent-wash (follows it into dark mode) */
+  --row-tint: color-mix(in srgb, var(--accent-wash) 55%, transparent);
   --accent-strong: #0a5458;
   --out: #9a3b2e;
   --in: #2d7550;
@@ -235,12 +237,14 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 
 /* merchant name in a transaction row: looks like text; click/tap shows the row's details */
 .btn-link.merchant-toggle { color: var(--ink); font-weight: inherit; text-align: left; }
-/* the chevron says the name (and the row) opens details; it stays on the name's last word */
-.merchant-last { white-space: nowrap; }
-.merchant-chevron { display: inline-block; width: 6px; height: 10px; margin-left: 0.35rem; vertical-align: -0.05em; fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms ease; }
-.merchant-toggle[aria-expanded='true'] .merchant-chevron { transform: rotate(90deg); }
-@media (hover: hover) { .register.txns tbody tr { cursor: pointer; } }
-@media (prefers-reduced-motion: reduce) { .merchant-chevron { transition: none; } }
+/* a whole row opens its details (MerchantCell rowToggle): it tints while open, and on hover */
+.register.txns td { transition: background-color 150ms; }
+.register.txns tbody tr.open td { background: var(--row-tint); }
+@media (hover: hover) {
+  .register.txns tbody tr { cursor: pointer; }
+  .register.txns tbody tr:hover td { background: var(--row-tint); }
+}
+@media (prefers-reduced-motion: reduce) { .register.txns td { transition: none; } }
 .row-details { color: var(--ink-soft); font-size: var(--step--1); margin-top: 0.2rem; overflow-wrap: anywhere; }
 .phone-only { display: none; }
 
@@ -359,7 +363,7 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .register .select-col input { width: 1.05rem; height: 1.05rem; margin: 0.2rem 0 0; cursor: pointer; accent-color: var(--accent); }
 .register .select-col input:disabled { cursor: not-allowed; opacity: 0.45; }
-.register tr.selected td { background: var(--accent-wash); }
+.register tr.selected td, .register.txns tbody tr.selected td { background: var(--accent-wash); } /* over the open / hover tint */
 .bulk-bar {
   position: sticky;
   top: 0.5rem;
