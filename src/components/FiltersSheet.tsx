@@ -1,6 +1,6 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import Button from './Button';
-import Collapse from './Collapse';
+import Collapse, { COLLAPSE_MS } from './Collapse';
 import { type ChecklistProps, FilterChecklist } from './HeaderFilter';
 import { type FieldsProps, FieldsForm } from './HeaderFields';
 import Modal from './Modal';
@@ -16,11 +16,32 @@ export type SheetFilter = { key: string; label: string; on: boolean; summary: st
  * some columns (Date, Account). A "Filters" button opens a sheet listing each
  * filter with its state; tapping one opens the same checklist or form as its
  * column header, in place. Changes apply as they're made.
+ *
+ * Opening one leaves the others as they are (closing one above would pull the
+ * tapped row up mid-slide), and the sheet sits at the top of the screen, so it
+ * grows downward instead of re-centering. A section opening below the fold is
+ * scrolled into view once it has slid open.
  */
 export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFilter[]; onShowAll: () => void }) {
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const items = useRef(new Map<string, HTMLLIElement>());
   const titleId = useId();
+
+  const shut = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  function toggle(key: string) {
+    if (expanded.has(key)) return shut(key);
+    setExpanded((prev) => new Set(prev).add(key));
+    window.setTimeout(() => {
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      items.current.get(key)?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }, COLLAPSE_MS);
+  }
   const count = filters.filter((f) => f.on).length;
 
   return (
@@ -34,7 +55,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
           className="filters-sheet"
           onClose={() => {
             setOpen(false);
-            setExpanded(null);
+            setExpanded(new Set());
           }}
         >
           {(close) => (
@@ -47,14 +68,20 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
               </div>
               <ul className="sheet-filters">
                 {filters.map((f) => {
-                  const isOpen = expanded === f.key;
+                  const isOpen = expanded.has(f.key);
                   return (
-                    <li key={f.key}>
+                    <li
+                      key={f.key}
+                      ref={(el) => {
+                        if (el) items.current.set(f.key, el);
+                        else items.current.delete(f.key);
+                      }}
+                    >
                       <Button
                         variant="link"
                         className="sheet-filter-row"
                         aria-expanded={isOpen}
-                        onClick={() => setExpanded(isOpen ? null : f.key)}
+                        onClick={() => toggle(f.key)}
                       >
                         <span className="sheet-filter-label">{f.label}</span>
                         <span className={f.on ? 'sheet-filter-summary on' : 'sheet-filter-summary'}>{f.summary}</span>
@@ -65,9 +92,9 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
                       <Collapse open={isOpen}>
                         <div className="sheet-filter-body">
                           {f.kind === 'checklist' ? (
-                            <FilterChecklist {...f.props} onDone={() => setExpanded(null)} />
+                            <FilterChecklist {...f.props} onDone={() => shut(f.key)} />
                           ) : (
-                            <FieldsForm {...f.props} onDone={() => setExpanded(null)} />
+                            <FieldsForm {...f.props} onDone={() => shut(f.key)} />
                           )}
                         </div>
                       </Collapse>

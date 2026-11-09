@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 /** How long the slide takes; matches .collapse in styles.css (the fallback waits a little longer). */
-const DURATION = 200;
+export const COLLAPSE_MS = 200;
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
@@ -35,7 +35,7 @@ export default function Collapse({ open, children }: { open: boolean; children: 
       return;
     }
     // unmount when the slide ends (or soon after, if no transitionend arrives)
-    const timer = window.setTimeout(() => setMounted(false), DURATION + 100);
+    const timer = window.setTimeout(() => setMounted(false), COLLAPSE_MS + 100);
     return () => window.clearTimeout(timer);
   }, [open]);
 

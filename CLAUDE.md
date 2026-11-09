@@ -70,7 +70,8 @@ Amount ("Min" / "Max" with a $ in the box, `?min=&max=`, dollars either directio
 The list's `or=` filters (categories, min amount, merchant) are separate params, which PostgREST ANDs.
 **Phones: Filters sheet** (`components/FiltersSheet.tsx`, Nov 9): Date and Account columns are hidden under 720px, so a
 "Filters (n)" link beside the Transactions heading opens a modal listing every column filter with its state ("2 of 3",
-"Oct 10 – Oct 25", "Min $5"); a row slides open in place (`components/Collapse.tsx`, ~200ms, off under reduced motion) to the same body its header uses. `HeaderFilter` / `HeaderFields`
+"Oct 10 – Oct 25", "Min $5"); a row slides open in place (`components/Collapse.tsx`, ~200ms, off under reduced motion) to the same body its header uses;
+sections open independently (closing one above would yank the tapped row) and the sheet is pinned to the top (no re-centering). `HeaderFilter` / `HeaderFields`
 are a trigger + popover around `FilterChecklist` / `FieldsForm`; Spending defines each filter once (`dateFilter`,
 `accountFilter`, …) and spreads it into both. Checklists have no "Show all" footer (only `reset`, for Trends). Hidden
 categories leave the list and fade in the pie (its middle shows what's visible); Spent / Income / Saved always cover the whole month, whatever the filters; hidden tags leave the list (an anti-join:
