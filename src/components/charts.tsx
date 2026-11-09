@@ -508,7 +508,6 @@ export function CategoryPie({
   rows,
   format,
   total,
-  totalLabel,
   selected,
   hidden = [],
   onSelect,
@@ -520,7 +519,6 @@ export function CategoryPie({
   rows: { key: string; name: string; value: number }[];
   format: (n: number) => string;
   total: number;
-  totalLabel: string;
   selected?: string | null;
   /** keys filtered out: drawn faded, in place */
   hidden?: string[];
@@ -572,11 +570,8 @@ export function CategoryPie({
               onClick={() => a.key !== 'other' && onSelect(a.key)}
             />
           ))}
-          <text x={size / 2} y={size / 2 - 6} textAnchor="middle" className="pie-total">
+          <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" className="pie-total">
             {format(total)}
-          </text>
-          <text x={size / 2} y={size / 2 + 24} textAnchor="middle" className="pie-total-label">
-            {totalLabel}
           </text>
         </svg>
         {tipArc && (

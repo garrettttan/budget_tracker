@@ -33,3 +33,9 @@ export const monthLong = (key: string) =>
 
 /** Reads `?month=YYYY-MM` as a YYYY-MM-01 key, null if missing or malformed. */
 export const parseMonth = (value: string | null) => (value && /^\d{4}-\d{2}$/.test(value) ? `${value}-01` : null);
+
+/** `?month=all` and the month key for every month at once (Spending's "All time"). */
+export const ALL_TIME = 'all';
+
+/** "November 2026", or "All time". */
+export const monthOrAll = (key: string) => (key === ALL_TIME ? 'All time' : monthLong(key));
