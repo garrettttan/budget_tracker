@@ -505,12 +505,11 @@ code { font-size: 0.9em; background: var(--accent-wash); padding: 0.05em 0.3em; 
 }
 .row-menu [role='menu'] { display: flex; flex-direction: column; }
 /* ⋯ → Add tag: a picker in the same popover; its list of matching tags drops down inside it, not floating */
-.row-menu-panel { padding: 0.6rem; text-align: left; } /* not the ⋯ column's right alignment */
-.add-tag-panel { display: flex; flex-direction: column; gap: 0.4rem; }
-.add-tag-title { font-size: var(--step--1); color: var(--ink-soft); }
-.add-tag-panel .combobox { display: block; width: 100%; }
-.row-menu.row-menu-panel .add-tag-panel .combobox input { width: 100%; padding: 0.4rem 0.5rem; font-size: var(--step-0); }
-.add-tag-panel .combobox ul { position: static; margin-top: 0.35rem; max-height: 14rem; box-shadow: none; }
+.modal.tag-sheet { margin: 1rem auto auto; max-height: calc(100dvh - 2rem); } /* pinned to the top: the phone keyboard can't cover its box */
+.tag-sheet .combobox { display: block; width: 100%; margin-top: 0.75rem; }
+/* the modal sits inside the register's ⋯ cell, so outrank its phone rule for the category box; the size modal fields use */
+.tag-sheet .combobox input, .register.txns .tag-sheet .combobox input { width: 100%; padding: 0.45rem 0.6rem; font-size: var(--step-0); }
+.tag-sheet .combobox ul { position: static; margin-top: 0.35rem; max-height: 14rem; box-shadow: none; }
 .row-menu .btn-link { text-align: left; padding: 0.45rem 0.6rem; border-radius: 4px; text-decoration: none; }
 .row-menu .btn-link:hover:not(:disabled), .row-menu .btn-link:focus-visible { background: var(--accent-wash); text-decoration: none; }
 /* in a modal, the reimbursement forms drop their inline box */

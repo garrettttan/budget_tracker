@@ -299,9 +299,9 @@ Email + password auth (single user).
 anywhere on the row that isn't a control, or its merchant name; the row tints while open and on hover (no chevron);
 `rowToggle` in `components/MerchantCell.tsx` skips controls and the select / Approved / ⋯ cells. The row holds the open
 state (`MerchantCell` is controlled); details slide via `Collapse`. On phones, tags show in the details without "+ Tag": the ⋯ menu's
-**Add tag** (a `phoneOnly` `MenuItem`; hidden ≥ 721px, as is a ⋯ holding nothing else) swaps the menu for a picker in
-the same popover (`MenuItem.panel`): a tag-name box whose matching tags drop down inline (Combobox, `New tag "…"` to
-create); picking or creating adds it and closes.
+**Add tag** (a `phoneOnly` `MenuItem`; hidden ≥ 721px, as is a ⋯ holding nothing else) opens a modal pinned to the
+top of the screen (`.tag-sheet`, Nov 10; it used to be a panel in the ⋯ popover, which iOS's keyboard could cover):
+a tag-name box whose matching tags drop down inline (Combobox, `New tag "…"` to create); picking or creating adds it and closes.
 
 Code map (cleanup, Nov 7): Spending's list lives in `lib/transactions.ts` (row type, `Scope`, filter
 keys, `fetchRows` / `fetchPending` / `fetchPresent`) and `components/TransactionRow.tsx` (a posted row,

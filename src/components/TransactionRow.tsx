@@ -181,14 +181,15 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
   );
 }
 
-type Form = 'expect' | 'link';
+type Form = 'expect' | 'link' | 'tag';
 
 /**
  * A row's ⋯ menu: Add tag (phones only: wider screens have the Tags column);
  * Expect reimbursement on a charge; on money in, Link to what someone owes, or
  * Unlink payment once linked; Delete transaction on one you added by hand.
  * Expect and Link open their form in a modal. No menu if none apply (on wider
- * screens, none but Add tag).
+ * screens, none but Add tag). Add tag opens a modal pinned to the top of the
+ * screen, so the phone keyboard can't cover its box.
  */
 function ActionsMenu({
   row: r,
@@ -218,36 +219,8 @@ function ActionsMenu({
     setForm(f);
   };
 
-  // Add tag (phones): a picker in the menu's popover; picking or creating a tag adds it and closes
-  const items: MenuItem[] = [
-    {
-      label: 'Add tag',
-      phoneOnly: true,
-      panel: (close) => (
-        <div className="add-tag-panel">
-          <span className="add-tag-title" aria-hidden="true">
-            Add tag
-          </span>
-          <Combobox
-            options={tags.filter((t) => !rowTags.some((x) => x.id === t.id)).map((t) => ({ value: t.id, text: t.name }))}
-            value={null}
-            label={`Add a tag to ${name}`}
-            placeholder="Tag name"
-            autoFocus
-            onChange={(id) => {
-              actions.onAddTag(id);
-              close();
-            }}
-            onCreate={(text) => {
-              actions.onCreateTag(text);
-              close();
-            }}
-            createLabel={(text) => `New tag “${text}”`}
-          />
-        </div>
-      ),
-    },
-  ];
+  // Add tag (phones): a picker in a modal pinned to the top, so the keyboard never covers its box
+  const items: MenuItem[] = [{ label: 'Add tag', phoneOnly: true, onSelect: () => show('tag') }];
   if (isCharge(r)) {
     const full = expectedOn(r) >= -Number(r.amount);
     items.push({
@@ -279,10 +252,17 @@ function ActionsMenu({
     <>
       <RowMenu label={`More for ${name}`} items={items} disabled={busy} />
       {form && (
-        <Modal labelledBy={titleId} busy={busy} onClose={() => setForm(null)}>
+        <Modal
+          labelledBy={titleId}
+          busy={busy}
+          onClose={() => setForm(null)}
+          className={form === 'tag' ? 'tag-sheet' : undefined}
+        >
           {(close) => (
             <>
-              <h2 id={titleId}>{form === 'expect' ? 'Expect reimbursement' : 'Link to what someone owes'}</h2>
+              <h2 id={titleId}>
+                {form === 'tag' ? 'Add tag' : form === 'expect' ? 'Expect reimbursement' : 'Link to what someone owes'}
+              </h2>
               <p className="muted small">
                 {name} · {shortDate(r.posted_date)} · {money(r.amount)}
               </p>
@@ -291,7 +271,24 @@ function ActionsMenu({
                   Couldn’t save. Try again.
                 </p>
               )}
-              {form === 'expect' ? (
+              {form === 'tag' ? (
+                <Combobox
+                  options={tags.filter((t) => !rowTags.some((x) => x.id === t.id)).map((t) => ({ value: t.id, text: t.name }))}
+                  value={null}
+                  label={`Add a tag to ${name}`}
+                  placeholder="Tag name"
+                  autoFocus
+                  onChange={(id) => {
+                    actions.onAddTag(id);
+                    close();
+                  }}
+                  onCreate={(text) => {
+                    actions.onCreateTag(text);
+                    close();
+                  }}
+                  createLabel={(text) => `New tag “${text}”`}
+                />
+              ) : form === 'expect' ? (
                 <ExpectForm
                   charge={-Number(r.amount)}
                   expected={expectedOn(r)}
