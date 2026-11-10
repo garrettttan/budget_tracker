@@ -238,7 +238,7 @@ export function isStalePending(
 export function normalizeDescription(description: string): string {
   const key = description
     .toLowerCase()
-    .replace(/^(sq|tst|sp|pp|paypal|pos)\s*\*\s*/, '') // card-processor prefixes
+    .replace(/^(sq|tst|sp|pp|paypal|pos|fsi)\s*\*\s*/, '') // card-processor prefixes
     .replace(/\*\w+$/, '') //                            trailing reference codes: "*RT4"
     .replace(/#?\d{3,}|\d+\/\d+(\/\d+)?/g, ' ') //       store numbers, ids, dates
     .replace(/[^a-z0-9&.' ]+/g, ' ')

@@ -129,6 +129,7 @@ test('merchant keys group variants of one merchant', () => {
   assert.equal(normalizeDescription('AMAZON.COM*RT4'), 'amazon.com');
   assert.equal(normalizeDescription('AMZN MKTP US*2K3'), 'amzn mktp us');
   assert.equal(normalizeDescription('TST* CARBONE NYC #0042 10/12'), 'carbone nyc');
+  assert.equal(normalizeDescription('FSI* CITY PARKING 0042'), 'city parking');
   assert.equal(normalizeDescription('12345'), '12345', 'falls back to the raw text when nothing is left');
   assert.equal(merchantName('joes coffee'), 'Joes Coffee');
   assert.equal(merchantName("trader joe's"), "Trader Joe's");
