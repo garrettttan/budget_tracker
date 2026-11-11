@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { db } from '../lib/supabase';
-import { plural } from '../lib/format';
 import Button from './Button';
 import Modal from './Modal';
+import { strings } from '../lib/strings';
+
+const t = strings.categories;
+const common = strings.common;
 
 export type EditableCategory = { id: string; name: string; group_name: string | null; is_income: boolean };
 
@@ -35,7 +38,7 @@ export default function EditCategory({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const why = !name.trim() ? 'Type a name first' : undefined;
+  const why = !name.trim() ? common.typeName : undefined;
   const needsTarget = transactionCount > 0;
 
   async function save(e: React.FormEvent) {
@@ -50,8 +53,8 @@ export default function EditCategory({
     setBusy(true);
     setError(null);
     const { error } = await db().from('categories').update(changes).eq('id', category.id);
-    if (error) return fail(error.code === '23505' ? 'You already have a category with that name.' : error.message);
-    await onSaved(`Saved ${name.trim()}.`);
+    if (error) return fail(error.code === '23505' ? t.duplicate : error.message);
+    await onSaved(common.saved(name.trim()));
   }
 
   async function remove() {
@@ -59,8 +62,8 @@ export default function EditCategory({
     setError(null);
     const { error } = await db().rpc('delete_category', { p_id: category.id, p_into: into || null });
     if (error) return fail(error.message);
-    const target = others.find((c) => c.id === into)?.name ?? 'Uncategorized';
-    await onSaved(needsTarget ? `Deleted ${category.name}; its transactions are now ${target}.` : `Deleted ${category.name}.`);
+    const target = others.find((c) => c.id === into)?.name ?? common.uncategorized;
+    await onSaved(needsTarget ? t.deletedInto(category.name, target) : common.deleted(category.name));
   }
 
   function fail(message: string) {
@@ -78,14 +81,14 @@ export default function EditCategory({
               remove();
             }}
           >
-            <h2 id="edit-category-title">Delete {category.name}?</h2>
-            {error && <p className="error" role="alert">Couldn’t delete: {error}</p>}
+            <h2 id="edit-category-title">{t.deleteTitle(category.name)}</h2>
+            {error && <p className="error" role="alert">{t.couldntDelete(error)}</p>}
             {needsTarget ? (
               <div className="fields single">
                 <label>
-                  Move its {plural(transactionCount, 'transaction')} to
+                  {t.moveTo(transactionCount)}
                   <select value={into} autoFocus disabled={busy} onChange={(e) => setInto(e.target.value)}>
-                    <option value="">Uncategorized</option>
+                    <option value="">{common.uncategorized}</option>
                     {others.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -95,28 +98,28 @@ export default function EditCategory({
                 </label>
               </div>
             ) : (
-              <p className="muted">No transactions use it.</p>
+              <p className="muted">{t.unused}</p>
             )}
             <div className="form-actions">
               <Button type="submit" variant="primary" disabled={busy}>
-                Delete
+                {common.delete}
               </Button>
               <Button variant="link" disabled={busy} onClick={() => setDeleting(false)}>
-                Back
+                {common.back}
               </Button>
             </div>
           </form>
         ) : (
           <form onSubmit={save}>
-            <h2 id="edit-category-title">Edit category</h2>
-            {error && <p className="error" role="alert">Couldn’t save: {error}</p>}
+            <h2 id="edit-category-title">{t.editTitle}</h2>
+            {error && <p className="error" role="alert">{common.couldntSave(error)}</p>}
             <div className="fields single">
               <label>
-                Name
+                {common.name}
                 <input type="text" value={name} autoFocus data-autofocus disabled={busy} onChange={(e) => setName(e.target.value)} />
               </label>
               <label>
-                Group
+                {common.group}
                 <input
                   type="text"
                   list="category-groups"
@@ -132,15 +135,15 @@ export default function EditCategory({
               </label>
               <label className="checkbox-field">
                 <input type="checkbox" checked={income} disabled={busy} onChange={(e) => setIncome(e.target.checked)} />
-                Income (not spending)
+                {t.incomeCheckbox}
               </label>
             </div>
             <div className="form-actions">
               <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
-                Save
+                {common.save}
               </Button>
               <Button variant="link" disabled={busy} onClick={close}>
-                Cancel
+                {common.cancel}
               </Button>
               <Button
                 variant="link"
@@ -151,7 +154,7 @@ export default function EditCategory({
                   setDeleting(true);
                 }}
               >
-                Delete category
+                {t.deleteButton}
               </Button>
             </div>
           </form>

@@ -1,5 +1,8 @@
 import { money, shortDate } from '../lib/format';
 import Button from './Button';
+import { strings } from '../lib/strings';
+
+const t = strings.suggestions;
 
 export type Suggestion = {
   out_id: string;
@@ -27,16 +30,16 @@ export default function TransferSuggestions({
 }) {
   return (
     <>
-      <h2>Possible transfers</h2>
+      <h2>{t.transfersTitle}</h2>
       <table className="register transfers">
         <thead>
           <tr>
-            <th scope="col">From</th>
-            <th scope="col">To</th>
-            <th scope="col">Dates</th>
-            <th scope="col" className="num">Amount</th>
+            <th scope="col">{t.from}</th>
+            <th scope="col">{t.to}</th>
+            <th scope="col">{t.dates}</th>
+            <th scope="col" className="num">{strings.spending.amount}</th>
             <th scope="col">
-              <span className="visually-hidden">Action</span>
+              <span className="visually-hidden">{t.action}</span>
             </th>
           </tr>
         </thead>
@@ -47,21 +50,21 @@ export default function TransferSuggestions({
               <td>{accountName(s.in_account_id)}</td>
               <td>
                 {shortDate(s.out_date)}
-                {s.in_date !== s.out_date && <span className="muted"> → {shortDate(s.in_date)}</span>}
+                {s.in_date !== s.out_date && <span className="muted">{t.arrow(shortDate(s.in_date))}</span>}
               </td>
               <td className="num">{money(s.amount)}</td>
               <td className="action">
                 <Button size="small" disabled={busy} onClick={() => onConfirm(s)}>
-                  Confirm transfer
+                  {t.confirmTransfer}
                 </Button>
                 <Button
                   variant="icon"
-                  aria-label="Not a transfer"
-                  title="Not a transfer"
+                  aria-label={t.notTransfer}
+                  title={t.notTransfer}
                   disabled={busy}
                   onClick={() => onDismiss(s)}
                 >
-                  ×
+                  {strings.common.closeSymbol}
                 </Button>
               </td>
             </tr>

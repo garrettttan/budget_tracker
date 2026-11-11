@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import CategoryList from '../components/CategoryList';
 import MerchantList from '../components/MerchantList';
 import TagList from '../components/TagList';
+import { strings } from '../lib/strings';
 
 const LISTS = { Categories: CategoryList, Merchants: MerchantList, Tags: TagList };
 
@@ -15,10 +16,10 @@ export default function SettingsSection({ title }: { title: keyof typeof LISTS }
   return (
     <section>
       <Link to="/settings" className="back-link">
-        ‹ Settings
+        {strings.settings.backToSettings}
       </Link>
       <header className="page-head">
-        <h1>{title}</h1>
+        <h1>{strings.settings.sections[title]}</h1>
       </header>
       <List />
     </section>

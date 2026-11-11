@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { byUse } from '../lib/categoryOrder';
-import { money, plural, shortDate } from '../lib/format';
+import { money, shortDate } from '../lib/format';
 import { ALL_TIME, monthEnd, monthLong, parseMonth, thisMonth } from '../lib/months';
 import { type OpenItem, fetchOpen, payers, personKey, suggestFor } from '../lib/reimbursements';
 import {
@@ -35,6 +35,10 @@ import ReimbursementSuggestions, { type PaymentRow, type ReimbursementMatch } fr
 import type { Tag } from '../components/TagCell';
 import TransactionRow, { PendingRow } from '../components/TransactionRow';
 import TransferSuggestions, { type Suggestion } from '../components/TransferSuggestions';
+import { strings } from '../lib/strings';
+
+const t = strings.spending;
+const common = strings.common;
 
 /** The URL's filters (see Scope); `setFilters` changes any of them. */
 type Filters = Partial<
@@ -282,18 +286,18 @@ export default function Spending({
 
   // ---- category and approval ---------------------------------------------------
 
-  const pairNote = (r: Row) => (r.transfer_pair_id ? ' The other side of the transfer is back in To review.' : '');
+  const pairNote = (r: Row) => (r.transfer_pair_id ? t.otherSideBack : '');
 
   async function setCategory(r: Row, value: string) {
     if (value === TRANSFER) {
-      return act(() => db().rpc('mark_transfer', { p_id: r.id }), () => `${rowName(r)} is now a transfer and approved.`);
+      return act(() => db().rpc('mark_transfer', { p_id: r.id }), () => t.nowTransfer(rowName(r)));
     }
     const id = value === UNCATEGORIZED ? null : value; // Uncategorized = no category
     if (r.approved) {
-      const category = id ? categories?.find((c) => c.id === id)?.name : 'Uncategorized';
+      const category = (id ? categories?.find((c) => c.id === id)?.name : common.uncategorized) ?? '';
       return act(
         () => db().rpc('recategorize_transactions', { p_ids: [r.id], p_category: id }),
-        () => `${rowName(r)} is now ${category}.${pairNote(r)}`,
+        () => t.nowCategory(rowName(r), category) + pairNote(r),
       );
     }
     // just a pre-fill: the row stays unapproved until you approve it
@@ -306,7 +310,7 @@ export default function Spending({
   const approve = (ids: string[]) =>
     act(
       () => db().rpc('approve_transactions', { p_ids: ids }),
-      (n) => `Approved ${plural(Number(n), 'transaction')}.`,
+      (n) => t.approvedCount(Number(n)),
     );
 
   function toggleApproved(r: Row) {
@@ -315,13 +319,13 @@ export default function Spending({
     if (!r.approved) return approve([r.id]);
     return act(
       () => db().rpc('send_to_review', { p_ids: [r.id] }),
-      () => `${rowName(r)} is back in To review.${pairNote(r)}`,
+      () => t.backInReview(rowName(r)) + pairNote(r),
     );
   }
 
   // ---- tags ----------------------------------------------------------------------
 
-  const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? 'a deleted tag';
+  const tagName = (id: string) => tags.find((x) => x.id === id)?.name ?? t.deletedTag;
   const tagIds = (r: Row) => r.transaction_tags.map((x) => x.tag_id);
 
   /** The tag called `typed` (ignoring case), created if there's none yet; null if that failed. */
@@ -374,33 +378,33 @@ export default function Spending({
   const expect = (r: Row, who: string, amount: number, note: string) =>
     act(
       () => db().rpc('expect_reimbursement', { p_transaction: r.id, p_who: who, p_amount: amount, p_note: note || null }),
-      () => `${who} owes you ${money(amount)} for ${rowName(r)}. It's on Owed to me, and only your share counts as spending.`,
+      () => t.expected(who, money(amount), rowName(r)),
     );
 
   const link = (paymentId: string, ids: string[]) =>
     act(
       () => db().rpc('link_reimbursement_payment', { p_payment: paymentId, p_reimbursements: ids }),
-      (n) => `Linked ${money(Number(n))} as paid back. It's approved and doesn't count as income.`,
+      (n) => t.linked(money(Number(n))),
     );
 
   const unlink = (r: Row) =>
     act(
       () => db().rpc('unlink_reimbursement_payment', { p_payment: r.id }),
-      () => `Unlinked ${rowName(r)}. It's back in To review, and what it paid back is owed again.`,
+      () => t.unlinked(rowName(r)),
     );
 
   /** Rows you entered by hand can be deleted; the database tidies what hangs off them. */
   function remove(r: Row) {
     const also = [
-      r.reimbursements.length ? 'what people owe you on it is removed too' : '',
-      isLinked(r) ? `what it paid back is owed again by ${payers(r.reimbursement_payments)}` : '',
-      r.transfer_pair_id ? 'the other side of the transfer goes back to To review' : '',
+      r.reimbursements.length ? t.deleteReimbursements : '',
+      isLinked(r) ? t.deletePayback(payers(r.reimbursement_payments)) : '',
+      r.transfer_pair_id ? t.deleteTransfer : '',
     ].filter(Boolean);
-    const summary = `${rowName(r)} (${money(r.amount)}, ${shortDate(r.posted_date)})`;
-    if (!window.confirm(`Delete ${summary}? This can’t be undone${also.length ? `; ${also.join(', and ')}` : ''}.`)) return;
+    const summary = t.deleteSummary(rowName(r), money(r.amount), shortDate(r.posted_date));
+    if (!window.confirm(t.confirmDelete(summary, also))) return;
     return act(
       () => db().rpc('delete_manual_transaction', { p_id: r.id }),
-      () => `Deleted ${summary}.`,
+      () => common.deleted(summary),
     );
   }
 
@@ -431,7 +435,7 @@ export default function Spending({
    */
   function categorizeSelected(value: string) {
     const id = value === UNCATEGORIZED ? null : value; // Uncategorized = no category
-    const name = id ? categories?.find((c) => c.id === id)?.name : 'Uncategorized';
+    const name = (id ? categories?.find((c) => c.id === id)?.name : common.uncategorized) ?? '';
     const approvedIds = categorizable.filter((r) => r.approved).map((r) => r.id);
     const reviewIds = categorizable.filter((r) => !r.approved).map((r) => r.id);
     const pairs = categorizable.some((r) => r.approved && r.transfer_pair_id);
@@ -445,15 +449,14 @@ export default function Spending({
         return { error: null };
       },
       () =>
-        `${plural(categorizable.length, 'transaction')} ${categorizable.length === 1 ? 'is' : 'are'} now ${name}.` +
-        (pairs ? ' The other sides of their transfers are back in To review.' : ''),
+        t.nowCategoryMany(categorizable.length, name) + (pairs ? t.otherSidesBack : ''),
     );
   }
 
   /** Adds the tag to every selected row that doesn't have it yet. */
   function tagSelected(tagId: string, name = tagName(tagId)) {
     const missing = selectedRows.filter((r) => !tagIds(r).includes(tagId));
-    if (missing.length === 0) return setNotice(`All selected transactions already carry ${name}.`);
+    if (missing.length === 0) return setNotice(t.alreadyTagged(name));
     return act(
       () =>
         db()
@@ -462,7 +465,7 @@ export default function Spending({
             missing.map((r) => ({ transaction_id: r.id, tag_id: tagId })),
             { onConflict: 'transaction_id,tag_id', ignoreDuplicates: true },
           ),
-      () => `Tagged ${plural(missing.length, 'transaction')} ${name}.`,
+      () => t.tagged(missing.length, name),
     );
   }
 
@@ -475,7 +478,7 @@ export default function Spending({
     const carrying = selectedRows.filter((r) => tagIds(r).includes(tagId)).map((r) => r.id);
     return act(
       () => db().from('transaction_tags').delete().eq('tag_id', tagId).in('transaction_id', carrying),
-      () => `Removed ${tagName(tagId)} from ${plural(carrying.length, 'transaction')}.`,
+      () => t.untagged(tagName(tagId), carrying.length),
     );
   }
 
@@ -489,8 +492,8 @@ export default function Spending({
 
   // Approved: both ticked = All (no `?status=`); one unticked = To review or Approved only
   const approvalItems = [
-    { id: 'review', name: `To review${unreviewed ? ` (${unreviewed})` : ''}` },
-    { id: 'approved', name: 'Approved' },
+    { id: 'review', name: unreviewed ? t.toReviewCount(unreviewed) : t.toReview },
+    { id: 'approved', name: t.approved },
   ];
   const approvalHidden = status === 'review' ? ['approved'] : status === 'approved' ? ['review'] : [];
   function setApprovalHidden(next: string[]) {
@@ -500,10 +503,10 @@ export default function Spending({
 
   const allCategoryItems = [
     ...(categories ?? []).map((c) => ({ id: c.id, name: c.name })),
-    { id: NO_CATEGORY, name: 'Uncategorized' },
-    { id: TRANSFER_KEY, name: 'Transfer' },
+    { id: NO_CATEGORY, name: common.uncategorized },
+    { id: TRANSFER_KEY, name: common.transfer },
   ];
-  const allTagItems = [{ id: UNTAGGED, name: 'No tags' }, ...tags.map((t) => ({ id: t.id, name: t.name }))];
+  const allTagItems = [{ id: UNTAGGED, name: t.noTags }, ...tags.map((x) => ({ id: x.id, name: x.name }))];
   // the headers list only what this range holds, with counts; unticked items stay so they can come back
   const listed = (items: { id: string; name: string }[], counts: Map<string, number> | undefined, hidden: string[]) =>
     counts ? items.filter((i) => counts.has(i.id) || hidden.includes(i.id)).map((i) => ({ ...i, count: counts.get(i.id) ?? 0 })) : items;
@@ -529,10 +532,10 @@ export default function Spending({
   // the pie by group: a group is a set of category keys, so its filters are hidecat too
   const groupOf = (key: string) =>
     key === NO_CATEGORY
-      ? 'Uncategorized'
+      ? common.uncategorized
       : key === TRANSFER_KEY
-        ? 'Transfer'
-        : categories?.find((c) => c.id === key)?.group_name?.trim() || 'No group';
+        ? common.transfer
+        : categories?.find((c) => c.id === key)?.group_name?.trim() || common.noGroup;
   const groupKeys = (name: string) => allCategoryItems.map((i) => i.id).filter((k) => groupOf(k) === name);
   const groupNames = [...new Set(allCategoryItems.map((i) => groupOf(i.id)))];
   // faded when every category in it is hidden
@@ -551,7 +554,7 @@ export default function Spending({
   };
   /** Only one tag: the `?tag=` filter, so rows with that tag and others still show. */
   const onlyTag = (id: string) =>
-    id === UNTAGGED ? setFilters({ tag: null, hidetag: tags.map((t) => t.id).join(',') || null }) : setFilters({ tag: id, hidetag: null });
+    id === UNTAGGED ? setFilters({ tag: null, hidetag: tags.map((x) => x.id).join(',') || null }) : setFilters({ tag: id, hidetag: null });
 
   /** Clears every filter: "Filters are on · Show all", and the phones' Filters sheet. */
   const showAll = () =>
@@ -559,51 +562,51 @@ export default function Spending({
 
   // each column's filter, once: its header (popover) and the phones' Filters sheet (inline) share it
   const dateFilter: FieldsProps = {
-    label: 'Date',
+    label: t.date,
     fields: [
-      { key: 'after', label: 'After', type: 'date', value: params.get('after') ?? '' },
-      { key: 'before', label: 'Before', type: 'date', value: params.get('before') ?? '' },
+      { key: 'after', label: t.after, type: 'date', value: params.get('after') ?? '' },
+      { key: 'before', label: t.before, type: 'date', value: params.get('before') ?? '' },
     ],
     onApply: (v) => setFilters({ after: v.after || null, before: v.before || null }),
   };
   const merchantFilter: FieldsProps = {
-    label: 'Merchant',
-    fields: [{ key: 'merchant', label: 'Name contains', type: 'text', value: params.get('merchant') ?? '' }],
+    label: t.merchant,
+    fields: [{ key: 'merchant', label: t.nameContains, type: 'text', value: params.get('merchant') ?? '' }],
     onApply: (v) => setFilters({ merchant: v.merchant || null }),
   };
   const accountFilter: ChecklistProps = {
-    label: 'Account',
-    plural: 'accounts',
+    label: t.account,
+    plural: t.accountsPlural,
     items: accountItems,
     hidden: hideAccounts,
     onChange: (next) => setFilters({ hideacct: next.join(',') || null }),
     onOnly: (id) => setFilters({ hideacct: [...accountNames.keys()].filter((k) => k !== id).join(',') || null }),
   };
   const categoryFilter: ChecklistProps = {
-    label: 'Category',
-    plural: 'categories',
+    label: t.category,
+    plural: t.categoriesPlural,
     items: categoryItems,
     hidden: hideCategories,
     onChange: (next) => setFilters({ hidecat: next.join(',') || null }),
     onOnly: onlyCategory,
   };
   const tagsFilter: ChecklistProps = {
-    label: 'Tags',
+    label: t.tags,
     items: tagItems,
     hidden: tagHidden,
     onChange: (next) => setFilters({ tag: null, hidetag: next.join(',') || null }),
     onOnly: onlyTag,
   };
   const amountFilter: FieldsProps = {
-    label: 'Amount',
+    label: t.amount,
     fields: [
-      { key: 'min', label: 'Min', type: 'number', prefix: '$', value: params.get('min') ?? '', placeholder: '0' },
-      { key: 'max', label: 'Max', type: 'number', prefix: '$', value: params.get('max') ?? '', placeholder: 'Any' },
+      { key: 'min', label: t.min, type: 'number', prefix: t.dollar, value: params.get('min') ?? '', placeholder: t.minPlaceholder },
+      { key: 'max', label: t.max, type: 'number', prefix: t.dollar, value: params.get('max') ?? '', placeholder: t.any },
     ],
     onApply: (v) => setFilters({ min: v.min || null, max: v.max || null }),
   };
   const approvedFilter: ChecklistProps = {
-    label: 'Approved',
+    label: t.approved,
     searchable: false,
     keepOne: true,
     items: approvalItems,
@@ -616,7 +619,7 @@ export default function Spending({
   const checklistRow = (key: string, f: ChecklistProps): SheetFilter => {
     const on = checklistOn(f.items, f.hidden);
     const shown = f.items.filter((i) => !f.hidden.includes(i.id));
-    const summary = !on ? 'All' : shown.length === 1 ? shown[0].name : `${shown.length} of ${f.items.length}`;
+    const summary = !on ? t.all : shown.length === 1 ? shown[0].name : t.someOf(shown.length, f.items.length);
     return { key, kind: 'checklist', props: f, on, summary };
   };
   const fieldsRow = (key: string, f: FieldsProps, summary: string | null): SheetFilter => ({
@@ -624,19 +627,19 @@ export default function Spending({
     kind: 'fields',
     props: f,
     on: fieldsOn(f.fields),
-    summary: summary ?? 'Any',
+    summary: summary ?? t.any,
   });
   const day = (d: string) => shortDate(d).replace(/, \d{4}$/, '');
   const range = (low: string | null, high: string | null, lowWord: string, highWord: string) =>
     low && high ? `${low} – ${high}` : low ? `${lowWord} ${low}` : high ? `${highWord} ${high}` : null;
-  const dollars = (n: number | null) => (n === null ? null : `$${n}`);
+  const dollars = (n: number | null) => (n === null ? null : `${t.dollar}${n}`);
   const sheetFilters: SheetFilter[] = [
-    fieldsRow('date', dateFilter, range(typed.after && day(typed.after), typed.before && day(typed.before), 'After', 'Before')),
-    fieldsRow('merchant', merchantFilter, typed.merchant && `“${typed.merchant}”`),
+    fieldsRow('date', dateFilter, range(typed.after && day(typed.after), typed.before && day(typed.before), t.after, t.before)),
+    fieldsRow('merchant', merchantFilter, typed.merchant && t.quoted(typed.merchant)),
     checklistRow('account', accountFilter),
     checklistRow('category', categoryFilter),
     checklistRow('tags', tagsFilter),
-    fieldsRow('amount', amountFilter, range(dollars(typed.minAmount), dollars(typed.maxAmount), 'Min', 'Max')),
+    fieldsRow('amount', amountFilter, range(dollars(typed.minAmount), dollars(typed.maxAmount), t.min, t.max)),
     checklistRow('approved', approvedFilter),
   ];
 
@@ -649,19 +652,19 @@ export default function Spending({
 
   const emptyMessage =
     columnFiltered
-      ? 'No transactions match.'
+      ? t.noMatch
       : tagFilter
-        ? `No ${status === 'review' ? 'transactions to review' : status === 'approved' ? 'approved transactions' : 'transactions'}${monthScoped ? ` in ${monthLong(month)}` : ''} carry this tag.`
+        ? t.noneCarryTag(status, monthScoped ? monthLong(month) : null)
         : status === 'review'
-          ? 'Nothing waiting. New transactions from the daily sync land here until you approve them.'
+          ? t.nothingWaiting
           : monthScoped
-            ? `No ${status === 'approved' ? 'approved transactions' : 'transactions'} in ${monthLong(month)}.`
-            : "No transactions yet. They'll appear here after your first sync or import.";
+            ? t.noneInMonth(status === 'approved', monthLong(month))
+            : t.noneYet;
 
   return (
     <section>
       <header className="page-head">
-        <h1>Spending</h1>
+        <h1>{t.title}</h1>
         <Button
           variant="link"
           onClick={() => {
@@ -670,7 +673,7 @@ export default function Spending({
             setError(null);
           }}
         >
-          Add transaction
+          {t.addTransaction}
         </Button>
       </header>
 
@@ -713,11 +716,11 @@ export default function Spending({
           suggestions={suggestions}
           accountName={(id) => accountNames.get(id) ?? ''}
           busy={busy}
-          onConfirm={(s) => act(() => db().rpc('confirm_transfer', { p_out: s.out_id, p_in: s.in_id }), () => 'Transfer confirmed and approved.')}
+          onConfirm={(s) => act(() => db().rpc('confirm_transfer', { p_out: s.out_id, p_in: s.in_id }), () => t.transferConfirmed)}
           onDismiss={(s) =>
             act(
               () => db().from('dismissed_transfer_pairs').insert({ out_id: s.out_id, in_id: s.in_id }),
-              () => 'Dismissed. Both transactions are still in To review.',
+              () => t.transferDismissed,
             )
           }
         />
@@ -730,13 +733,13 @@ export default function Spending({
         <>
           {/* the filter note sits beside the heading, so turning a filter on doesn't push the list down */}
           <div className="list-head">
-            <h2>Transactions</h2>
+            <h2>{t.listTitle}</h2>
             <FiltersSheet filters={sheetFilters} onShowAll={showAll} />
             {filtering && (
               <p className="filters-on">
-                Filters are on.
+                {t.filtersOn}
                 <Button variant="link" onClick={showAll}>
-                  Show all
+                  {common.showAll}
                 </Button>
               </p>
             )}
@@ -764,8 +767,8 @@ export default function Spending({
                 <th scope="col" className="select-col">
                   <input
                     type="checkbox"
-                    aria-label={allSelected ? 'Clear selection' : `Select all ${rows.length} shown`}
-                    title={allSelected ? 'Clear selection' : 'Select all shown'}
+                    aria-label={allSelected ? t.clearSelection : t.selectAllShownCount(rows.length)}
+                    title={allSelected ? t.clearSelection : t.selectAllShown}
                     checked={allSelected}
                     ref={(el) => {
                       if (el) el.indeterminate = selected.size > 0 && !allSelected;
@@ -795,14 +798,14 @@ export default function Spending({
                 <th scope="col" className="approved-col">
                   <HeaderFilter {...approvedFilter} align="end">
                     {/* phones: just a check mark, to leave room for the other columns */}
-                    <span className="label-long">Approved</span>
+                    <span className="label-long">{t.approved}</span>
                     <span className="label-short" aria-hidden="true">
-                      ✓
+                      {t.approvedShort}
                     </span>
                   </HeaderFilter>
                 </th>
                 <th scope="col" className="menu-col">
-                  <span className="visually-hidden">Actions</span>
+                  <span className="visually-hidden">{common.actions}</span>
                 </th>
               </tr>
             </thead>
@@ -842,7 +845,7 @@ export default function Spending({
           {hasMore && (
             <div className="load-more">
               <Button disabled={busy} onClick={loadMore}>
-                Load {PAGE} more
+                {t.loadMore(PAGE)}
               </Button>
             </div>
           )}

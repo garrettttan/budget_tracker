@@ -4,6 +4,7 @@
 // you), no transfers, and untagged spending plus any tags in `includeTags`.
 import { db } from './supabase';
 import { round } from './cents';
+import { strings } from './strings';
 
 /** One category's spending in one month. `category_id` null = Uncategorized. */
 export type SpendRow = { month: string; category_id: string | null; category_name: string | null; category_group: string | null; spent: string };
@@ -35,7 +36,7 @@ export function categoryTotals(rows: SpendRow[], keep: (month: string) => boolea
   for (const r of rows) {
     if (!keep(r.month)) continue;
     const key = r.category_id ?? NO_CATEGORY;
-    const t = totals.get(key) ?? { key, name: r.category_name ?? 'Uncategorized', value: 0 };
+    const t = totals.get(key) ?? { key, name: r.category_name ?? strings.common.uncategorized, value: 0 };
     t.value = round(t.value + Number(r.spent));
     totals.set(key, t);
   }
@@ -98,7 +99,7 @@ export async function fetchSummaryLines(start: string | null, end: string | null
     for (const r of page) {
       lines.push({
         key: r.category_id ?? NO_CATEGORY,
-        name: r.category_name ?? 'Uncategorized',
+        name: r.category_name ?? strings.common.uncategorized,
         tagIds: r.tag_ids,
         accountId: r.account_id,
         posted_date: r.posted_date,

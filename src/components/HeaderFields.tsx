@@ -1,6 +1,9 @@
 import { type ReactNode, type FormEvent, useId, useState } from 'react';
 import Button from './Button';
 import { usePopover } from './usePopover';
+import { strings } from '../lib/strings';
+
+const t = strings.filters;
 
 type Field = {
   key: string;
@@ -60,7 +63,7 @@ export default function HeaderFields({
         className={`th-filter${on ? ' active' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Filter ${label}${on ? ', filter on' : ''}`}
+        aria-label={t.filter(label, on)}
         onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="th-filter-label">{children ?? label}</span>
@@ -71,7 +74,7 @@ export default function HeaderFields({
       {open && (
         <div ref={pop} className="header-filter-pop" role="dialog" aria-labelledby={titleId} style={style}>
           <span id={titleId} className="visually-hidden">
-            Filter {label}
+            {t.filterTitle(label)}
           </span>
           <FieldsForm {...form} onDone={close} />
         </div>
@@ -126,10 +129,10 @@ export function FieldsForm({ fields, onApply, onDone }: FieldsProps & { onDone: 
             onDone();
           }}
         >
-          Clear
+          {t.clear}
         </Button>
         <Button variant="primary" size="small" type="submit">
-          Apply
+          {t.apply}
         </Button>
       </div>
     </form>

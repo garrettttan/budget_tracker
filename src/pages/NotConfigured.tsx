@@ -1,13 +1,16 @@
+import { strings } from '../lib/strings';
+
+const t = strings.notConfigured;
+
 /** Shown instead of the app when the build has no Supabase settings. */
 export default function NotConfigured() {
   return (
     <div className="center-screen">
       <div className="narrow">
-        <h1>Ledger isn't connected to a database yet</h1>
+        <h1>{t.title}</h1>
         <p className="muted">
-          Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> in a{' '}
-          <code>.env.local</code> file for local development, or as repository variables for the
-          GitHub Pages build. The README has the steps.
+          {t.set} <code>VITE_SUPABASE_URL</code> {t.and} <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> {t.inA}{' '}
+          <code>.env.local</code> {t.rest}
         </p>
       </div>
     </div>

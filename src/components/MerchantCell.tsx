@@ -2,6 +2,7 @@ import { useId, type MouseEvent, type ReactNode } from 'react';
 import { shortDate } from '../lib/format';
 import Button from './Button';
 import Collapse from './Collapse';
+import { strings } from '../lib/strings';
 
 /**
  * A transaction's merchant name. It opens the row's details (date and account,
@@ -54,7 +55,7 @@ export default function MerchantCell({
             <br />
           </span>
           {description}
-          {note && <span className="row-note">Note: {note}</span>}
+          {note && <span className="row-note">{strings.row.note(note)}</span>}
           {children}
         </div>
       </Collapse>

@@ -7,6 +7,10 @@ import { type OpenItem, allocate, byPerson, personKey } from '../lib/reimburseme
 import Button from './Button';
 import CategorySelect, { type Category, TRANSFER, UNCATEGORIZED } from './CategorySelect';
 import Modal from './Modal';
+import { strings } from '../lib/strings';
+
+const t = strings.addTransaction;
+const common = strings.common;
 
 export type AccountOption = { id: string; name: string; manual: boolean };
 
@@ -48,13 +52,13 @@ export default function AddTransaction({
   const payback = direction === 'in' ? owers.find((g) => personKey(g.who) === payer) : undefined;
   const plan = payback && parsed ? allocate(parsed, payback.items) : [];
   const why = !accountId
-    ? 'Add an account first'
+    ? t.noAccount
     : !date
-      ? 'Pick a date'
+      ? t.pickDate
       : parsed === null || parsed === 0
-        ? 'Enter an amount'
+        ? common.enterAmount
         : !description.trim()
-          ? 'Describe it'
+          ? t.describe
           : undefined;
 
   async function save(e: React.FormEvent) {
@@ -87,7 +91,7 @@ export default function AddTransaction({
       return setError(error.message);
     }
     const account = accounts.find((a) => a.id === accountId)?.name;
-    let summary = `${description.trim()} (${money(signed)}) on ${account}`;
+    let summary = t.summary(description.trim(), money(signed), account);
     if (payback) {
       const linked = await db().rpc('link_reimbursement_payment', {
         p_payment: (data as { id: string }).id,
@@ -95,15 +99,15 @@ export default function AddTransaction({
       });
       if (linked.error) {
         setBusy(false);
-        await onAdded(`${summary}, but not linked`);
-        setAdded(`Added ${summary}, but not linked.`);
-        return setError(`Saved, but linking it failed (it's in To review): ${linked.error.message}`);
+        await onAdded(t.notLinkedSummary(summary));
+        setAdded(t.addedNotLinked(summary));
+        return setError(t.linkFailed(linked.error.message));
       }
-      summary += `, paying back ${payback.who}`;
+      summary += t.payingBack(payback.who);
     }
     setBusy(false);
     await onAdded(summary);
-    setAdded(`Added ${summary}${payback ? '' : ', approved'}.`);
+    setAdded(t.added(summary, !payback));
     setAmount('');
     setDescription('');
     setCategory(null);
@@ -117,12 +121,12 @@ export default function AddTransaction({
       {(close) => (
         <form onSubmit={save}>
           <div className="modal-head">
-            <h2 id="add-transaction-title">Add transaction</h2>
-            <Button variant="icon" aria-label="Close" disabled={busy} onClick={close}>
-              ×
+            <h2 id="add-transaction-title">{t.title}</h2>
+            <Button variant="icon" aria-label={common.close} disabled={busy} onClick={close}>
+              {common.closeSymbol}
             </Button>
           </div>
-          <p className="muted small">Saved as approved, since you entered it. Money in can pay back what someone owes you.</p>
+          <p className="muted small">{t.intro}</p>
           {error && <p className="error" role="alert">{error}</p>}
           {added && !error && (
             <p className="notice" role="status">
@@ -131,7 +135,7 @@ export default function AddTransaction({
           )}
           <div className="fields">
             <label>
-              Account
+              {t.account}
               <select value={accountId} disabled={busy} onChange={(e) => setAccountId(e.target.value)}>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -141,18 +145,18 @@ export default function AddTransaction({
               </select>
             </label>
             <label>
-              Date
+              {t.date}
               <input type="date" value={date} disabled={busy} required onChange={(e) => setDate(e.target.value)} />
             </label>
             <div className="field">
-              <span id="add-txn-amount">Amount</span>
+              <span id="add-txn-amount">{t.amount}</span>
               <div className="amount-entry">
-                <div className="filter" role="group" aria-label="Money out or in">
+                <div className="filter" role="group" aria-label={t.outOrIn}>
                   <Button size="small" aria-pressed={direction === 'out'} disabled={busy} onClick={() => setDirection('out')}>
-                    Out
+                    {t.out}
                   </Button>
                   <Button size="small" aria-pressed={direction === 'in'} disabled={busy} onClick={() => setDirection('in')}>
-                    In
+                    {t.in}
                   </Button>
                 </div>
                 <input
@@ -161,31 +165,31 @@ export default function AddTransaction({
                   aria-labelledby="add-txn-amount"
                   value={amount}
                   disabled={busy}
-                  placeholder="0.00"
+                  placeholder={common.amountPlaceholder}
                   onChange={(e) => setAmount(e.target.value)}
                 />
               </div>
             </div>
             <label className="span-2">
-              Description
+              {t.description}
               <input
                 ref={descriptionInput}
                 type="text"
                 value={description}
                 data-autofocus
                 disabled={busy}
-                placeholder="Dinner with Sam"
+                placeholder={t.descriptionPlaceholder}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </label>
             {direction === 'in' && owers.length > 0 && (
               <label className="span-2">
-                Pays back
+                {t.paysBack}
                 <select value={payer} disabled={busy} onChange={(e) => setPayer(e.target.value)}>
-                  <option value="">Nobody: income or a refund</option>
+                  <option value="">{t.nobody}</option>
                   {owers.map((g) => (
                     <option key={personKey(g.who)} value={personKey(g.who)}>
-                      {g.who} (owes {money(g.remaining)})
+                      {common.owes(g.who, money(g.remaining))}
                     </option>
                   ))}
                 </select>
@@ -194,20 +198,21 @@ export default function AddTransaction({
             {payback ? (
               <p className="field payback-plan">
                 {plan.length
-                  ? `Covers ${plan.map((p) => `${p.item.label} ${money(p.part)}`).join(', ')}${
-                      parsed && parsed > payback.remaining ? `; ${money(round(parsed - payback.remaining))} more than they owe` : ''
-                    }. Not counted as income.`
-                  : 'Enter the amount to see what it covers.'}
+                  ? t.covers(
+                      plan.map((p) => t.coversPart(p.item.label, money(p.part))),
+                      parsed && parsed > payback.remaining ? money(round(parsed - payback.remaining)) : null,
+                    )
+                  : t.enterToSee}
               </p>
             ) : (
               <div className="field">
                 {/* the picker labels itself; this is the visible caption */}
-                <span aria-hidden="true">Category</span>
+                <span aria-hidden="true">{t.category}</span>
                 <CategorySelect
                   categories={categories}
                   value={category}
                   disabled={busy}
-                  label="Category"
+                  label={t.category}
                   onChange={(value) => {
                     setCategory(value === UNCATEGORIZED ? null : value);
                     // a paycheck or refund into Income is money in
@@ -218,17 +223,17 @@ export default function AddTransaction({
             )}
             <label className="wide">
               <span>
-                Note <span className="muted">(optional)</span>
+                {common.note} <span className="muted">{common.optional}</span>
               </span>
               <input type="text" value={note} disabled={busy} onChange={(e) => setNote(e.target.value)} />
             </label>
           </div>
           <div className="form-actions">
             <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
-              Add transaction
+              {t.title}
             </Button>
             <Button variant="link" disabled={busy} onClick={close}>
-              Done
+              {common.done}
             </Button>
           </div>
         </form>

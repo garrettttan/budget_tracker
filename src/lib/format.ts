@@ -1,17 +1,13 @@
 // Turning values into text for the page, and typed text back into values.
 import { round } from './cents';
+import { strings } from './strings';
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 /** Formats a signed amount; negative = money out. */
 export function money(amount: number | string | null | undefined): string {
-  if (amount === null || amount === undefined || amount === '') return '—';
+  if (amount === null || amount === undefined || amount === '') return strings.common.missing;
   return usd.format(Number(amount));
-}
-
-/** "1 transaction", "3 transactions". */
-export function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`;
 }
 
 /**
@@ -28,7 +24,7 @@ export function parseAmount(text: string, { allowNegative = false } = {}): numbe
 
 /** "Nov 3, 2026" for a date (YYYY-MM-DD) or a timestamp. */
 export function shortDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return strings.common.missing;
   // Dates without a time are calendar dates; don't let the timezone shift them
   const d = iso.length === 10 ? new Date(iso + 'T12:00:00') : new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -36,11 +32,11 @@ export function shortDate(iso: string | null | undefined): string {
 
 /** "just now", "5 minutes ago", "3 hours ago", then the date. */
 export function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return 'never';
+  if (!iso) return strings.format.never;
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${plural(mins, 'minute')} ago`;
+  if (mins < 1) return strings.format.justNow;
+  if (mins < 60) return strings.format.minutesAgo(mins);
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${plural(hours, 'hour')} ago`;
+  if (hours < 24) return strings.format.hoursAgo(hours);
   return shortDate(iso);
 }

@@ -14,6 +14,9 @@ import SettingsSection from './pages/SettingsSection';
 import NotConfigured from './pages/NotConfigured';
 import Button from './components/Button';
 import Modal from './components/Modal';
+import { strings } from './lib/strings';
+
+const t = strings.app;
 
 /** How many posted transactions wait for review; refreshed on every page change and on demand. */
 function useUnreviewedCount(enabled: boolean) {
@@ -41,11 +44,11 @@ function ToSpending() {
 
 /** The pages, in nav order. */
 const NAV: { to: string; label: string }[] = [
-  { to: '/spending', label: 'Spending' },
-  { to: '/trends', label: 'Trends' },
-  { to: '/owed', label: 'Owed to me' },
-  { to: '/accounts', label: 'Accounts' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/spending', label: t.nav.spending },
+  { to: '/trends', label: t.nav.trends },
+  { to: '/owed', label: t.nav.owed },
+  { to: '/accounts', label: t.nav.accounts },
+  { to: '/settings', label: t.nav.settings },
 ];
 
 /** The pages, with the to-review badge on Spending: the desktop rail and the phone drawer. */
@@ -57,7 +60,7 @@ function NavList({ unreviewed, onNavigate }: { unreviewed: number | null; onNavi
           <NavLink to={item.to} className={({ isActive }) => (isActive ? 'active' : undefined)} onClick={onNavigate}>
             <span>{item.label}</span>
             {item.to === '/spending' && unreviewed !== null && unreviewed > 0 && (
-              <span className="badge" aria-label={`${unreviewed} to review`}>
+              <span className="badge" aria-label={t.toReview(unreviewed)}>
                 {unreviewed}
               </span>
             )}
@@ -80,7 +83,7 @@ function PhoneMenu({ unreviewed }: { unreviewed: number | null }) {
       <Button
         variant="icon"
         className="menu-button"
-        aria-label={waiting ? `Menu, ${unreviewed} to review` : 'Menu'}
+        aria-label={waiting ? t.menuToReview(unreviewed) : t.menu}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
@@ -94,20 +97,20 @@ function PhoneMenu({ unreviewed }: { unreviewed: number | null }) {
           {unreviewed}
         </span>
       )}
-      <span className="wordmark">Ledger</span>
+      <span className="wordmark">{t.name}</span>
       {open && (
         <Modal labelledBy="drawer-title" className="drawer" onClose={() => setOpen(false)}>
           {(close) => (
             <>
               <div className="modal-head">
                 <h2 id="drawer-title" className="wordmark">
-                  Ledger
+                  {t.name}
                 </h2>
-                <Button variant="icon" aria-label="Close menu" onClick={close}>
-                  ×
+                <Button variant="icon" aria-label={t.closeMenu} onClick={close}>
+                  {strings.common.closeSymbol}
                 </Button>
               </div>
-              <nav aria-label="Main">
+              <nav aria-label={t.mainNav}>
                 <NavList unreviewed={unreviewed} onNavigate={close} />
               </nav>
             </>
@@ -128,8 +131,8 @@ export default function App() {
 
   return (
     <div className="shell">
-      <nav className="rail" aria-label="Main">
-        <div className="wordmark">Ledger</div>
+      <nav className="rail" aria-label={t.mainNav}>
+        <div className="wordmark">{t.name}</div>
         <NavList unreviewed={unreviewed} />
       </nav>
       <PhoneMenu unreviewed={unreviewed} />

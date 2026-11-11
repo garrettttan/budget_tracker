@@ -6,6 +6,10 @@ import { money, parseAmount } from '../lib/format';
 import { round } from '../lib/cents';
 import { type OpenItem, allocate, byPerson, personKey } from '../lib/reimbursements';
 import Button from './Button';
+import { strings } from '../lib/strings';
+
+const t = strings.reimbursements;
+const common = strings.common;
 
 /**
  * Expect reimbursement: someone owes you part of a charge. Who (with the
@@ -35,24 +39,24 @@ export function ExpectForm({
   const max = round(charge - expected);
   const parsed = parseAmount(amount);
   const why = !who.trim()
-    ? 'Say who owes it'
+    ? t.sayWho
     : parsed === null || parsed === 0
-      ? 'Enter an amount'
+      ? common.enterAmount
       : parsed > max
-        ? `At most ${money(max)} is left on this charge`
+        ? t.atMost(money(max))
         : undefined;
 
   return (
     <form
       className="inline-form"
-      aria-label="Expect reimbursement"
+      aria-label={t.expectForm}
       onSubmit={(e) => {
         e.preventDefault();
         if (!why && parsed !== null) onSave(who.trim(), parsed, note.trim());
       }}
     >
       <label>
-        Who owes you
+        {t.whoOwes}
         <input type="text" list={listId} value={who} autoFocus disabled={busy} onChange={(e) => setWho(e.target.value)} />
         <datalist id={listId}>
           {people.map((p) => (
@@ -61,38 +65,38 @@ export function ExpectForm({
         </datalist>
       </label>
       <label>
-        How much
+        {t.howMuch}
         <span className="amount-quick">
           <input
             type="text"
             inputMode="decimal"
-            placeholder="0.00"
+            placeholder={common.amountPlaceholder}
             value={amount}
             disabled={busy}
             onChange={(e) => setAmount(e.target.value)}
           />
           <Button variant="link" size="small" disabled={busy} onClick={() => setAmount(round(charge / 2).toFixed(2))}>
-            Half
+            {t.half}
           </Button>
           {expected > 0 && (
             <Button variant="link" size="small" disabled={busy} onClick={() => setAmount(max.toFixed(2))}>
-              The rest
+              {t.theRest}
             </Button>
           )}
         </span>
       </label>
       <label>
         <span>
-          Note <span className="muted">(optional)</span>
+          {common.note} <span className="muted">{common.optional}</span>
         </span>
         <input type="text" value={note} disabled={busy} onChange={(e) => setNote(e.target.value)} />
       </label>
       <span className="inline-form-actions">
         <Button type="submit" size="small" variant="primary" disabled={busy || Boolean(why)} title={why}>
-          Save
+          {common.save}
         </Button>
         <Button variant="link" size="small" disabled={busy} onClick={onCancel}>
-          Cancel
+          {common.cancel}
         </Button>
       </span>
     </form>
@@ -136,9 +140,9 @@ export function LinkForm({
   if (people.length === 0) {
     return (
       <p className="inline-form muted">
-        Nobody owes you anything right now. Use Expect reimbursement on a charge first.{' '}
+        {t.nobodyOwes}{' '}
         <Button variant="link" size="small" onClick={onCancel}>
-          Close
+          {common.close}
         </Button>
       </p>
     );
@@ -147,24 +151,24 @@ export function LinkForm({
   return (
     <form
       className="inline-form"
-      aria-label="Link to what someone owes"
+      aria-label={t.linkForm}
       onSubmit={(e) => {
         e.preventDefault();
         if (plan.length) onLink(plan.map((p) => p.item.id));
       }}
     >
       <label>
-        Paid back by
+        {t.paidBackBy}
         <select value={person} disabled={busy} onChange={(e) => pickPerson(e.target.value)}>
           {people.map((g) => (
             <option key={personKey(g.who)} value={personKey(g.who)}>
-              {g.who} (owes {money(g.remaining)})
+              {common.owes(g.who, money(g.remaining))}
             </option>
           ))}
         </select>
       </label>
       <fieldset className="link-items">
-        <legend>Covers</legend>
+        <legend>{t.covers}</legend>
         {items.map((i) => {
           const part = plan.find((p) => p.item.id === i.id)?.part;
           return (
@@ -181,17 +185,15 @@ export function LinkForm({
                   })
                 }
               />
-              {i.label}: {money(i.remaining)}
-              {part !== undefined && part < i.remaining && <span className="muted"> ({money(part)} of it)</span>}
-              {ticked.has(i.id) && part === undefined && <span className="muted"> (payment used up)</span>}
+              {t.item(i.label, money(i.remaining))}
+              {part !== undefined && part < i.remaining && <span className="muted">{t.partOf(money(part))}</span>}
+              {ticked.has(i.id) && part === undefined && <span className="muted">{t.usedUp}</span>}
             </label>
           );
         })}
       </fieldset>
       {extra > 0 && plan.length > 0 && (
-        <p className="muted small">
-          {money(extra)} of this payment is more than they owe; it won’t count as income.
-        </p>
+        <p className="muted small">{t.extra(money(extra))}</p>
       )}
       <span className="inline-form-actions">
         <Button
@@ -199,12 +201,12 @@ export function LinkForm({
           size="small"
           variant="primary"
           disabled={busy || plan.length === 0}
-          title={plan.length === 0 ? 'Tick at least one item' : undefined}
+          title={plan.length === 0 ? t.tickOne : undefined}
         >
-          Link {money(covered)}
+          {t.link(money(covered))}
         </Button>
         <Button variant="link" size="small" disabled={busy} onClick={onCancel}>
-          Cancel
+          {common.cancel}
         </Button>
       </span>
     </form>

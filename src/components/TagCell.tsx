@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import Button from './Button';
 import Combobox from './Combobox';
+import { strings } from '../lib/strings';
+
+const copy = strings.row;
 
 export type Tag = { id: string; name: string };
 
@@ -40,18 +43,18 @@ export default function TagCell({
     <div className="tag-cell">
       {tags.map((t) => (
         <span key={t.id} className="tag-chip">
-          <Button variant="link" className="tag-chip-name" title={`Show transactions tagged ${t.name}`} onClick={() => onFilter(t.id)}>
+          <Button variant="link" className="tag-chip-name" title={copy.showTagged(t.name)} onClick={() => onFilter(t.id)}>
             {t.name}
           </Button>
           <Button
             variant="icon"
             className="tag-chip-remove"
-            aria-label={`Remove tag ${t.name} from ${rowName}`}
-            title="Remove tag"
+            aria-label={copy.removeTagFrom(t.name, rowName)}
+            title={copy.removeTag}
             disabled={disabled}
             onClick={() => onRemove(t.id)}
           >
-            ×
+            {strings.common.closeSymbol}
           </Button>
         </span>
       ))}
@@ -59,13 +62,13 @@ export default function TagCell({
         <Combobox
           options={allTags.filter((t) => !on.has(t.id)).map((t) => ({ value: t.id, text: t.name }))}
           value={null}
-          label={`Add a tag to ${rowName}`}
-          placeholder="Tag name"
+          label={strings.common.addTagTo(rowName)}
+          placeholder={strings.common.tagName}
           autoFocus
           disabled={disabled}
           onChange={onAdd}
           onCreate={onCreate}
-          createLabel={(text) => `New tag “${text}”`}
+          createLabel={strings.common.newTag}
           onClose={() => setAdding(false)}
         />
       ) : noAddButton ? null : (
@@ -73,11 +76,11 @@ export default function TagCell({
           variant="link"
           size="small"
           className="tag-add"
-          aria-label={`Add a tag to ${rowName}`}
+          aria-label={strings.common.addTagTo(rowName)}
           disabled={disabled}
           onClick={() => setAdding(true)}
         >
-          + Tag
+          {copy.addTagButton}
         </Button>
       )}
     </div>

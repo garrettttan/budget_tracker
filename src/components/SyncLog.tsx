@@ -1,6 +1,9 @@
 import { relativeTime } from '../lib/format';
 import Button from './Button';
 import Modal from './Modal';
+import { strings } from '../lib/strings';
+
+const t = strings.settings;
 
 export type SyncRun = {
   id: string;
@@ -20,9 +23,9 @@ export default function SyncLog({ runs, onClose }: { runs: SyncRun[]; onClose: (
       {(close) => (
         <>
           <div className="modal-head">
-            <h2 id="sync-log-title">Sync log</h2>
-            <Button variant="icon" aria-label="Close" onClick={close}>
-              ×
+            <h2 id="sync-log-title">{t.syncLog}</h2>
+            <Button variant="icon" aria-label={strings.common.close} onClick={close}>
+              {strings.common.closeSymbol}
             </Button>
           </div>
           <SyncTable runs={runs} />
@@ -37,11 +40,11 @@ function SyncTable({ runs }: { runs: SyncRun[] }) {
     <table className="register sync-log">
       <thead>
         <tr>
-          <th scope="col">When</th>
-          <th scope="col">Result</th>
-          <th scope="col" className="num">New</th>
-          <th scope="col" className="num">Updated</th>
-          <th scope="col" className="num">Removed</th>
+          <th scope="col">{t.when}</th>
+          <th scope="col">{t.result}</th>
+          <th scope="col" className="num">{t.new}</th>
+          <th scope="col" className="num">{t.updated}</th>
+          <th scope="col" className="num">{t.removed}</th>
         </tr>
       </thead>
       <tbody>
@@ -49,7 +52,7 @@ function SyncTable({ runs }: { runs: SyncRun[] }) {
           <tr key={run.id}>
             <td>
               {relativeTime(run.started_at)}
-              {run.trigger !== 'schedule' && <span className="muted sync-trigger"> ({run.trigger})</span>}
+              {run.trigger !== 'schedule' && <span className="muted sync-trigger">{t.trigger(run.trigger)}</span>}
             </td>
             <td className={run.status === 'error' ? 'error' : undefined}>
               {run.status}

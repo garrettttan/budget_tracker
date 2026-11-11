@@ -5,6 +5,9 @@ import { db } from './supabase';
 import { round } from './cents';
 import { money } from './format';
 import type { OpenItem } from './reimbursementMatch';
+import { strings } from './strings';
+
+const t = strings.reimbursements;
 
 export * from './reimbursementMatch';
 
@@ -14,17 +17,15 @@ export type Reimbursement = { id: string; who: string; amount: string; status: '
 /** Part of a payment, linked to what it paid back. */
 export type PaymentLink = { amount: string; reimbursements: { who: string } | null };
 
-const STATUS_WORD = { owed: 'owes', received: 'paid back', written_off: 'written off:' } as const;
-
 /** One line per person for a charge: "Sam owes $40 · Alex paid back $30". */
 export function reimbursementSummary(items: Reimbursement[]): string {
-  return items.map((r) => `${r.who} ${STATUS_WORD[r.status]} ${money(r.amount)}`).join(' · ');
+  return items.map((r) => `${r.who} ${t.status[r.status]} ${money(r.amount)}`).join(t.separator);
 }
 
 /** Who a linked payment paid back: "Sam", "Sam and Alex", "Sam, Alex and Kim". */
 export function payers(links: PaymentLink[]): string {
   const names = [...new Set(links.map((l) => l.reimbursements?.who.trim()).filter(Boolean))] as string[];
-  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return names.length <= 2 ? names.join(t.and) : `${names.slice(0, -1).join(t.listSeparator)}${t.and}${names.at(-1)}`;
 }
 
 /** Your share of a charge (`amount` negative): what's left after everything expected back. */

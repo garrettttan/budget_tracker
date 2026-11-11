@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import Button from './Button';
 import { usePopover } from './usePopover';
+import { strings } from '../lib/strings';
 
 export type MenuItem = {
   label: string;
@@ -78,7 +79,7 @@ export default function RowMenu({ label, items, disabled }: { label: string; ite
         disabled={disabled}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        ⋯
+        {strings.row.menuSymbol}
       </Button>
       {open && (
         <div ref={pop} className="row-menu" style={style}>

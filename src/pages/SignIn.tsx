@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { db } from '../lib/supabase';
 import Button from '../components/Button';
+import { strings } from '../lib/strings';
+
+const t = strings.signIn;
 
 type Mode = 'sign-in' | 'create';
 
@@ -33,7 +36,7 @@ export default function SignIn() {
       });
       if (error) setError(error.message);
       else if (!data.session) {
-        setNotice(`Check ${email} for a confirmation link, then come back and sign in.`);
+        setNotice(t.checkEmail(email));
         setMode('sign-in');
       }
     }
@@ -43,20 +46,15 @@ export default function SignIn() {
   return (
     <div className="center-screen">
       <form className="narrow auth" onSubmit={submit}>
-        <div className="wordmark large">Ledger</div>
-        <h1>{mode === 'sign-in' ? 'Sign in' : 'Create your account'}</h1>
-        {mode === 'create' && (
-          <p className="muted">
-            This app is for one person. After you create your account, turn off sign-ups in
-            Supabase so nobody else can.
-          </p>
-        )}
+        <div className="wordmark large">{strings.app.name}</div>
+        <h1>{mode === 'sign-in' ? t.title : t.createTitle}</h1>
+        {mode === 'create' && <p className="muted">{t.createNote}</p>}
         <label>
-          Email
+          {t.email}
           <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label>
-          Password
+          {t.password}
           <input
             type="password"
             autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
@@ -69,7 +67,7 @@ export default function SignIn() {
         {error && <p className="error" role="alert">{error}</p>}
         {notice && <p className="notice" role="status">{notice}</p>}
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? 'Working…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+          {busy ? t.working : mode === 'sign-in' ? t.signIn : t.createAccount}
         </Button>
         <Button
           variant="link"
@@ -78,7 +76,7 @@ export default function SignIn() {
             setError(null);
           }}
         >
-          {mode === 'sign-in' ? 'First time here? Create your account' : 'Already have an account? Sign in'}
+          {mode === 'sign-in' ? t.toCreate : t.toSignIn}
         </Button>
       </form>
     </div>

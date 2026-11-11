@@ -306,13 +306,21 @@ a tag-name box whose matching tags drop down inline (Combobox, `New tag "…"` t
 Code map (cleanup, Nov 7): Spending's list lives in `lib/transactions.ts` (row type, `Scope`, filter
 keys, `fetchRows` / `fetchPending` / `fetchPresent`) and `components/TransactionRow.tsx` (a posted row,
 `PendingRow`, and the row's reimbursement actions, which keep their own form-open state); the page keeps
-state and handlers. Shared helpers: `lib/cents.ts` (`round`, `sum`), `lib/format.ts` (`plural`),
+state and handlers. Shared helpers: `lib/cents.ts` (`round`, `sum`), `lib/format.ts` (`money`, `shortDate`),
 `lib/months.ts` (`today`, `addMonths`), `lib/reports.ts` (`fetchReports`, `categoryTotals`, used by
 MonthSpending and Trends), `lib/supabase.ts` (`functionErrorMessage`, `CONNECTION_COLUMNS`),
 `lib/reimbursements.ts` (`yourShare`, `payers`, `reimbursementSummary`; the forms are
 `components/ReimbursementForms.tsx`). Edge functions share CORS + JWT checks in `_shared/http.ts`.
 `reimbursementMatch.ts` imports `./cents.ts` with the extension (Node's test runner needs it;
 tsconfig has `allowImportingTsExtensions`). The README is the public overview; keep it current.
+
+**Copy lives in two files** (Nov 11): every string the web app shows (labels, tooltips, screen-reader
+names, notices, confirms) is in `src/lib/strings.ts`, grouped by page (`strings.spending`,
+`strings.common`, …; files take `const t = strings.<page>`); templates are functions that take values
+already formatted (`money()`, `shortDate()`), and `plural` lives there too. Every message an edge
+function sends back is in `supabase/functions/_shared/messages.ts`. Never write copy inline; add it to
+the right file. Database errors (`raise exception` in migrations) stay in SQL: applied migrations
+can't be edited. Still inline: `index.html`'s `<title>` and the seeded category names (data).
 
 Design: Public Sans (tabular figures); text levels: page title h1 28px bold > section h2 20px
 semibold > body 15px regular (never bold, so it can't pass for a heading) > secondary (muted or 13px); paper `#F4F6F7`, ink `#16232F`, one accent teal
