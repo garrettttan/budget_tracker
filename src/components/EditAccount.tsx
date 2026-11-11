@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { db } from '../lib/supabase';
-import { money, parseAmount, plural } from '../lib/format';
+import { money, parseAmount } from '../lib/format';
 import Button from './Button';
 import Modal from './Modal';
 import { type AccountClass, CLASSES } from './AddAccount';
+import { strings } from '../lib/strings';
+
+const t = strings.accounts;
 
 export type EditableAccount = {
   id: string;
@@ -44,7 +47,7 @@ export default function EditAccount({
   const [error, setError] = useState<string | null>(null);
 
   const parsed = balance.trim() === '' ? 0 : parseAmount(balance, { allowNegative: true });
-  const why = !name.trim() ? 'Type a name first' : manual && parsed === null ? 'The balance isn’t a number' : undefined;
+  const why = !name.trim() ? strings.common.typeName : manual && parsed === null ? t.badBalance : undefined;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -66,10 +69,7 @@ export default function EditAccount({
       const { count, error: countError } = await countTransactions(account.id);
       if (countError) return fail(countError.message);
       if (count) {
-        const ok = window.confirm(
-          `Move ${account.name} to Investments? Only its balance is kept: its ${plural(count, 'transaction')} ` +
-            `(and any notes, reimbursements or tags on them) will be deleted.`,
-        );
+        const ok = window.confirm(t.confirmInvestment(account.name, count));
         if (!ok) return setBusy(false);
         const del = await db().from('transactions').delete().eq('account_id', account.id);
         if (del.error) return fail(del.error.message);
@@ -77,21 +77,18 @@ export default function EditAccount({
     }
     const { error } = await db().from('accounts').update(changes).eq('id', account.id);
     if (error) return fail(error.message);
-    await onSaved(`Saved ${name.trim()}.`);
+    await onSaved(strings.common.saved(name.trim()));
   }
 
   async function remove() {
     setError(null);
     const { count, error: countError } = await countTransactions(account.id);
     if (countError) return setError(countError.message);
-    const what = count
-      ? `its ${plural(count, 'transaction')} (and any tags or reimbursements on them) will be deleted too.`
-      : 'it has no transactions.';
-    if (!window.confirm(`Delete ${account.name}? This can’t be undone; ${what}`)) return;
+    if (!window.confirm(t.confirmDelete(account.name, count ?? 0))) return;
     setBusy(true);
     const { error } = await db().from('accounts').delete().eq('id', account.id);
     if (error) return fail(error.message);
-    await onSaved(`Deleted ${account.name}.`);
+    await onSaved(strings.common.deleted(account.name));
   }
 
   function fail(message: string) {
@@ -103,16 +100,16 @@ export default function EditAccount({
     <Modal labelledBy="edit-account-title" busy={busy} onClose={onClose}>
       {(close) => (
         <form onSubmit={save}>
-          <h2 id="edit-account-title">Edit account</h2>
-          <p className="muted small">{account.institution ?? 'Manual account'}</p>
-          {error && <p className="error" role="alert">Couldn’t save: {error}</p>}
+          <h2 id="edit-account-title">{t.editTitle}</h2>
+          <p className="muted small">{account.institution ?? t.manualAccount}</p>
+          {error && <p className="error" role="alert">{strings.common.couldntSave(error)}</p>}
           <div className="fields single">
             <label>
-              Name
+              {strings.common.name}
               <input type="text" value={name} autoFocus data-autofocus disabled={busy} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
-              Class
+              {t.class}
               <select value={cls} disabled={busy} onChange={(e) => setCls(e.target.value as AccountClass)}>
                 {CLASSES.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -123,37 +120,37 @@ export default function EditAccount({
             </label>
             {manual ? (
               <label>
-                Current balance
+                {t.currentBalance}
                 <input
                   type="text"
                   inputMode="decimal"
                   value={balance}
                   disabled={busy}
-                  placeholder="0.00"
+                  placeholder={strings.common.amountPlaceholder}
                   onChange={(e) => setBalance(e.target.value)}
                 />
               </label>
             ) : (
               <div className="field">
-                Balance
+                {t.balance}
                 <span className="num static-value">{money(account.balance)}</span>
               </div>
             )}
             <label className="checkbox-field">
               <input type="checkbox" checked={hidden} disabled={busy} onChange={(e) => setHidden(e.target.checked)} />
-              Hide this account
+              {t.hide}
             </label>
           </div>
           <div className="form-actions">
             <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
-              Save
+              {strings.common.save}
             </Button>
             <Button variant="link" disabled={busy} onClick={close}>
-              Cancel
+              {strings.common.cancel}
             </Button>
             {manual && (
               <Button variant="link" className="danger push-right" disabled={busy} onClick={remove}>
-                Delete account
+                {t.deleteButton}
               </Button>
             )}
           </div>

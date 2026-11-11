@@ -7,6 +7,9 @@ import { type Scope, UNTAGGED, matchesTyped, matchingMerchants } from '../lib/tr
 import Button from './Button';
 import Segmented from './Segmented';
 import { CategoryPie } from './charts';
+import { strings } from '../lib/strings';
+
+const t = strings.month;
 
 /** localStorage key: the pie shows category groups */
 const BY_GROUP = 'spending-pie-by-group';
@@ -172,14 +175,14 @@ export default function MonthSpending({
         <div className="stat-month">
           <Button
             variant="icon"
-            aria-label="Previous month"
+            aria-label={t.previous}
             disabled={!prev}
-            title={prev ? undefined : allTime ? 'Pick a month to step through months' : 'No earlier spending'}
+            title={prev ? undefined : allTime ? t.pickMonth : t.noEarlier}
             onClick={() => prev && onMonth(prev)}
           >
-            ‹
+            {t.previousSymbol}
           </Button>
-          <select className="heading-select" aria-label="Month" value={month} onChange={(e) => onMonth(e.target.value)}>
+          <select className="heading-select" aria-label={t.month} value={month} onChange={(e) => onMonth(e.target.value)}>
             {options.map((key) => (
               <option key={key} value={key}>
                 {monthLong(key)}
@@ -188,45 +191,45 @@ export default function MonthSpending({
           </select>
           <Button
             variant="icon"
-            aria-label="Next month"
+            aria-label={t.next}
             disabled={!next}
-            title={next ? undefined : allTime ? 'Pick a month to step through months' : 'This is the current month'}
+            title={next ? undefined : allTime ? t.pickMonth : t.isCurrent}
             onClick={() => next && onMonth(next)}
           >
-            ›
+            {t.nextSymbol}
           </Button>
         </div>
         <div>
-          <dt>Spent</dt>
+          <dt>{t.spent}</dt>
           <dd>{money(spending)}</dd>
         </div>
         <div>
-          <dt>Income</dt>
+          <dt>{t.income}</dt>
           <dd>{money(income)}</dd>
         </div>
         <div>
-          <dt>{income - spending >= 0 ? 'Saved' : 'Spent more than earned'}</dt>
+          <dt>{income - spending >= 0 ? t.saved : t.overspent}</dt>
           <dd>{money(Math.abs(income - spending))}</dd>
         </div>
       </dl>
-      {lines && !loading && byCategory.length === 0 && <p className="empty">{allTime ? 'No spending yet.' : `No spending in ${monthLong(month)}.`}</p>}
+      {lines && !loading && byCategory.length === 0 && <p className="empty">{allTime ? t.noSpendingYet : t.noSpendingIn(monthLong(month))}</p>}
       {byCategory.length > 0 && (
         <CategoryPie
           rows={byGroup ? byGroupRows : byCategory}
           reserveRows={byGroup ? byCategory : byGroupRows}
           format={money}
           total={visibleTotal}
-          label={`Spending by ${byGroup ? 'category group' : 'category'}, ${monthLong(month)}`}
+          label={t.pieLabel(byGroup, monthLong(month))}
           selected={byGroup ? groups.selected : selected}
           hidden={byGroup ? groups.hidden : hidden}
-          selectHint="Shows its transactions"
+          selectHint={t.pieHint}
           onSelect={byGroup ? groups.onSelect : onSelect}
           listHeader={
             <Segmented
-              label="Show the pie by"
+              label={t.showPieBy}
               options={[
-                { value: 'category', label: 'Category' },
-                { value: 'group', label: 'Group' },
+                { value: 'category', label: t.byCategory },
+                { value: 'group', label: t.byGroup },
               ]}
               value={byGroup ? 'group' : 'category'}
               onChange={(v) => showByGroup(v === 'group')}

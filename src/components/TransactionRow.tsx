@@ -12,6 +12,9 @@ import Modal from './Modal';
 import { ExpectForm, LinkForm } from './ReimbursementForms';
 import RowMenu, { type MenuItem } from './RowMenu';
 import TagCell, { type Tag } from './TagCell';
+import { strings } from '../lib/strings';
+
+const t = strings.row;
 
 /** What a row can ask the page to do. The async ones resolve true once saved. */
 export type RowActions = {
@@ -77,7 +80,7 @@ export default function TransactionRow({
       onClick={rowToggle(toggleDetails)}
     >
       <td className="select-col">
-        <input type="checkbox" aria-label={`Select ${name}`} checked={selected} disabled={busy} onChange={actions.onSelect} />
+        <input type="checkbox" aria-label={t.select(name)} checked={selected} disabled={busy} onChange={actions.onSelect} />
       </td>
       <td className="date-col">{shortDate(r.posted_date)}</td>
       <td>
@@ -93,7 +96,7 @@ export default function TransactionRow({
             r.reimbursements.length > 0 ? (
               <div className="reimb-line">{reimbursementSummary(r.reimbursements)}</div>
             ) : isLinked(r) ? (
-              <div className="reimb-line">Paid back by {payers(r.reimbursement_payments)}</div>
+              <div className="reimb-line">{t.paidBackBy(payers(r.reimbursement_payments))}</div>
             ) : undefined
           }
         >
@@ -104,13 +107,13 @@ export default function TransactionRow({
       <td className="account-col">{r.accounts?.name}</td>
       <td>
         {isLinked(r) ? (
-          <span className="muted">Payback, not income</span>
+          <span className="muted">{t.payback}</span>
         ) : (
           <CategorySelect
             categories={categories}
             value={r.is_transfer ? TRANSFER : r.category_id}
             disabled={busy}
-            label={`Category for ${name}`}
+            label={t.categoryFor(name)}
             onChange={actions.onCategory}
           />
         )}
@@ -120,20 +123,14 @@ export default function TransactionRow({
       <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>
         {money(r.amount)}
         {r.reimbursements.length > 0 && (
-          <div className="share">your share {money(-yourShare(Number(r.amount), r.reimbursements))}</div>
+          <div className="share">{t.yourShare(money(-yourShare(Number(r.amount), r.reimbursements)))}</div>
         )}
       </td>
       <td className="approved-col">
         <input
           type="checkbox"
-          aria-label={`Approved: ${name}`}
-          title={
-            isLinked(r)
-              ? 'Linked as a payback; use Unlink payment in its ⋯ menu to change this'
-              : r.approved
-                ? 'Untick to move it back to To review'
-                : 'Tick to approve'
-          }
+          aria-label={t.approvedFor(name)}
+          title={isLinked(r) ? t.linkedTitle : r.approved ? t.untickTitle : t.tickTitle}
           checked={r.approved}
           disabled={busy || isLinked(r)}
           onChange={actions.onToggleApproved}
@@ -164,14 +161,14 @@ export function PendingRow({ row: r, categories }: { row: Row; categories: Categ
           description={r.description}
           postedDate={r.posted_date}
           account={r.accounts?.name}
-          summary={<div className="pending-line">Pending</div>}
+          summary={<div className="pending-line">{t.pending}</div>}
           open={details}
           onToggle={toggleDetails}
         />
       </td>
       <td className="account-col">{r.accounts?.name}</td>
       <td className="pending-category">
-        {r.is_transfer ? 'Transfer' : (categories.find((c) => c.id === r.category_id)?.name ?? 'Uncategorized')}
+        {r.is_transfer ? strings.common.transfer : (categories.find((c) => c.id === r.category_id)?.name ?? strings.common.uncategorized)}
       </td>
       <td className="tags-col" />
       <td className={`num ${Number(r.amount) < 0 ? 'out' : 'in'}`}>{money(r.amount)}</td>
@@ -220,27 +217,27 @@ function ActionsMenu({
   };
 
   // Add tag (phones): a picker in a modal pinned to the top, so the keyboard never covers its box
-  const items: MenuItem[] = [{ label: 'Add tag', phoneOnly: true, onSelect: () => show('tag') }];
+  const items: MenuItem[] = [{ label: t.addTag, phoneOnly: true, onSelect: () => show('tag') }];
   if (isCharge(r)) {
     const full = expectedOn(r) >= -Number(r.amount);
     items.push({
-      label: 'Expect reimbursement',
+      label: t.expect,
       disabled: full,
-      title: full ? 'The whole charge is already expected back' : 'Someone owes you part of this',
+      title: full ? t.expectFullTitle : t.expectTitle,
       onSelect: () => show('expect'),
     });
   } else if (Number(r.amount) > 0 && !r.is_transfer) {
     items.push(
       isLinked(r)
-        ? { label: 'Unlink payment', onSelect: actions.onUnlink }
-        : { label: 'Link to what someone owes', onSelect: () => show('link') },
+        ? { label: t.unlink, onSelect: actions.onUnlink }
+        : { label: t.link, onSelect: () => show('link') },
     );
   }
   if (r.source === 'manual') {
     items.push({
-      label: 'Delete transaction',
+      label: t.delete,
       danger: true,
-      title: 'You added this by hand, so you can delete it',
+      title: t.deleteTitle,
       onSelect: actions.onDelete,
     });
   }
@@ -250,7 +247,7 @@ function ActionsMenu({
 
   return (
     <>
-      <RowMenu label={`More for ${name}`} items={items} disabled={busy} />
+      <RowMenu label={t.moreFor(name)} items={items} disabled={busy} />
       {form && (
         <Modal
           labelledBy={titleId}
@@ -261,22 +258,22 @@ function ActionsMenu({
           {(close) => (
             <>
               <h2 id={titleId}>
-                {form === 'tag' ? 'Add tag' : form === 'expect' ? 'Expect reimbursement' : 'Link to what someone owes'}
+                {form === 'tag' ? t.addTag : form === 'expect' ? t.expect : t.link}
               </h2>
               <p className="muted small">
                 {name} · {shortDate(r.posted_date)} · {money(r.amount)}
               </p>
               {failed && (
                 <p className="error" role="alert">
-                  Couldn’t save. Try again.
+                  {t.saveFailed}
                 </p>
               )}
               {form === 'tag' ? (
                 <Combobox
                   options={tags.filter((t) => !rowTags.some((x) => x.id === t.id)).map((t) => ({ value: t.id, text: t.name }))}
                   value={null}
-                  label={`Add a tag to ${name}`}
-                  placeholder="Tag name"
+                  label={strings.common.addTagTo(name)}
+                  placeholder={strings.common.tagName}
                   autoFocus
                   onChange={(id) => {
                     actions.onAddTag(id);
@@ -286,7 +283,7 @@ function ActionsMenu({
                     actions.onCreateTag(text);
                     close();
                   }}
-                  createLabel={(text) => `New tag “${text}”`}
+                  createLabel={strings.common.newTag}
                 />
               ) : form === 'expect' ? (
                 <ExpectForm

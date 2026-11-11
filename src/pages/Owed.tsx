@@ -5,6 +5,9 @@ import { round } from '../lib/cents';
 import { money, shortDate } from '../lib/format';
 import { CHARGE, personKey } from '../lib/reimbursements';
 import Button from '../components/Button';
+import { strings } from '../lib/strings';
+
+const t = strings.owed;
 
 type Status = 'owed' | 'received' | 'written_off';
 
@@ -71,8 +74,8 @@ export default function Owed() {
     update(() => db().from('reimbursements').update({ status, updated_at: new Date().toISOString() }).eq('id', i.id), done);
 
   function remove(i: Item) {
-    if (!window.confirm(`Stop expecting ${money(i.amount)} from ${i.who} for ${label(i)}? The whole charge counts as yours again.`)) return;
-    return update(() => db().from('reimbursements').delete().eq('id', i.id), `Removed. ${label(i)} counts in full again.`);
+    if (!window.confirm(t.confirmRemove(money(i.amount), i.who, label(i)))) return;
+    return update(() => db().from('reimbursements').delete().eq('id', i.id), t.removed(label(i)));
   }
 
   const open = (items ?? []).filter((i) => i.status === 'owed' && leftOf(i) > 0);
@@ -87,27 +90,24 @@ export default function Owed() {
   return (
     <section>
       <header className="page-head">
-        <h1>Owed to me</h1>
+        <h1>{t.title}</h1>
       </header>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
 
       {items && open.length === 0 && (
         <p className="empty">
-          Nobody owes you anything. On <Link to="/spending">Spending</Link>, open a charge’s details and choose
-          Expect reimbursement when someone owes you part of it.
+          {t.emptyBefore} <Link to="/spending">{t.emptyLink}</Link>
+          {t.emptyAfter}
         </p>
       )}
 
       {open.length > 0 && (
         <>
           <p className="net-worth">
-            <span className="muted">Total owed</span> <strong className="num">{money(total)}</strong>
+            <span className="muted">{t.totalOwed}</span> <strong className="num">{money(total)}</strong>
           </p>
-          <p className="muted small">
-            When someone pays you back, link the payment on Spending (it’s suggested under Paid back?), or enter a
-            Venmo payment with Add transaction. Paid in cash? Mark it received.
-          </p>
+          <p className="muted small">{t.help}</p>
         </>
       )}
 
@@ -117,18 +117,18 @@ export default function Owed() {
         return (
           <div key={personKey(who)}>
             <h2>
-              {who} <span className="muted owes">owes {money(owes)}</span>
+              {who} <span className="muted owes">{t.owes(money(owes))}</span>
             </h2>
             <table className="register owed">
               <thead>
                 <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">For</th>
-                  <th scope="col" className="num">Owed</th>
-                  <th scope="col" className="num">Paid</th>
-                  <th scope="col" className="num">Left</th>
+                  <th scope="col">{t.date}</th>
+                  <th scope="col">{t.for}</th>
+                  <th scope="col" className="num">{t.owedCol}</th>
+                  <th scope="col" className="num">{t.paid}</th>
+                  <th scope="col" className="num">{t.left}</th>
                   <th scope="col">
-                    <span className="visually-hidden">Actions</span>
+                    <span className="visually-hidden">{strings.common.actions}</span>
                   </th>
                 </tr>
               </thead>
@@ -141,31 +141,35 @@ export default function Owed() {
                       {i.note && <div className="muted small">{i.note}</div>}
                     </td>
                     <td className="num">{money(i.amount)}</td>
-                    <td className="num">{paidOf(i) ? money(paidOf(i)) : '—'}</td>
+                    <td className="num">{paidOf(i) ? money(paidOf(i)) : strings.common.missing}</td>
                     <td className="num">{money(leftOf(i))}</td>
                     <td className="action">
                       <Button
                         size="small"
                         disabled={busy}
-                        title="Paid outside your accounts, like cash"
-                        onClick={() => setStatus(i, 'received', `Marked ${label(i)} received from ${who}.`)}
+                        title={t.receivedTitle}
+                        onClick={() => setStatus(i, 'received', t.markedReceived(label(i), who))}
                       >
-                        Received
+                        {t.received}
                       </Button>
                       <Button
                         size="small"
                         variant="link"
                         disabled={busy}
-                        title={paidOf(i) ? 'The unpaid part counts as your spending again' : 'It counts as your spending again'}
-                        onClick={() =>
-                          setStatus(i, 'written_off', `Wrote off ${money(leftOf(i))} from ${who}; it counts as your spending again.`)
-                        }
+                        title={paidOf(i) ? t.writeOffPartTitle : t.writeOffTitle}
+                        onClick={() => setStatus(i, 'written_off', t.wroteOff(money(leftOf(i)), who))}
                       >
-                        Write off
+                        {t.writeOff}
                       </Button>
                       {paidOf(i) === 0 && (
-                        <Button variant="icon" aria-label={`Stop expecting ${money(i.amount)} from ${who} for ${label(i)}`} title="Remove" disabled={busy} onClick={() => remove(i)}>
-                          ×
+                        <Button
+                          variant="icon"
+                          aria-label={t.stopExpecting(money(i.amount), who, label(i))}
+                          title={t.remove}
+                          disabled={busy}
+                          onClick={() => remove(i)}
+                        >
+                          {strings.common.closeSymbol}
                         </Button>
                       )}
                     </td>
@@ -179,17 +183,17 @@ export default function Owed() {
 
       {settled.length > 0 && (
         <>
-          <h2>Settled</h2>
+          <h2>{t.settled}</h2>
           <table className="register owed settled">
             <thead>
               <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Who</th>
-                <th scope="col">For</th>
-                <th scope="col" className="num">Amount</th>
-                <th scope="col">Status</th>
+                <th scope="col">{t.date}</th>
+                <th scope="col">{t.who}</th>
+                <th scope="col">{t.for}</th>
+                <th scope="col" className="num">{t.amount}</th>
+                <th scope="col">{t.status}</th>
                 <th scope="col">
-                  <span className="visually-hidden">Actions</span>
+                  <span className="visually-hidden">{strings.common.actions}</span>
                 </th>
               </tr>
             </thead>
@@ -211,11 +215,11 @@ export default function Owed() {
                     <td>
                       {i.status === 'written_off'
                         ? paid
-                          ? `Written off after ${money(paid)} paid`
-                          : 'Written off'
+                          ? t.writtenOffAfter(money(paid))
+                          : t.writtenOff
                         : lastPaid && paid >= Number(i.amount)
-                          ? `Paid back ${shortDate(lastPaid)}`
-                          : 'Received'}
+                          ? t.paidBackOn(shortDate(lastPaid))
+                          : t.received}
                     </td>
                     <td className="action">
                       {canReopen && (
@@ -223,9 +227,9 @@ export default function Owed() {
                           size="small"
                           variant="link"
                           disabled={busy}
-                          onClick={() => setStatus(i, 'owed', `${i.who} owes ${money(leftOf(i))} for ${label(i)} again.`)}
+                          onClick={() => setStatus(i, 'owed', t.reopened(i.who, money(leftOf(i)), label(i)))}
                         >
-                          Reopen
+                          {t.reopen}
                         </Button>
                       )}
                     </td>
@@ -234,7 +238,7 @@ export default function Owed() {
               })}
             </tbody>
           </table>
-          <p className="muted small">Fully paid items reopen by unlinking their payment on Spending.</p>
+          <p className="muted small">{t.reopenNote}</p>
         </>
       )}
     </section>

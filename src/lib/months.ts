@@ -1,3 +1,4 @@
+import { strings } from './strings';
 // Calendar months, keyed by their first day as YYYY-MM-01 (what the reporting
 // functions return). Dates are built at noon local time so a time zone shift
 // can never push them into the day before.
@@ -38,4 +39,4 @@ export const parseMonth = (value: string | null) => (value && /^\d{4}-\d{2}$/.te
 export const ALL_TIME = 'all';
 
 /** "November 2026", or "All time". */
-export const monthOrAll = (key: string) => (key === ALL_TIME ? 'All time' : monthLong(key));
+export const monthOrAll = (key: string) => (key === ALL_TIME ? strings.format.allTime : monthLong(key));

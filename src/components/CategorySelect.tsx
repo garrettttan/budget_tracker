@@ -1,4 +1,5 @@
 import Combobox from './Combobox';
+import { strings } from '../lib/strings';
 
 export type Category = { id: string; name: string; is_income: boolean; group_name?: string | null };
 
@@ -24,8 +25,8 @@ export default function CategorySelect({
 }) {
   const options = [
     ...categories.map((c) => ({ value: c.id, text: c.name })),
-    { value: UNCATEGORIZED, text: 'Uncategorized' },
-    { value: TRANSFER, text: 'Transfer (not spending)' },
+    { value: UNCATEGORIZED, text: strings.common.uncategorized },
+    { value: TRANSFER, text: strings.picker.transferOption },
   ];
   return <Combobox options={options} value={value ?? UNCATEGORIZED} {...props} />;
 }

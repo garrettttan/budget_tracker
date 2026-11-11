@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { round } from '../lib/cents';
 import Button from './Button';
+import { strings } from '../lib/strings';
+
+const t = strings.charts;
 
 /*
  * Small hand-rolled SVG charts for Trends and Spending (no chart library).
@@ -45,8 +48,9 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
 /** Axis labels: $0, $750, $1.5K, $12K. */
 export function axisMoney(v: number): string {
   const a = Math.abs(v);
-  const s = a >= 10_000 ? `${Math.round(a / 1000)}K` : a >= 1000 ? `${(a / 1000).toFixed(1).replace(/\.0$/, '')}K` : String(Math.round(a));
-  return `${v < 0 ? '−' : ''}$${s}`;
+  const s =
+    a >= 10_000 ? t.thousands(String(Math.round(a / 1000))) : a >= 1000 ? t.thousands((a / 1000).toFixed(1).replace(/\.0$/, '')) : String(Math.round(a));
+  return t.axisMoney(v < 0, s);
 }
 
 /** A column's path: 4px rounded top corners, square at the baseline. */
@@ -184,7 +188,11 @@ export function MonthColumns({
                     className="chart-hit"
                     tabIndex={0}
                     role={onSelect ? 'button' : 'img'}
-                    aria-label={`${m.long}: ${series.map((s) => `${s.name} ${format(s.values[i])}`).join(', ')}${onSelect && selectHint ? `. ${selectHint}` : ''}`}
+                    aria-label={t.monthLabel(
+                      m.long,
+                      series.map((s) => t.seriesValue(s.name, format(s.values[i]))),
+                      onSelect && selectHint ? selectHint : null,
+                    )}
                     onPointerEnter={() => show(i, cx)}
                     onPointerLeave={hide}
                     onFocus={() => show(i, cx)}
@@ -274,7 +282,7 @@ export function TimeLine({
           width={width}
           height={PLOT_H + X_BAND + 8}
           role={onSelect ? 'button' : 'img'}
-          aria-label={onSelect && selectHint ? `${label}. Arrow keys move between months; ${selectHint.toLowerCase()}` : label}
+          aria-label={onSelect && selectHint ? t.arrowMonths(label, selectHint) : label}
           tabIndex={0}
           className={onSelect ? 'clickable' : undefined}
           onClick={(e) => onSelect?.(dates[nearest(e.clientX - e.currentTarget.getBoundingClientRect().left)].date)}
@@ -397,7 +405,7 @@ export function PaceLines({
           width={width}
           height={PLOT_H + X_BAND + 8}
           role="img"
-          aria-label={`${label}. Arrow keys move between days`}
+          aria-label={t.arrowDays(label)}
           tabIndex={0}
           onPointerMove={(e) => setIdx(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
           onPointerLeave={() => setIdx(null)}
@@ -549,7 +557,7 @@ export function CategoryPie({
   const colored = rows.length > SLICE_COLORS.length ? rows.slice(0, SLICE_COLORS.length - 1) : rows;
   const rest = rows.slice(colored.length);
   const slices: Slice[] = colored.map((r, i) => ({ ...r, color: SLICE_COLORS[i] }));
-  if (rest.length) slices.push({ key: 'other', name: `Other (${rest.length})`, value: rest.reduce((a, r) => a + r.value, 0), color: OTHER_COLOR });
+  if (rest.length) slices.push({ key: 'other', name: t.other(rest.length), value: rest.reduce((a, r) => a + r.value, 0), color: OTHER_COLOR });
   const sliceOf = (key: string) => (rest.some((r) => r.key === key) ? 'other' : key);
   // Other is faded only when everything folded into it is
   const faded = (key: string) => (key === 'other' ? rest.every((r) => hidden.includes(r.key)) : hidden.includes(key));
@@ -572,7 +580,7 @@ export function CategoryPie({
   return (
     <div className="pie-layout">
       <div className="chart pie">
-        <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${label}: ${slices.map((s) => `${s.name} ${share(s.value)}`).join(', ')}`}>
+        <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={t.pieLabel(label, slices.map((s) => t.sliceShare(s.name, share(s.value))))}>
           {drawn.map((a) => (
             <path
               key={a.key}
@@ -601,7 +609,7 @@ export function CategoryPie({
           >
             <div className="chart-tip-row">
               <span className="chart-key-rect" style={{ background: tipArc.color }} />
-              <strong>{format(tipArc.value)}</strong> <span className="muted">{tipArc.name} · {share(tipArc.value)}</span>
+              <strong>{format(tipArc.value)}</strong> <span className="muted">{t.sliceTip(tipArc.name, share(tipArc.value))}</span>
             </div>
           </div>
         )}
@@ -632,7 +640,7 @@ export function CategoryPie({
                     variant="link"
                     className={`pie-row${selected === r.key ? ' selected' : ''}${hidden.includes(r.key) ? ' faded' : ''}${hot && hot !== sliceOf(r.key) ? ' dim' : ''}`}
                     aria-pressed={selected === r.key}
-                    aria-label={`${r.name}: ${format(r.value)}, ${share(r.value)}. ${selectHint}`}
+                    aria-label={t.rowLabel(r.name, format(r.value), share(r.value), selectHint)}
                     onPointerEnter={() => setHover(r.key)}
                     onPointerLeave={() => setHover(null)}
                     onFocus={() => setHover(r.key)}

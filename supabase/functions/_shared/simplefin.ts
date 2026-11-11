@@ -9,6 +9,8 @@
 //   * each /accounts request may span at most 90 days, but responses warn
 //     above 45 ("may be capped"), so we stay at 45
 
+import { messages } from './messages.ts';
+
 export const MAX_REQUESTS_PER_DAY = 12; // our own cap, well under SimpleFIN's ~24
 const TIME_ZONE = 'America/New_York';
 const WINDOW_DAYS = 45;
@@ -58,9 +60,9 @@ export function decodeSetupToken(token: string): string {
   try {
     url = new URL(atob(token.trim()));
   } catch {
-    throw new SimplefinError("That doesn't look like a SimpleFIN Setup Token.");
+    throw new SimplefinError(messages.notASetupToken);
   }
-  if (url.protocol !== 'https:') throw new SimplefinError('The Setup Token must point to an https address.');
+  if (url.protocol !== 'https:') throw new SimplefinError(messages.setupTokenNotHttps);
   return url.toString();
 }
 
@@ -68,12 +70,9 @@ export function decodeSetupToken(token: string): string {
 export async function claimAccessUrl(setupToken: string, fetchImpl: typeof fetch = fetch): Promise<string> {
   const res = await fetchImpl(decodeSetupToken(setupToken), { method: 'POST', headers: { 'Content-Length': '0' } });
   if (res.status === 403) {
-    throw new SimplefinError(
-      'SimpleFIN says this Setup Token was already used or does not exist. If you did not use it ' +
-        'yourself, someone else may have: disable it in SimpleFIN Bridge and create a new one.',
-    );
+    throw new SimplefinError(messages.setupTokenUsed);
   }
-  if (!res.ok) throw new SimplefinError(`SimpleFIN could not claim the token (HTTP ${res.status}).`);
+  if (!res.ok) throw new SimplefinError(messages.claimFailed(res.status));
   const accessUrl = (await res.text()).trim();
   splitAccessUrl(accessUrl); // validate before we store it
   return accessUrl;
@@ -83,7 +82,7 @@ export async function claimAccessUrl(setupToken: string, fetchImpl: typeof fetch
 export function splitAccessUrl(accessUrl: string): { baseUrl: string; authorization: string } {
   const url = new URL(accessUrl);
   if (url.protocol !== 'https:' || !url.username || !url.password) {
-    throw new SimplefinError('The SimpleFIN Access URL is malformed.');
+    throw new SimplefinError(messages.accessUrlMalformed);
   }
   const credentials = `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`;
   return {
@@ -106,9 +105,9 @@ export async function fetchAccountSet(accessUrl: string, window: Window, fetchIm
   });
   const res = await fetchImpl(`${baseUrl}/accounts?${query}`, { headers: { Authorization: authorization } });
   if (res.status === 403) {
-    throw new SimplefinError('SimpleFIN rejected the saved access. Reconnect in Settings with a new Setup Token.');
+    throw new SimplefinError(messages.accessRejected);
   }
-  if (!res.ok) throw new SimplefinError(`SimpleFIN request failed (HTTP ${res.status}).`);
+  if (!res.ok) throw new SimplefinError(messages.requestFailed(res.status));
   return (await res.json()) as SfAccountSet;
 }
 
@@ -149,11 +148,11 @@ export function skipReason(opts: {
   rateLimitedAt: string | null; // start of the last run, if it was rate limited
 }): string | null {
   if (opts.requestsLast24h + opts.plannedRequests > MAX_REQUESTS_PER_DAY) {
-    return `would exceed ${MAX_REQUESTS_PER_DAY} SimpleFIN requests in 24 h`;
+    return messages.skipTooManyRequests(MAX_REQUESTS_PER_DAY);
   }
   if (opts.rateLimitedAt) {
     const hours = (opts.now.getTime() - Date.parse(opts.rateLimitedAt)) / 3_600_000;
-    if (hours < COOLDOWN_HOURS) return 'skipping a day after a SimpleFIN rate-limit warning';
+    if (hours < COOLDOWN_HOURS) return messages.skipAfterRateLimit;
   }
   return null;
 }
@@ -194,7 +193,7 @@ export type BankFields = {
 export function toBankFields(t: SfTransaction, now: Date): BankFields {
   const when = t.posted || t.transacted_at || now.getTime() / 1000;
   const amount = Number(t.amount);
-  if (!Number.isFinite(amount)) throw new SimplefinError(`Transaction ${t.id} has an invalid amount.`);
+  if (!Number.isFinite(amount)) throw new SimplefinError(messages.invalidAmount(t.id));
   return {
     external_id: t.id,
     posted_date: toLocalDate(when),

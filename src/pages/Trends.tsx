@@ -11,6 +11,9 @@ import Button from '../components/Button';
 import HeaderFilter from '../components/HeaderFilter';
 import Switch from '../components/Switch';
 import { Legend, MonthColumns, PaceLines, TimeLine, type PaceSeries } from '../components/charts';
+import { strings } from '../lib/strings';
+
+const t = strings.trends;
 
 // series colors (validated for color-blind separation in styles.css)
 const INCOME = 'var(--viz-income)';
@@ -29,10 +32,10 @@ const readList = (value: string | null) =>
 const writeList = (keys: string[]) => keys.map((k) => k.replace(/%/g, '%25').replace(/,/g, '%2C')).join(',') || null;
 
 const RANGES = [
-  { key: '12m', label: 'Last 12 months', months: 12 },
-  { key: 'ytd', label: 'This year', months: 0 },
-  { key: '6m', label: 'Last 6 months', months: 6 },
-  { key: '3m', label: 'Last 3 months', months: 3 },
+  { key: '12m', label: t.ranges['12m'], months: 12 },
+  { key: 'ytd', label: t.ranges.ytd, months: 0 },
+  { key: '6m', label: t.ranges['6m'], months: 6 },
+  { key: '3m', label: t.ranges['3m'], months: 3 },
 ] as const;
 type RangeKey = (typeof RANGES)[number]['key'];
 
@@ -88,7 +91,7 @@ function monthValues(spend: SpendRow[], months: MonthKey[], keep: (r: SpendRow) 
 
 /** A category's group, named as Spending's pie names it: Uncategorized, its group, or No group. */
 const groupName = (categoryId: string | null, group: string | null | undefined) =>
-  categoryId === null ? 'Uncategorized' : group?.trim() || 'No group';
+  categoryId === null ? strings.common.uncategorized : group?.trim() || strings.common.noGroup;
 
 /** The months a range covers, oldest first, as YYYY-MM-01 keys (the current month included). */
 function monthsFor(range: RangeKey) {
@@ -262,7 +265,7 @@ export default function Trends() {
   // earlier three that have any spending; shown when two or more do, else it's just last month)
   // rent is the biggest bill and lands on a different day each month, so it swamps the pace
   // lines; Housing is left out unless its toggle (?housing=1) is on
-  const housing = categories.find((c) => c.name === 'Housing')?.id ?? null;
+  const housing = categories.find((c) => c.name === t.housing)?.id ?? null;
   const withHousing = params.get('housing') === '1';
   // the group chart has its own Housing switch (?grouphousing=1), off by default like the pace's
   const groupHousing = params.get('grouphousing') === '1';
@@ -277,13 +280,13 @@ export default function Trends() {
     );
     const has = new Set(lines.map((l) => l.posted_date.slice(0, 7)));
     const earlier = [1, 2, 3].map((n) => addMonths(current, -n)).filter((m) => has.has(m.slice(0, 7)));
-    const series: PaceSeries[] = [{ name: 'This month', color: SPENDING, values: runningTotals(shown, current, days, today) }];
+    const series: PaceSeries[] = [{ name: t.thisMonth, color: SPENDING, values: runningTotals(shown, current, days, today) }];
     const last = addMonths(current, -1);
-    if (earlier.includes(last)) series.push({ name: 'Last month', color: EARLIER, values: runningTotals(shown, last, days) });
+    if (earlier.includes(last)) series.push({ name: t.lastMonth, color: EARLIER, values: runningTotals(shown, last, days) });
     if (earlier.length >= 2) {
       const curves = earlier.map((m) => runningTotals(shown, m, days) as number[]);
       series.push({
-        name: 'Average month',
+        name: t.averageMonth,
         color: EARLIER,
         dashed: true,
         values: curves[0].map((_, i) => round(sum(curves.map((c) => c[i])) / curves.length)),
@@ -306,18 +309,18 @@ export default function Trends() {
     groupNames.includes(groupName(categoryId, group)) && !(groupLeavesOutHousing && categoryId === housing);
   const groupCategoryKeys = [
     ...categories.filter((c) => inPickedGroup(c.id, c.group_name)).map((c) => c.id),
-    ...(groupNames.includes('Uncategorized') ? [NO_CATEGORY] : []),
+    ...(groupNames.includes(strings.common.uncategorized) ? [NO_CATEGORY] : []),
   ];
 
   return (
     <section>
       <header className="page-head">
-        <h1>Trends</h1>
+        <h1>{t.title}</h1>
       </header>
       {error && <p className="error" role="alert">{error}</p>}
 
       <div className="trend-filters">
-        <div className="filter range-filter" role="group" aria-label="Months">
+        <div className="filter range-filter" role="group" aria-label={t.months}>
           {RANGES.map((r) => (
             <Button key={r.key} size="small" aria-pressed={range === r.key} onClick={() => set({ range: r.key === '12m' ? null : r.key })}>
               {r.label}
@@ -327,25 +330,25 @@ export default function Trends() {
         {tagList.length > 0 && (
           <div className="tag-include">
             <HeaderFilter
-              label="Tags"
+              label={t.tags}
               items={tagList.map((t) => ({ id: t.tag_id, name: t.name, count: t.transaction_count }))}
               hidden={tagList.map((t) => t.tag_id).filter((id) => !included.includes(id))}
               onChange={(hidden) => set({ hidetag: hidden.join(',') || null })}
               onOnly={(id) => set({ hidetag: tagList.map((t) => t.tag_id).filter((t) => t !== id).join(',') || null })}
               active={!allTags}
               reset={{
-                label: 'Reset',
+                label: strings.common.reset,
                 onClick: () => set({ hidetag: null }),
                 disabled: allTags,
-                title: allTags ? 'Every tag is included' : undefined,
+                title: allTags ? t.everyTag : undefined,
               }}
             >
-              Include tagged:{' '}
+              {t.includeTagged}{' '}
               {allTags
-                ? 'All'
+                ? t.all
                 : includedNames.length === 0
-                  ? 'None'
-                  : includedNames[0] + (includedNames.length > 1 ? ` +${includedNames.length - 1}` : '')}
+                  ? t.none
+                  : includedNames[0] + (includedNames.length > 1 ? t.more(includedNames.length - 1) : '')}
             </HeaderFilter>
           </div>
         )}
@@ -354,37 +357,37 @@ export default function Trends() {
       <div className={loading && spend ? 'trends refetching' : 'trends'}>
         {pace && (
           <>
-            <h2>This month</h2>
+            <h2>{t.thisMonth}</h2>
             <div className="pace-controls">
               {pace.series.length > 1 && <Legend shape="line" items={pace.series} />}
               {housing && (
                 <Switch checked={withHousing} onChange={(on) => set({ housing: on ? '1' : null })}>
-                  Include Housing
+                  {t.includeHousing}
                 </Switch>
               )}
             </div>
-            <PaceLines days={pace.days} series={pace.series} format={money} label="Spending so far this month, day by day" dayLabel={dayLabel} />
+            <PaceLines days={pace.days} series={pace.series} format={money} label={t.paceLabel} dayLabel={dayLabel} />
           </>
         )}
 
-        <h2>Cash flow</h2>
-        <Legend shape="rect" items={[{ name: 'Income', color: INCOME }, { name: 'Spending', color: SPENDING }]} />
+        <h2>{t.cashFlow}</h2>
+        <Legend shape="rect" items={[{ name: t.income, color: INCOME }, { name: t.spending, color: SPENDING }]} />
         <MonthColumns
           months={months}
           series={[
-            { name: 'Income', color: INCOME, values: income },
-            { name: 'Spending', color: SPENDING, values: spending },
+            { name: t.income, color: INCOME, values: income },
+            { name: t.spending, color: SPENDING, values: spending },
           ]}
           format={money}
-          label="Income and spending by month"
-          selectHint="Opens its transactions"
+          label={t.cashFlowLabel}
+          selectHint={t.opensTransactions}
           onSelect={(key) => openMonth(key)}
         />
 
         {pickedCategories.length > 0 && (
           <PickedOverTime
-            title="Categories over time"
-            pickLabel="Categories"
+            title={t.categoriesOverTime}
+            pickLabel={t.categories}
             options={categoryOptions}
             picked={pickedCategories}
             isDefault={!params.get('cat')}
@@ -401,8 +404,8 @@ export default function Trends() {
 
         {pickedGroups.length > 0 && (
           <PickedOverTime
-            title="Category groups over time"
-            pickLabel="Groups"
+            title={t.groupsOverTime}
+            pickLabel={t.groups}
             options={groupOptions}
             picked={pickedGroups}
             isDefault={!params.get('group')}
@@ -421,23 +424,23 @@ export default function Trends() {
             extra={
               groupHasHousing && (
                 <Switch checked={groupHousing} onChange={(on) => set({ grouphousing: on ? '1' : null })}>
-                  Include Housing
+                  {t.includeHousing}
                 </Switch>
               )
             }
           />
         )}
 
-        <h2>Net worth</h2>
+        <h2>{t.netWorth}</h2>
         {netWorth.length > 0 ? (
           <TimeLine
             dates={netWorth}
-            series={[{ name: 'Net worth', color: INCOME, values: netWorth.map((p) => p.value) }]}
+            series={[{ name: t.netWorth, color: INCOME, values: netWorth.map((p) => p.value) }]}
             format={money}
-            label="Net worth by month"
+            label={t.netWorthLabel}
           />
         ) : (
-          <p className="empty">No balances yet. They appear after the first sync.</p>
+          <p className="empty">{t.noBalances}</p>
         )}
       </div>
     </section>
@@ -506,9 +509,9 @@ function PickedOverTime({
             keepOne
             max={MAX_LINES}
             active={false}
-            reset={{ label: 'Reset', onClick: () => onPick([]), disabled: isDefault, title: isDefault ? 'Showing the biggest already' : undefined }}
+            reset={{ label: strings.common.reset, onClick: () => onPick([]), disabled: isDefault, title: isDefault ? t.biggestAlready : undefined }}
           >
-            {names[0] + (names.length > 1 ? ` +${names.length - 1}` : '')}
+            {names[0] + (names.length > 1 ? t.more(names.length - 1) : '')}
           </HeaderFilter>
         </span>
         {extra && <span className="picker-extra">{extra}</span>}
@@ -522,8 +525,8 @@ function PickedOverTime({
         dates={months.map((m) => ({ date: m.key, long: m.long }))}
         series={series}
         format={money}
-        label={`${names.join(', ')} spending by month`}
-        selectHint="Enter opens that month's transactions"
+        label={t.overTimeLabel(names)}
+        selectHint={t.opensMonth}
         onSelect={onOpenMonth}
       />
     </>

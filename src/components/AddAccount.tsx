@@ -3,14 +3,17 @@ import { db } from '../lib/supabase';
 import { parseAmount } from '../lib/format';
 import Button from './Button';
 import Modal from './Modal';
+import { strings } from '../lib/strings';
+
+const t = strings.accounts;
 
 export type AccountClass = 'cash' | 'investment' | 'liability';
 
 /** The account classes, in the order Accounts lists them. */
 export const CLASSES: { value: AccountClass; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'investment', label: 'Investments' },
-  { value: 'liability', label: 'Liabilities' },
+  { value: 'cash', label: t.classes.cash },
+  { value: 'investment', label: t.classes.investment },
+  { value: 'liability', label: t.classes.liability },
 ];
 
 /**
@@ -26,7 +29,7 @@ export default function AddAccount({ onAdded, onCancel }: { onAdded: (name: stri
   const [error, setError] = useState<string | null>(null);
 
   const parsed = balance.trim() === '' ? 0 : parseAmount(balance, { allowNegative: true });
-  const why = !name.trim() ? 'Type a name first' : parsed === null ? 'The balance isn’t a number' : undefined;
+  const why = !name.trim() ? strings.common.typeName : parsed === null ? t.badBalance : undefined;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -45,19 +48,16 @@ export default function AddAccount({ onAdded, onCancel }: { onAdded: (name: stri
     <Modal labelledBy="add-account-title" busy={busy} onClose={onCancel}>
       {(close) => (
         <form onSubmit={save}>
-          <h2 id="add-account-title">Add manual account</h2>
-          <p className="muted small">
-            For accounts SimpleFIN can’t see, like Venmo. Enter their transactions with Add transaction on the Spending
-            page.
-          </p>
+          <h2 id="add-account-title">{t.addTitle}</h2>
+          <p className="muted small">{t.addIntro}</p>
           {error && <p className="error" role="alert">{error}</p>}
           <div className="fields single">
             <label>
-              Name
-              <input type="text" value={name} autoFocus disabled={busy} placeholder="Venmo" onChange={(e) => setName(e.target.value)} />
+              {strings.common.name}
+              <input type="text" value={name} autoFocus disabled={busy} placeholder={t.namePlaceholder} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
-              Class
+              {t.class}
               <select value={cls} disabled={busy} onChange={(e) => setCls(e.target.value as AccountClass)}>
                 {CLASSES.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -67,23 +67,23 @@ export default function AddAccount({ onAdded, onCancel }: { onAdded: (name: stri
               </select>
             </label>
             <label>
-              Current balance
+              {t.currentBalance}
               <input
                 type="text"
                 inputMode="decimal"
                 value={balance}
                 disabled={busy}
-                placeholder="0.00"
+                placeholder={strings.common.amountPlaceholder}
                 onChange={(e) => setBalance(e.target.value)}
               />
             </label>
           </div>
           <div className="form-actions">
             <Button type="submit" variant="primary" disabled={busy || Boolean(why)} title={why}>
-              Add account
+              {t.addButton}
             </Button>
             <Button variant="link" disabled={busy} onClick={close}>
-              Cancel
+              {strings.common.cancel}
             </Button>
           </div>
         </form>

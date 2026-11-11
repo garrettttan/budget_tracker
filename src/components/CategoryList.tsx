@@ -5,6 +5,10 @@ import { byUse, usageCount as count } from '../lib/categoryOrder';
 import Button from './Button';
 import EditCategory, { type EditableCategory } from './EditCategory';
 import PencilIcon from './PencilIcon';
+import { strings } from '../lib/strings';
+
+const t = strings.categories;
+const common = strings.common;
 
 type CategoryRow = EditableCategory & { transactions: { count: number }[] };
 
@@ -70,10 +74,10 @@ export default function CategoryList() {
     setBusy(true);
     reset();
     const { error } = await db().from('categories').insert({ name, group_name: group });
-    if (error) setError(error.code === '23505' ? 'You already have a category with that name.' : error.message);
+    if (error) setError(error.code === '23505' ? t.duplicate : error.message);
     else {
       closeAdd();
-      setNotice(group ? `Added ${name} to ${group}.` : `Added ${name}.`);
+      setNotice(t.added(name, group));
     }
     await load();
     setBusy(false);
@@ -110,8 +114,8 @@ export default function CategoryList() {
         <input
           type="search"
           className="merchant-filter"
-          placeholder="Find a category"
-          aria-label="Find a category"
+          placeholder={t.find}
+          aria-label={t.find}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
@@ -126,8 +130,8 @@ export default function CategoryList() {
             <input
               type="text"
               className="merchant-name-input"
-              placeholder="New category"
-              aria-label="New category name"
+              placeholder={t.newPlaceholder}
+              aria-label={t.newLabel}
               value={newName}
               disabled={busy}
               autoFocus
@@ -138,8 +142,8 @@ export default function CategoryList() {
             <input
               type="text"
               className="group-name-input"
-              placeholder="Group"
-              aria-label="New category's group"
+              placeholder={t.groupPlaceholder}
+              aria-label={t.groupLabel}
               list="new-category-groups"
               value={newGroup}
               disabled={busy}
@@ -155,9 +159,9 @@ export default function CategoryList() {
               type="submit"
               size="small"
               disabled={busy || !newName.trim()}
-              title={newName.trim() ? undefined : 'Type a name first'}
+              title={newName.trim() ? undefined : common.typeName}
             >
-              Add
+              {common.add}
             </Button>
             <Button
               size="small"
@@ -165,7 +169,7 @@ export default function CategoryList() {
               disabled={busy}
               onClick={closeAdd}
             >
-              Cancel
+              {common.cancel}
             </Button>
           </form>
         ) : (
@@ -176,7 +180,7 @@ export default function CategoryList() {
               setAdding(true);
             }}
           >
-            Add category
+            {t.addButton}
           </Button>
         )}
       </div>
@@ -184,12 +188,12 @@ export default function CategoryList() {
       <table className="register categories">
         <thead>
           <tr>
-            <th scope="col">Category</th>
+            <th scope="col">{t.category}</th>
             <th scope="col" className="num">
-              Transactions
+              {common.transactions}
             </th>
             <th scope="col">
-              <span className="visually-hidden">Actions</span>
+              <span className="visually-hidden">{common.actions}</span>
             </th>
           </tr>
         </thead>
@@ -197,18 +201,18 @@ export default function CategoryList() {
           <tbody key={g.name ?? ''}>
             <tr className="group-row">
               <th scope="rowgroup" colSpan={3}>
-                {g.name ?? 'No group'}
+                {g.name ?? common.noGroup}
               </th>
             </tr>
             {g.categories.map((c) => (
               <tr key={c.id}>
                 <td>
                   {c.name}
-                  {c.is_income && <span className="account-sub">Income</span>}
+                  {c.is_income && <span className="account-sub">{t.income}</span>}
                 </td>
                 <td className="num">
                   {count(c) > 0 ? (
-                    <Link to={`/spending?month=all&category=${c.id}`} title={`Show every ${c.name} transaction`}>
+                    <Link to={`/spending?month=all&category=${c.id}`} title={t.showEvery(c.name)}>
                       {count(c)}
                     </Link>
                   ) : (
@@ -218,8 +222,8 @@ export default function CategoryList() {
                 <td className="action">
                   <Button
                     variant="icon"
-                    aria-label={`Edit ${c.name}`}
-                    title="Edit"
+                    aria-label={strings.accounts.editName(c.name)}
+                    title={strings.common.edit}
                     disabled={busy}
                     onClick={() => {
                       reset();
@@ -234,7 +238,7 @@ export default function CategoryList() {
           </tbody>
         ))}
       </table>
-      {shown.length === 0 && <p className="muted">No category matches "{filter}".</p>}
+      {shown.length === 0 && <p className="muted">{t.noMatch(filter)}</p>}
 
       {editing && (
         <EditCategory

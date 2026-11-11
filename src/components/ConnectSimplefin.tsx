@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { db, functionErrorMessage } from '../lib/supabase';
 import Button from './Button';
+import { strings } from '../lib/strings';
+
+const t = strings.settings;
 
 /** What the simplefin-claim edge function returns. */
 type ClaimResponse = {
@@ -37,7 +40,7 @@ export default function ConnectSimplefin({
       setToken('');
       const s = data.sync;
       const message =
-        s.status === 'skipped' ? `Connected. The first sync was skipped: ${s.reason}.` : `Connected. First sync: ${s.new} new transactions.`;
+        s.status === 'skipped' ? t.connectedSkipped(s.reason) : t.connectedSynced(s.new);
       setNotice(message);
       onConnected(message);
     }
@@ -47,18 +50,15 @@ export default function ConnectSimplefin({
 
   return (
     <form className="auth narrow" onSubmit={submit}>
-      <p className="muted">
-        In SimpleFIN Bridge, create a Setup Token and paste it here. It works only once; the app trades it for access that
-        stays encrypted on the server.
-      </p>
+      <p className="muted">{t.connectIntro}</p>
       <label>
-        Setup Token
+        {t.setupToken}
         <input type="text" autoComplete="off" spellCheck={false} required data-autofocus value={token} onChange={(e) => setToken(e.target.value)} />
       </label>
       <Button type="submit" variant="primary" disabled={busy}>
-        {busy ? 'Connecting and syncing…' : 'Connect SimpleFIN'}
+        {busy ? t.connecting : t.connect}
       </Button>
-      {busy && <p className="muted">The first sync can take up to a minute.</p>}
+      {busy && <p className="muted">{t.firstSyncWait}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
     </form>

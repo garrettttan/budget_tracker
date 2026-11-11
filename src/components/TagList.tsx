@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
-import { plural } from '../lib/format';
 import Button from './Button';
+import { strings } from '../lib/strings';
+
+const tt = strings.tags;
+const common = strings.common;
 
 type TagRow = { id: string; name: string; transaction_tags: { count: number }[] };
 
@@ -35,7 +38,7 @@ export default function TagList() {
     setError(null);
     setNotice(null);
     const { error } = await action();
-    if (error) setError(error.code === '23505' ? 'You already have a tag with that name.' : error.message);
+    if (error) setError(error.code === '23505' ? tt.duplicate : error.message);
     else {
       setNotice(success);
       setEditing(null);
@@ -47,15 +50,15 @@ export default function TagList() {
 
   async function add() {
     const name = newName.trim();
-    if (await act(() => db().from('tags').insert({ name }), `Added ${name}. Tag transactions with it on Spending.`)) {
+    if (await act(() => db().from('tags').insert({ name }), tt.added(name))) {
       setNewName('');
     }
   }
 
   const rename = (t: TagRow) =>
-    act(() => db().from('tags').update({ name: draft.trim() }).eq('id', t.id), `Renamed to ${draft.trim()}.`);
+    act(() => db().from('tags').update({ name: draft.trim() }).eq('id', t.id), common.renamedTo(draft.trim()));
 
-  const remove = (t: TagRow) => act(() => db().from('tags').delete().eq('id', t.id), `Deleted ${t.name}.`);
+  const remove = (t: TagRow) => act(() => db().from('tags').delete().eq('id', t.id), common.deleted(t.name));
 
   function start(t: TagRow, mode: Editing['mode']) {
     setEditing({ id: t.id, mode });
@@ -81,27 +84,27 @@ export default function TagList() {
         <input
           type="text"
           className="merchant-name-input"
-          placeholder="New tag, e.g. Japan 2026"
-          aria-label="New tag name"
+          placeholder={tt.newPlaceholder}
+          aria-label={tt.newLabel}
           value={newName}
           disabled={busy}
           onChange={(e) => setNewName(e.target.value)}
         />
-        <Button type="submit" size="small" disabled={busy || !newName.trim()} title={newName.trim() ? undefined : 'Type a name first'}>
-          Add tag
+        <Button type="submit" size="small" disabled={busy || !newName.trim()} title={newName.trim() ? undefined : common.typeName}>
+          {tt.addButton}
         </Button>
       </form>
 
       {tags.length === 0 ? (
-        <p className="muted">No tags yet. Add one here, or with + Tag on any transaction.</p>
+        <p className="muted">{tt.empty}</p>
       ) : (
         <table className="register tags">
           <thead>
             <tr>
-              <th scope="col">Tag</th>
-              <th scope="col" className="num">Transactions</th>
+              <th scope="col">{tt.tag}</th>
+              <th scope="col" className="num">{common.transactions}</th>
               <th scope="col">
-                <span className="visually-hidden">Actions</span>
+                <span className="visually-hidden">{common.actions}</span>
               </th>
             </tr>
           </thead>
@@ -116,7 +119,7 @@ export default function TagList() {
                       <input
                         type="text"
                         className="merchant-name-input"
-                        aria-label={`New name for ${t.name}`}
+                        aria-label={strings.merchants.newNameFor(t.name)}
                         value={draft}
                         autoFocus
                         disabled={busy}
@@ -132,7 +135,7 @@ export default function TagList() {
                   </td>
                   <td className="num">
                     {count(t) > 0 ? (
-                      <Link to={`/spending?month=all&tag=${t.id}`} title={`Show every transaction tagged ${t.name}`}>
+                      <Link to={`/spending?month=all&tag=${t.id}`} title={tt.showEvery(t.name)}>
                         {count(t)}
                       </Link>
                     ) : (
@@ -145,22 +148,22 @@ export default function TagList() {
                         <Button
                           size="small"
                           disabled={busy || !draft.trim()}
-                          title={draft.trim() ? undefined : 'Type a name first'}
+                          title={draft.trim() ? undefined : common.typeName}
                           onClick={() => rename(t)}
                         >
-                          Save
+                          {common.save}
                         </Button>
                         <Button size="small" variant="link" disabled={busy} onClick={() => setEditing(null)}>
-                          Cancel
+                          {common.cancel}
                         </Button>
                       </>
                     ) : (
                       <>
                         <Button size="small" disabled={busy || deleting} onClick={() => start(t, 'rename')}>
-                          Rename
+                          {common.rename}
                         </Button>
                         <Button size="small" disabled={busy || deleting} onClick={() => start(t, 'delete')}>
-                          Delete…
+                          {tt.deleteButton}
                         </Button>
                       </>
                     )}
@@ -170,17 +173,12 @@ export default function TagList() {
                   <tr key={`${t.id}-delete`} className="merge-row">
                     <td colSpan={3}>
                       <div className="merge-form">
-                        <span>
-                          Delete {t.name}?{' '}
-                          {count(t) > 0
-                            ? `It comes off its ${plural(count(t), 'transaction')}; the transactions stay.`
-                            : 'No transactions carry it.'}
-                        </span>
+                        <span>{tt.confirmDelete(t.name, count(t))}</span>
                         <Button size="small" variant="primary" disabled={busy} onClick={() => remove(t)}>
-                          Delete
+                          {common.delete}
                         </Button>
                         <Button size="small" variant="link" disabled={busy} onClick={() => setEditing(null)}>
-                          Cancel
+                          {common.cancel}
                         </Button>
                       </div>
                     </td>

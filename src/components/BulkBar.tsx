@@ -2,6 +2,9 @@ import Button from './Button';
 import { type Category, UNCATEGORIZED } from './CategorySelect';
 import Combobox from './Combobox';
 import type { Tag } from './TagCell';
+import { strings } from '../lib/strings';
+
+const t = strings.bulk;
 
 /**
  * Actions for the selected rows: approve them, give them all one category,
@@ -42,45 +45,45 @@ export default function BulkBar({
 }) {
   const options = (tags: Tag[]) => tags.map((t) => ({ value: t.id, text: t.name }));
   return (
-    <div className="bulk-bar" role="region" aria-label="Selected transactions">
-      <strong>{count} selected</strong>
+    <div className="bulk-bar" role="region" aria-label={t.region}>
+      <strong>{t.selected(count)}</strong>
       <Button
         variant="primary"
         size="small"
         disabled={busy || approvable === 0}
-        title={approvable === 0 ? 'None of the selected rows is waiting for review' : undefined}
+        title={approvable === 0 ? t.noneToApprove : undefined}
         onClick={onApprove}
       >
-        Approve{approvable ? ` ${approvable}` : ''}
+        {t.approve(approvable)}
       </Button>
       <Combobox
-        options={[...categories.map((c) => ({ value: c.id, text: c.name })), { value: UNCATEGORIZED, text: 'Uncategorized' }]}
+        options={[...categories.map((c) => ({ value: c.id, text: c.name })), { value: UNCATEGORIZED, text: strings.common.uncategorized }]}
         value={null}
-        label="Set the category of the selected transactions"
-        placeholder="Set category"
+        label={t.setCategoryLabel}
+        placeholder={t.setCategory}
         disabled={busy || categorizable === 0}
         onChange={onSetCategory}
       />
       <Combobox
         options={options(allTags)}
         value={null}
-        label="Add a tag to the selected transactions"
-        placeholder="+ Add tag"
+        label={t.addTagLabel}
+        placeholder={t.addTag}
         disabled={busy}
         onChange={onAddTag}
         onCreate={onCreateTag}
-        createLabel={(text) => `New tag “${text}”`}
+        createLabel={strings.common.newTag}
       />
       <Combobox
         options={options(tagsOnSelected)}
         value={null}
-        label="Remove a tag from the selected transactions"
-        placeholder="− Remove tag"
+        label={t.removeTagLabel}
+        placeholder={t.removeTag}
         disabled={busy || tagsOnSelected.length === 0}
         onChange={onRemoveTag}
       />
       <Button variant="link" size="small" disabled={busy} onClick={onClear}>
-        Clear selection
+        {strings.spending.clearSelection}
       </Button>
     </div>
   );

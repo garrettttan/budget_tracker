@@ -4,6 +4,9 @@ import { money, shortDate } from '../lib/format';
 import { type OpenItem, allocate } from '../lib/reimbursements';
 import Button from './Button';
 import { LinkForm } from './ReimbursementForms';
+import { strings } from '../lib/strings';
+
+const t = strings.suggestions;
 
 /** Unreviewed money in (lib/transactions fetchUnreviewedIncome). */
 export type PaymentRow = {
@@ -41,15 +44,15 @@ export default function ReimbursementSuggestions({
   const [choosing, setChoosing] = useState<string | null>(null); // payment id
   return (
     <>
-      <h2>Paid back?</h2>
+      <h2>{t.paybacksTitle}</h2>
       <table className="register paybacks">
         <thead>
           <tr>
-            <th scope="col">Money in</th>
-            <th scope="col">Pays back</th>
-            <th scope="col" className="num">Amount</th>
+            <th scope="col">{t.moneyIn}</th>
+            <th scope="col">{t.paysBack}</th>
+            <th scope="col" className="num">{strings.spending.amount}</th>
             <th scope="col">
-              <span className="visually-hidden">Actions</span>
+              <span className="visually-hidden">{strings.common.actions}</span>
             </th>
           </tr>
         </thead>
@@ -70,18 +73,18 @@ export default function ReimbursementSuggestions({
                   <td>
                     {plan.map(({ item, part }) => (
                       <div key={item.id}>
-                        {item.who}: {item.label} {money(part)}
-                        {part < item.remaining && <span className="muted"> of {money(item.remaining)}</span>}
+                        {t.item(item.who, item.label, money(part))}
+                        {part < item.remaining && <span className="muted">{t.ofTotal(money(item.remaining))}</span>}
                       </div>
                     ))}
                     {extra(amount, plan) > 0 && (
-                      <div className="muted small">{money(extra(amount, plan))} more than they owe; not counted as income</div>
+                      <div className="muted small">{t.moreThanOwed(money(extra(amount, plan)))}</div>
                     )}
                   </td>
                   <td className="num in">{money(amount)}</td>
                   <td className="action">
                     <Button size="small" disabled={busy} onClick={() => onLink(m.payment.id, plan.map((p) => p.item.id))}>
-                      Link
+                      {t.link}
                     </Button>
                     <Button
                       size="small"
@@ -90,7 +93,7 @@ export default function ReimbursementSuggestions({
                       aria-expanded={choosing === m.payment.id}
                       onClick={() => setChoosing(choosing === m.payment.id ? null : m.payment.id)}
                     >
-                      Choose…
+                      {t.choose}
                     </Button>
                   </td>
                 </tr>

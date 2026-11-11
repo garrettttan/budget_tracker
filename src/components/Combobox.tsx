@@ -1,4 +1,7 @@
 import { useId, useRef, useState } from 'react';
+import { strings } from '../lib/strings';
+
+const t = strings.picker;
 
 export type Option = { value: string; text: string };
 
@@ -17,9 +20,9 @@ export default function Combobox({
   label,
   disabled,
   autoFocus,
-  placeholder = 'Choose…',
+  placeholder = t.choose,
   onCreate,
-  createLabel = (text) => `Create “${text}”`,
+  createLabel = t.create,
   onClose,
 }: {
   options: Option[];
@@ -117,7 +120,7 @@ export default function Combobox({
       {open && (
         <ul id={listId} role="listbox" aria-label={label}>
           {matches.length === 0 && (
-            <li className="combobox-empty">{onCreate && !typed ? 'Type a name to create one' : 'No match'}</li>
+            <li className="combobox-empty">{onCreate && !typed ? t.typeToCreate : t.noMatch}</li>
           )}
           {matches.map((o, i) => (
             <li

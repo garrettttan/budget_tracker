@@ -23,6 +23,7 @@ import {
   toBankFields,
   toLocalDate,
 } from './simplefin.ts';
+import { messages } from './messages.ts';
 
 export type Connection = { id: string; user_id: string; status: string };
 
@@ -60,7 +61,7 @@ export async function runSync(
 
   try {
     const accessUrl = await must<string | null>(admin.rpc('get_simplefin_access_url', { p_connection_id: conn.id }));
-    if (!accessUrl) throw new SimplefinError('No SimpleFIN access saved. Connect in Settings.');
+    if (!accessUrl) throw new SimplefinError(messages.noAccessSaved);
 
     const fetched = await fetchWindows(accessUrl, windows, lastPosted === null, log);
     const { ids: accountIds, investments } = await saveAccounts(admin, conn, fetched, now);

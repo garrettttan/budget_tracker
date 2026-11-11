@@ -4,6 +4,9 @@ import Collapse, { COLLAPSE_MS } from './Collapse';
 import { type ChecklistProps, FilterChecklist } from './HeaderFilter';
 import { type FieldsProps, FieldsForm } from './HeaderFields';
 import Modal from './Modal';
+import { strings } from '../lib/strings';
+
+const t = strings.filters;
 
 /** One column's filter, as Spending's headers have it (its label names the row), plus a short state for the sheet's row. */
 export type SheetFilter = { key: string; on: boolean; summary: string } & (
@@ -43,7 +46,7 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
   return (
     <>
       <Button variant="link" className="phone-only filters-button" onClick={() => setOpen(true)}>
-        {count ? `Filters (${count})` : 'Filters'}
+        {t.sheetButton(count)}
       </Button>
       {open && (
         <Modal
@@ -57,9 +60,9 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
           {(close) => (
             <>
               <div className="modal-head">
-                <h2 id={titleId}>Filters</h2>
-                <Button variant="icon" aria-label="Close" onClick={close}>
-                  ×
+                <h2 id={titleId}>{t.sheetTitle}</h2>
+                <Button variant="icon" aria-label={strings.common.close} onClick={close}>
+                  {strings.common.closeSymbol}
                 </Button>
               </div>
               <ul className="sheet-filters">
@@ -99,8 +102,8 @@ export default function FiltersSheet({ filters, onShowAll }: { filters: SheetFil
                 })}
               </ul>
               <div className="sheet-foot">
-                <Button variant="secondary" disabled={count === 0} title={count ? undefined : 'No filters are on'} onClick={onShowAll}>
-                  Show all
+                <Button variant="secondary" disabled={count === 0} title={count ? undefined : t.noneOn} onClick={onShowAll}>
+                  {strings.common.showAll}
                 </Button>
               </div>
             </>

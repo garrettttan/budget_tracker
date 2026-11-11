@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CONNECTION_COLUMNS, type Connection, db } from '../lib/supabase';
 import { sum } from '../lib/cents';
-import { money, plural, relativeTime } from '../lib/format';
+import { money, relativeTime } from '../lib/format';
 import Button from '../components/Button';
 import AddAccount, { CLASSES } from '../components/AddAccount';
 import EditAccount, { type EditableAccount } from '../components/EditAccount';
 import PencilIcon from '../components/PencilIcon';
+import { strings } from '../lib/strings';
+
+const t = strings.accounts;
 
 type Account = EditableAccount & { balance_date: string | null };
 
@@ -60,32 +63,32 @@ export default function Accounts() {
     <section>
       <header className="page-head">
         <div>
-          <h1>Accounts</h1>
+          <h1>{t.title}</h1>
           {connections?.map((c) => (
             <p key={c.id} className={`page-sub ${c.status === 'active' && !isStale(c.last_synced_at) ? 'muted' : 'error'}`}>
-              Last synced {relativeTime(c.last_synced_at)}.
+              {t.lastSynced(relativeTime(c.last_synced_at))}
               {c.status_message ? ` ${c.status_message}` : ''}
             </p>
           ))}
         </div>
         {counted.length > 0 && (
           <p className="net-worth">
-            <span className="muted">Net worth</span> <strong className="num">{money(total(counted))}</strong>
+            <span className="muted">{t.netWorth}</span> <strong className="num">{money(total(counted))}</strong>
           </p>
         )}
       </header>
-      {error && <p className="error" role="alert">Couldn't update accounts: {error}</p>}
+      {error && <p className="error" role="alert">{t.updateFailed(error)}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
 
       {connections && connections.length === 0 && (
         <p className="empty">
-          No banks connected yet. <Link to="/settings">Connect SimpleFIN Bridge in Settings.</Link>
+          {t.noBanks} <Link to="/settings">{t.connectLink}</Link>
         </p>
       )}
       {connections?.some((c) => isStale(c.last_synced_at)) && (
         <p className="error" role="alert">
-          The daily sync hasn't run in over a day and a half. Check the "Daily SimpleFIN sync" workflow in
-          GitHub Actions (it may have been disabled), or the <Link to="/settings">sync log</Link>.
+          {t.staleBefore} <Link to="/settings">{t.staleLink}</Link>
+          {t.staleAfter}
         </p>
       )}
 
@@ -110,16 +113,16 @@ export default function Accounts() {
                         <td>
                           {a.name}
                           <span className="account-sub">
-                            {a.institution ?? 'Manual'}
-                            {a.hidden && ' · Hidden'}
+                            {a.institution ?? t.manual}
+                            {a.hidden && t.hiddenTag}
                           </span>
                         </td>
                         <td className="num">{money(a.balance)}</td>
                         <td className="action">
                           <Button
                             variant="icon"
-                            aria-label={`Edit ${a.name}`}
-                            title="Edit"
+                            aria-label={t.editName(a.name)}
+                            title={strings.common.edit}
                             onClick={() => {
                               setEditing(a);
                               setNotice(null);
@@ -134,7 +137,7 @@ export default function Accounts() {
                   </tbody>
                   <tfoot>
                     <tr>
-                      <th scope="row">Total {label.toLowerCase()}</th>
+                      <th scope="row">{t.total(label)}</th>
                       <td className="num">{money(total(group.filter((a) => !a.hidden)))}</td>
                       <td />
                     </tr>
@@ -151,7 +154,7 @@ export default function Accounts() {
         {hiddenCount > 0 && (
           <p>
             <Button variant="link" onClick={() => setShowHidden((v) => !v)}>
-              {showHidden ? 'Hide hidden accounts' : `Show ${plural(hiddenCount, 'hidden account')}`}
+              {showHidden ? t.hideHidden : t.showHidden(hiddenCount)}
             </Button>
           </p>
         )}
@@ -162,7 +165,7 @@ export default function Accounts() {
             setNotice(null);
           }}
         >
-          Add manual account
+          {t.addManual}
         </Button>
       </div>
 
@@ -171,7 +174,7 @@ export default function Accounts() {
           onCancel={() => setAdding(false)}
           onAdded={async (name) => {
             setAdding(false);
-            setNotice(`Added ${name}. Add its transactions from the Spending page.`);
+            setNotice(t.added(name));
             await load();
           }}
         />

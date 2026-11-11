@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { db } from '../lib/supabase';
-import { plural } from '../lib/format';
 import Button from './Button';
 import Combobox from './Combobox';
+import { strings } from '../lib/strings';
+
+const t = strings.merchants;
+const common = strings.common;
 
 type Merchant = {
   id: string;
@@ -65,15 +68,15 @@ export default function MerchantList() {
   }
 
   const rename = (m: Merchant) =>
-    act(() => db().from('merchants').update({ name: draft.trim() }).eq('id', m.id), `Renamed to ${draft.trim()}.`);
+    act(() => db().from('merchants').update({ name: draft.trim() }).eq('id', m.id), common.renamedTo(draft.trim()));
 
   function merge(m: Merchant) {
     const into = merchants?.find((x) => x.id === draft);
-    return act(() => db().rpc('merge_merchants', { p_from: m.id, p_into: draft }), `Merged ${m.name} into ${into?.name}.`);
+    return act(() => db().rpc('merge_merchants', { p_from: m.id, p_into: draft }), t.merged(m.name, into?.name));
   }
 
   if (!merchants) return null;
-  if (merchants.length === 0) return <p className="muted">Merchants appear here after your first sync.</p>;
+  if (merchants.length === 0) return <p className="muted">{t.empty}</p>;
 
   const count = (m: Merchant) => m.transactions[0]?.count ?? 0;
   const byName = (a: Merchant, b: Merchant) => a.name.localeCompare(b.name);
@@ -105,8 +108,8 @@ export default function MerchantList() {
       <input
         type="search"
         className="merchant-filter"
-        placeholder="Find a merchant"
-        aria-label="Find a merchant"
+        placeholder={t.find}
+        aria-label={t.find}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
@@ -114,14 +117,14 @@ export default function MerchantList() {
         <thead>
           <tr>
             <th scope="col" aria-sort={ariaSort('name')}>
-              {sortHeader('name', 'Merchant')}
+              {sortHeader('name', t.merchant)}
             </th>
-            <th scope="col">Remembered category</th>
+            <th scope="col">{t.rememberedCategory}</th>
             <th scope="col" className="num" aria-sort={ariaSort('count')}>
-              {sortHeader('count', 'Transactions')}
+              {sortHeader('count', common.transactions)}
             </th>
             <th scope="col">
-              <span className="visually-hidden">Actions</span>
+              <span className="visually-hidden">{common.actions}</span>
             </th>
           </tr>
         </thead>
@@ -137,7 +140,7 @@ export default function MerchantList() {
                     <input
                       type="text"
                       className="merchant-name-input"
-                      aria-label={`New name for ${m.name}`}
+                      aria-label={t.newNameFor(m.name)}
                       value={draft}
                       autoFocus
                       disabled={busy}
@@ -148,10 +151,10 @@ export default function MerchantList() {
                       }}
                     />
                   ) : (
-                    <span title={plural(aliases, 'bank description')}>{m.name}</span>
+                    <span title={t.bankDescriptions(aliases)}>{m.name}</span>
                   )}
                 </td>
-                <td>{m.categories?.name ?? <span className="muted">None yet</span>}</td>
+                <td>{m.categories?.name ?? <span className="muted">{common.noneYet}</span>}</td>
                 <td className="num">{count(m)}</td>
                 <td className="action">
                   {renaming ? (
@@ -159,28 +162,28 @@ export default function MerchantList() {
                       <Button
                         size="small"
                         disabled={busy || !draft.trim()}
-                        title={draft.trim() ? undefined : 'Type a name first'}
+                        title={draft.trim() ? undefined : common.typeName}
                         onClick={() => rename(m)}
                       >
-                        Save
+                        {common.save}
                       </Button>
                       <Button size="small" variant="link" disabled={busy} onClick={() => setEditing(null)}>
-                        Cancel
+                        {common.cancel}
                       </Button>
                     </>
                   ) : (
                     <>
                       <Button size="small" disabled={busy || merging} onClick={() => start(m, 'rename')}>
-                        Rename
+                        {common.rename}
                       </Button>
                       <Button
                         size="small"
                         disabled={busy || merging || merchants.length < 2}
-                        title={merchants.length < 2 ? 'There is no other merchant to merge into' : undefined}
-                        aria-label={`Merge ${m.name} into another merchant`}
+                        title={merchants.length < 2 ? t.noOther : undefined}
+                        aria-label={t.mergeLabel(m.name)}
                         onClick={() => start(m, 'merge')}
                       >
-                        Merge
+                        {t.merge}
                       </Button>
                     </>
                   )}
@@ -190,12 +193,12 @@ export default function MerchantList() {
                 <tr key={`${m.id}-merge`} className="merge-row">
                   <td colSpan={4}>
                     <div className="merge-form">
-                      <span>Merge {m.name} into</span>
+                      <span>{t.mergeInto(m.name)}</span>
                       <Combobox
                         options={merchants.filter((x) => x.id !== m.id).map((x) => ({ value: x.id, text: x.name }))}
                         value={draft || null}
                         onChange={setDraft}
-                        label={`Merchant to merge ${m.name} into`}
+                        label={t.mergeTarget(m.name)}
                         disabled={busy}
                         autoFocus
                       />
@@ -203,20 +206,16 @@ export default function MerchantList() {
                         size="small"
                         variant="primary"
                         disabled={busy || !draft}
-                        title={draft ? undefined : 'Choose a merchant first'}
+                        title={draft ? undefined : t.chooseFirst}
                         onClick={() => merge(m)}
                       >
-                        Merge
+                        {t.merge}
                       </Button>
                       <Button size="small" variant="link" disabled={busy} onClick={() => setEditing(null)}>
-                        Cancel
+                        {common.cancel}
                       </Button>
                     </div>
-                    <p className="muted small">
-                      Its {plural(count(m), 'transaction')} and{' '}
-                      {plural(aliases, 'bank description')} move to the merchant you pick, and{' '}
-                      {m.name} is removed.
-                    </p>
+                    <p className="muted small">{t.mergeExplain(count(m), aliases, m.name)}</p>
                   </td>
                 </tr>
               ),
@@ -224,7 +223,7 @@ export default function MerchantList() {
           })}
         </tbody>
       </table>
-      {shown.length === 0 && <p className="muted">No merchant matches "{filter}".</p>}
+      {shown.length === 0 && <p className="muted">{t.noMatch(filter)}</p>}
     </>
   );
 }

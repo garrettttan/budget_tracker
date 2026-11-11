@@ -1,6 +1,9 @@
 import { type ReactNode, useId, useState } from 'react';
 import Button from './Button';
 import { usePopover } from './usePopover';
+import { strings } from '../lib/strings';
+
+const t = strings.filters;
 
 /** `count`: how many transactions have it in the current range, shown beside the name. */
 export type Item = { id: string; name: string; count?: number };
@@ -69,7 +72,7 @@ export default function HeaderFilter({
         className={`th-filter${on ? ' active' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Filter ${label}${on ? ', filter on' : ''}`}
+        aria-label={t.filter(label, on)}
         onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="th-filter-label">{children ?? label}</span>
@@ -80,7 +83,7 @@ export default function HeaderFilter({
       {open && (
         <div ref={pop} className="header-filter-pop" role="dialog" aria-labelledby={titleId} style={style}>
           <span id={titleId} className="visually-hidden">
-            Filter {label}
+            {t.filterTitle(label)}
           </span>
           <FilterChecklist {...list} onDone={close} />
         </div>
@@ -132,8 +135,8 @@ export function FilterChecklist({
         <input
           type="search"
           className="header-filter-search"
-          placeholder={`Search ${plural}`}
-          aria-label={`Search ${plural}`}
+          placeholder={t.search(plural)}
+          aria-label={t.search(plural)}
           value={query}
           autoFocus
           onChange={(e) => setQuery(e.target.value)}
@@ -146,13 +149,13 @@ export function FilterChecklist({
           autoFocus={!searchable}
           checked={allShown}
           disabled={matches.length === 0 || cantClearAll || cantSelectAll}
-          title={cantClearAll ? 'At least one has to stay ticked' : cantSelectAll ? `Up to ${max} at a time` : undefined}
+          title={cantClearAll ? t.keepOne : cantSelectAll && max !== undefined ? t.upTo(max) : undefined}
           ref={(el) => {
             if (el) el.indeterminate = shownMatches > 0 && !allShown;
           }}
           onChange={selectAll}
         />
-        {typed ? 'Select all matches' : 'Select all'}
+        {typed ? t.selectAllMatches : t.selectAll}
       </label>
       <ul className="header-filter-list">
         {matches.map((i) => (
@@ -164,9 +167,9 @@ export function FilterChecklist({
                 disabled={(lastShown && !hidden.includes(i.id)) || lockedOut(i.id)}
                 title={
                   lastShown && !hidden.includes(i.id)
-                    ? 'At least one has to stay ticked'
-                    : lockedOut(i.id)
-                      ? `Up to ${max} at a time`
+                    ? t.keepOne
+                    : lockedOut(i.id) && max !== undefined
+                      ? t.upTo(max)
                       : undefined
                 }
                 onChange={() => toggle(i.id)}
@@ -178,17 +181,17 @@ export function FilterChecklist({
               variant="link"
               size="small"
               className="header-filter-only"
-              aria-label={`Only ${i.name}`}
+              aria-label={t.onlyItem(i.name)}
               onClick={() => {
                 onOnly(i.id);
                 onDone();
               }}
             >
-              Only
+              {t.only}
             </Button>
           </li>
         ))}
-        {matches.length === 0 && <li className="muted small">No matches.</li>}
+        {matches.length === 0 && <li className="muted small">{t.noMatches}</li>}
       </ul>
       {reset && (
         <div className="header-filter-foot">

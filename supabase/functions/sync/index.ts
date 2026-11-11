@@ -8,13 +8,14 @@
 // to sync_runs and show in Settings → Sync log.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { type Connection, runSync } from '../_shared/run-sync.ts';
+import { messages } from '../_shared/messages.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
 Deno.serve(async (req) => {
   const secret = Deno.env.get('SYNC_SECRET');
   if (req.method !== 'POST' || !secret || !sameString(req.headers.get('Authorization') ?? '', `Bearer ${secret}`)) {
-    return Response.json({ error: 'unauthorized' }, { status: 401 });
+    return Response.json({ error: messages.unauthorized }, { status: 401 });
   }
   const trigger = new URL(req.url).searchParams.get('trigger') === 'manual' ? 'manual' : 'schedule';
 

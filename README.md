@@ -45,6 +45,7 @@ src/                        the web app (Vite + React + TypeScript)
     reports.ts              the monthly reports behind Spending and Trends
     reimbursements.ts       what people owe you
     reimbursementMatch.ts   which payment pays back what (unit-tested)
+    strings.ts              every word the app shows, grouped by page
     format.ts, months.ts, cents.ts   formatting, dates, money math
   styles.css                all styles; color tokens at the top
 
@@ -54,7 +55,8 @@ supabase/
     sync/                   the daily sync (called by GitHub Actions with a shared secret)
     sync-now/               Settings → Sync now (called by the signed-in user)
     simplefin-claim/        connects SimpleFIN from a one-time Setup Token
-    _shared/                the sync itself (run-sync.ts) and SimpleFIN protocol helpers
+    _shared/                the sync itself (run-sync.ts), SimpleFIN protocol helpers, and
+                            messages.ts (every message the functions send back)
   tests/                    schema tests (in-memory Postgres) and unit tests
 
 .github/workflows/
