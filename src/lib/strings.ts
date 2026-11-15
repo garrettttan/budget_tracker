@@ -389,9 +389,6 @@ const charts = {
 
 const owed = {
   title: 'Owed to me',
-  emptyBefore: 'Nobody owes you anything. On',
-  emptyLink: 'Spending',
-  emptyAfter: ', open a charge’s details and choose Expect reimbursement when someone owes you part of it.',
   totalOwed: 'Total owed',
   help: 'When someone pays you back, link the payment on Spending (it’s suggested under Paid back?), or enter a Venmo payment with Add transaction. Paid in cash? Mark it received.',
   owes: (amount: string) => `owes ${amount}`,

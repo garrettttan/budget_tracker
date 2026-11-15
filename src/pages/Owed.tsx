@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { db } from '../lib/supabase';
 import { round } from '../lib/cents';
 import { money, shortDate } from '../lib/format';
@@ -94,13 +93,6 @@ export default function Owed() {
       </header>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
-
-      {items && open.length === 0 && (
-        <p className="empty">
-          {t.emptyBefore} <Link to="/spending">{t.emptyLink}</Link>
-          {t.emptyAfter}
-        </p>
-      )}
 
       {open.length > 0 && (
         <>
