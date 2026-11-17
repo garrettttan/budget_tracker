@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { round } from '../lib/cents';
 import Button from './Button';
 import { strings } from '../lib/strings';
@@ -100,6 +100,28 @@ const AXIS_W = 52;
 const X_BAND = 26;
 /** room right of every plot for a line's end label; the same on every chart so their plots line up */
 const END_W = 84;
+/** below this width (phones) a chart drops the end-label room and labels the last point above it instead */
+const COMPACT_W = 560;
+
+/** Left axis and right margin for a chart this wide: phones give the plot every pixel they can. */
+function margins(width: number) {
+  const compact = width < COMPACT_W;
+  // compact: just room for the last dot (r 4 + 2px stroke) past the plot's end
+  return { compact, axisW: compact ? 44 : AXIS_W, endW: compact ? 8 : END_W };
+}
+
+/** A line's latest value beside its last dot; on phones (no room to the right) above it, ending at the dot. */
+function EndLabel({ x, y, compact, children }: { x: number; y: number; compact: boolean; children: ReactNode }) {
+  return compact ? (
+    <text x={x} y={y - 10} textAnchor="end" className="chart-end-label">
+      {children}
+    </text>
+  ) : (
+    <text x={x + 10} y={y} dy="0.32em" className="chart-end-label">
+      {children}
+    </text>
+  );
+}
 
 /**
  * Monthly columns: one series, or two side by side (2px apart). Each month's
@@ -126,12 +148,13 @@ export function MonthColumns({
   selectHint?: string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
+  const { axisW, endW } = margins(width);
   const [tip, setTip] = useState<Tip | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(0, ...series.flatMap((s) => s.values));
   const ticks = niceTicks(0, max || 100);
   const top = ticks[ticks.length - 1];
-  const plotW = Math.max(0, width - AXIS_W - END_W);
+  const plotW = Math.max(0, width - axisW - endW);
   const slot = months.length ? plotW / months.length : 0;
   const colW = Math.max(2, Math.min(24, (slot * 0.7 - 2 * (series.length - 1)) / series.length));
   const groupW = colW * series.length + 2 * (series.length - 1);
@@ -142,7 +165,7 @@ export function MonthColumns({
   function show(i: number, cx: number) {
     setHover(i);
     setTip({
-      x: Math.min(Math.max(AXIS_W + cx, 80), Math.max(width - 80, 80)),
+      x: Math.min(Math.max(axisW + cx, 80), Math.max(width - 80, 80)),
       y: 0,
       title: months[i].long,
       rows: series.map((s) => ({ color: s.color, name: s.name, value: format(s.values[i]) })),
@@ -160,14 +183,14 @@ export function MonthColumns({
           <g transform="translate(0,8)">
             {ticks.map((t) => (
               <g key={t}>
-                <line x1={AXIS_W} x2={AXIS_W + plotW} y1={y(t)} y2={y(t)} className="chart-grid" />
-                <text x={AXIS_W - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
+                <line x1={axisW} x2={axisW + plotW} y1={y(t)} y2={y(t)} className="chart-grid" />
+                <text x={axisW - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
                   {axisMoney(t)}
                 </text>
               </g>
             ))}
             {months.map((m, i) => {
-              const x0 = AXIS_W + i * slot + (slot - groupW) / 2;
+              const x0 = axisW + i * slot + (slot - groupW) / 2;
               const cx = i * slot + slot / 2;
               const dim = (selected && selected !== m.key) || (hover !== null && hover !== i);
               return (
@@ -176,12 +199,12 @@ export function MonthColumns({
                     <path key={s.name} d={columnPath(x0 + j * (colW + 2), y(s.values[i]), colW, PLOT_H - y(s.values[i]))} style={{ fill: s.color }} />
                   ))}
                   {i % every === 0 && (
-                    <text x={AXIS_W + cx} y={PLOT_H + 18} textAnchor="middle" className="chart-axis">
+                    <text x={axisW + cx} y={PLOT_H + 18} textAnchor="middle" className="chart-axis">
                       {m.short}
                     </text>
                   )}
                   <rect
-                    x={AXIS_W + i * slot}
+                    x={axisW + i * slot}
                     y={0}
                     width={slot}
                     height={PLOT_H + X_BAND}
@@ -208,7 +231,7 @@ export function MonthColumns({
                 </g>
               );
             })}
-            <line x1={AXIS_W} x2={AXIS_W + plotW} y1={PLOT_H} y2={PLOT_H} className="chart-baseline" />
+            <line x1={axisW} x2={axisW + plotW} y1={PLOT_H} y2={PLOT_H} className="chart-baseline" />
           </g>
         </svg>
       )}
@@ -241,16 +264,17 @@ export function TimeLine({
   selectHint?: string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
+  const { compact, axisW, endW } = margins(width);
   const [idx, setIdx] = useState<number | null>(null);
   const all = series.flatMap((s) => s.values);
   const ticks = niceTicks(Math.min(0, ...all), Math.max(0, ...all));
   const lo = ticks[0];
   const hi = ticks[ticks.length - 1];
   const single = series.length === 1;
-  const plotW = Math.max(0, width - AXIS_W - END_W);
+  const plotW = Math.max(0, width - axisW - endW);
   const t0 = dates.length ? Date.parse(dates[0].date) : 0;
   const t1 = dates.length ? Date.parse(dates[dates.length - 1].date) : 1;
-  const x = (d: string) => AXIS_W + (t1 === t0 ? plotW : ((Date.parse(d) - t0) / (t1 - t0)) * plotW);
+  const x = (d: string) => axisW + (t1 === t0 ? plotW : ((Date.parse(d) - t0) / (t1 - t0)) * plotW);
   const y = (v: number) => PLOT_H - ((v - lo) / (hi - lo || 1)) * PLOT_H;
   const lastIdx = dates.length - 1;
   const last = dates[lastIdx];
@@ -302,17 +326,17 @@ export function TimeLine({
           <g transform="translate(0,8)">
             {ticks.map((t) => (
               <g key={t}>
-                <line x1={AXIS_W} x2={AXIS_W + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? 'chart-baseline' : 'chart-grid'} />
-                <text x={AXIS_W - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
+                <line x1={axisW} x2={axisW + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? 'chart-baseline' : 'chart-grid'} />
+                <text x={axisW - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
                   {axisMoney(t)}
                 </text>
               </g>
             ))}
-            <text x={AXIS_W} y={PLOT_H + 18} className="chart-axis">
+            <text x={axisW} y={PLOT_H + 18} className="chart-axis">
               {dates[0].long}
             </text>
             {dates.length > 1 && (
-              <text x={AXIS_W + plotW} y={PLOT_H + 18} textAnchor="end" className="chart-axis">
+              <text x={axisW + plotW} y={PLOT_H + 18} textAnchor="end" className="chart-axis">
                 {last.long}
               </text>
             )}
@@ -333,9 +357,9 @@ export function TimeLine({
               </g>
             ))}
             {single && (
-              <text x={x(last.date) + 10} y={y(series[0].values[lastIdx])} dy="0.32em" className="chart-end-label">
+              <EndLabel x={x(last.date)} y={y(series[0].values[lastIdx])} compact={compact}>
                 {format(series[0].values[lastIdx])}
-              </text>
+              </EndLabel>
             )}
           </g>
         </svg>
@@ -368,13 +392,14 @@ export function PaceLines({
   dayLabel: (day: number) => string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
+  const { compact, axisW, endW } = margins(width);
   const [idx, setIdx] = useState<number | null>(null);
   const all = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
   const ticks = niceTicks(Math.min(0, ...all), Math.max(0, ...all));
   const lo = ticks[0];
   const hi = ticks[ticks.length - 1];
-  const plotW = Math.max(0, width - AXIS_W - END_W);
-  const x = (i: number) => AXIS_W + (days > 1 ? (i / (days - 1)) * plotW : plotW);
+  const plotW = Math.max(0, width - axisW - endW);
+  const x = (i: number) => axisW + (days > 1 ? (i / (days - 1)) * plotW : plotW);
   const y = (v: number) => PLOT_H - ((v - lo) / (hi - lo || 1)) * PLOT_H;
   const path = (values: (number | null)[]) =>
     values
@@ -384,7 +409,7 @@ export function PaceLines({
   const main = series[0];
   const lastIdx = main ? main.values.reduce<number>((last, v, i) => (v === null ? last : i), -1) : -1;
   const focusIdx = lastIdx >= 0 ? lastIdx : days - 1;
-  const nearest = (px: number) => Math.min(days - 1, Math.max(0, Math.round(((px - AXIS_W) / (plotW || 1)) * (days - 1))));
+  const nearest = (px: number) => Math.min(days - 1, Math.max(0, Math.round(((px - axisW) / (plotW || 1)) * (days - 1))));
 
   const tip: Tip | null =
     idx === null
@@ -419,16 +444,16 @@ export function PaceLines({
           <g transform="translate(0,8)">
             {ticks.map((t) => (
               <g key={t}>
-                <line x1={AXIS_W} x2={AXIS_W + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? 'chart-baseline' : 'chart-grid'} />
-                <text x={AXIS_W - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
+                <line x1={axisW} x2={axisW + plotW} y1={y(t)} y2={y(t)} className={t === 0 ? 'chart-baseline' : 'chart-grid'} />
+                <text x={axisW - 8} y={y(t)} dy="0.32em" textAnchor="end" className="chart-axis">
                   {axisMoney(t)}
                 </text>
               </g>
             ))}
-            <text x={AXIS_W} y={PLOT_H + 18} className="chart-axis">
+            <text x={axisW} y={PLOT_H + 18} className="chart-axis">
               {dayLabel(1)}
             </text>
-            <text x={AXIS_W + plotW} y={PLOT_H + 18} textAnchor="end" className="chart-axis">
+            <text x={axisW + plotW} y={PLOT_H + 18} textAnchor="end" className="chart-axis">
               {dayLabel(days)}
             </text>
             {/* the main series last, so it draws on top */}
@@ -445,9 +470,9 @@ export function PaceLines({
             {main && lastIdx >= 0 && (
               <>
                 <circle cx={x(lastIdx)} cy={y(main.values[lastIdx]!)} r={4} className="chart-dot" style={{ fill: main.color }} />
-                <text x={x(lastIdx) + 10} y={y(main.values[lastIdx]!)} dy="0.32em" className="chart-end-label">
+                <EndLabel x={x(lastIdx)} y={y(main.values[lastIdx]!)} compact={compact}>
                   {format(main.values[lastIdx]!)}
-                </text>
+                </EndLabel>
               </>
             )}
           </g>
