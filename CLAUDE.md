@@ -106,7 +106,8 @@ point per month: synced accounts' latest `balance_snapshots` on or before month 
 at their current balance). No tag totals section (removed Nov 9; search Spending by tag). Clicking a month opens Spending
 with `?status=all&month=` (+ `category=` from the category chart). Charts
 are hand-rolled SVG in `src/components/charts.tsx` (no chart library): hover and keyboard focus show a
-tooltip. Garrett removed the explanatory text and "Show as table" views on purpose; don't add them back.
+tooltip. Under 560px wide (phones) a chart drops its 84px end-label margin and labels the last point
+above it, so the plot spans the full width (`margins` in `charts.tsx`). Garrett removed the explanatory text and "Show as table" views on purpose; don't add them back.
 
 **Next: phase 6, Backfill** (CSV/OFX import from Jan 1 2026, dedupe, undo).
 
